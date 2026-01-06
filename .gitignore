@@ -1,0 +1,24 @@
+# --- IntelliJ & Editor Müll ---
+.idea/
+*.iml
+*.iws
+.vscode/
+.DS_Store
+
+# --- Gradle & Build Müll ---
+.gradle/
+build/
+out/
+gradle/
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# --- Docker Müll ---
+# Wir wollen keine lokalen DB-Daten im Git haben!
+postgres-data/
+
+# --- Java Müll ---
+*.class
+*.log
+*.jar
+*.war

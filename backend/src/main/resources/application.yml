@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: church-dn-backend
+
+  # 1. Datenbank Verbindung
+  datasource:
+    url: jdbc:postgresql://localhost:5433/dn_youth_hanmaum_db
+    username: user1
+    password: user1password
+    driver-class-name: org.postgresql.Driver
+
+  # 2. JPA / Hibernate Einstellungen
+  jpa:
+    database: POSTGRESQL
+    show-sql: true      # Zeigt dir im Log, was Hibernate tut (Gut zum Debuggen)
+    open-in-view: false
+    hibernate:
+      # WICHTIG: 'validate' prüft nur, ob DB und Kotlin zusammenpassen.
+      # Da wir die Tabellen manuell erstellt haben, darf Hibernate NICHTS ändern!
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+        # Dialekt für Postgres 15+
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # 3. Flyway (DB Migration Tool)
+  flyway:
+    enabled: false # Erstmal aus, da wir Tabellen manuell haben. Später aktivieren wir das.
+
+# Server Port (Standard ist 8080)
+server:
+  port: 8080
