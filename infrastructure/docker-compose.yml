@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # Deine existierende Datenbank (nichts ändern!)
+  hanmaumApp-db:
+    image: postgres:15-alpine
+    container_name: hanmaumApp-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PW}
+    ports:
+      - "5433:5432"
+    volumes:
+      - hanmaumApp_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # --- NEU: KEYCLOAK (Der Identity Provider) ---
+  hanmaumApp-keycloak:
+    image: quay.io/keycloak/keycloak:26.3.0
+    container_name: hanmaumApp-keycloak
+    command: start-dev # Entwickler-Modus (schneller Start)
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HTTP_PORT: '8090'
+      KC_HOSTNAME_STRICT: 'false'
+      KC_HOSTNAME_STRICT_HTTPS: 'false'
+      KC_CACHE: 'local'
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - '8091:8090'
+      - '9001:9000'
+    depends_on:
+      hanmaumApp-db:
+        condition: service_healthy
+
+  # -----------------------------------------------------------------
+  # BACKEND APP (Später für den Server)
+  # -----------------------------------------------------------------
+#  backend:
+#    # 'build: .' sucht im aktuellen Ordner nach einem "Dockerfile"
+#    build: .
+#    container_name: hanmaumApp-backend
+#    restart: unless-stopped
+#    ports:
+#      - "8080:8080" # App ist von außen erreichbar
+#    environment:
+#      # WICHTIG: Hier nutzen wir den internen Docker-Namen und Port der DB
+#      SPRING_DATASOURCE_URL: jdbc:postgresql://hanmaumApp-db:5432/${POSTGRES_DB}
+#      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+#      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+#      # Keycloak Konfiguration für Spring Boot (Beispiel)
+#      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://hanmaumApp-keycloak:8090/realms/${KC_HANMAUM_REALM}
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
+#      keycloak:
+#        condition: service_started
+
+volumes:
+  hanmaumApp_postgres_data:

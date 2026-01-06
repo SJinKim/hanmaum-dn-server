@@ -1,7 +1,7 @@
 package com.hanmaum.dn.app.features.members.api
 
-import com.hanmaum.dn.app.features.members.api.dto.CreateMemberRequest
-import com.hanmaum.dn.app.features.members.api.dto.UpdateMemberRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.domain.Member
 
 fun CreateMemberRequest.toEntity(): Member {
