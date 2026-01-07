@@ -1,4 +1,4 @@
-package com.hanmaum.dn.app.features.members.api.dto
+package com.hanmaum.dn.app.features.members.api.v1.dto
 
 import java.time.LocalDate
 

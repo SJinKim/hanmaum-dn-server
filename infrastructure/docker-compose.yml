@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  # Deine existierende Datenbank (nichts ändern!)
+  hanmaumApp-db:
+    image: postgres:15-alpine
+    container_name: hanmaumApp-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - hanmaumApp_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # --- NEU: KEYCLOAK (Der Identity Provider) ---
+  hanmaumApp-keycloak:
+    image: quay.io/keycloak/keycloak:26.3.0
+    container_name: hanmaumApp-keycloak
+    depends_on:
+      hanmaumApp-db:
+        condition: service_healthy
+    command: start-dev --import-realm --health-enabled=true
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+
+      # --- Postgres Verbindung ---
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://hanmaumApp-db:5432/${POSTGRES_DB}
+      KC_DB_USERNAME: ${POSTGRES_USER}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+
+      KC_DB_URL_PROPERTIES: "?currentSchema=public"
+
+      KC_HTTP_PORT: '8090'
+      KC_HOSTNAME_STRICT: 'false'
+      KC_HOSTNAME_STRICT_HTTPS: 'false'
+      KC_CACHE: 'local'
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - '8091:8090'
+      - '9001:9000'
+    volumes:
+      - ./docker/keycloak/data:/opt/keycloak/data
+        # Hier muss deine realm-export.json liegen, damit --import-realm sie findet
+      - ./docker/keycloak/export:/opt/keycloak/data/import
+
+  # -----------------------------------------------------------------
+  # BACKEND APP (Später für den Server)
+  # -----------------------------------------------------------------
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: hanmaumApp-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080" # App ist von außen erreichbar
+    environment:
+      # WICHTIG: Hier nutzen wir den internen Docker-Namen und Port der DB
+      SPRING_DATASOURCE_URL: jdbc:postgresql://hanmaumApp-db:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_FLYWAY_ENABLED: "true"
+      # Keycloak Konfiguration für Spring Boot (Beispiel)
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://hanmaumApp-keycloak:8090/realms/${KEYCLOAK_HANMAUM_REALM}
+    depends_on:
+      hanmaumApp-db:
+        condition: service_healthy
+      hanmaumApp-keycloak:
+        condition: service_started
+
+volumes:
+  hanmaumApp_postgres_data:

@@ -22,3 +22,5 @@ postgres-data/
 *.log
 *.jar
 *.war
+
+.env
