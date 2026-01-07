@@ -1,4 +1,4 @@
-package com.hanmaum.dn.app
+package com.hanmaum.dn
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
