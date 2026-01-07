@@ -1,6 +1,11 @@
 spring:
   application:
     name: church-dn-backend
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8091/realms/hanmaum
 
   # 1. Datenbank Verbindung
   datasource:
