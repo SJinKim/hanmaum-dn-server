@@ -1,30 +1,42 @@
 package com.hanmaum.dn.app.features.members.domain
 
+import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
+import com.hanmaum.dn.app.common.domainvalue.Gender
+import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.common.jpa.BaseEntity
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
+import jakarta.persistence.FetchType
+import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
-import jakarta.persistence.*
-import org.hibernate.annotations.SQLDelete
-import org.hibernate.annotations.SQLRestriction
+import jakarta.persistence.Id
+import jakarta.persistence.JoinColumn
+import jakarta.persistence.ManyToOne
+import jakarta.persistence.Table
 import java.time.LocalDate
 
 @Entity
 @Table(name = "members")
-@SQLDelete(sql = "UPDATE members SET deleted_at = NOW() WHERE id = ?")
-@SQLRestriction("deleted_at IS NULL")
 class Member(
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "members_seq_gen")
-    @SequenceGenerator(name = "members_seq_gen", sequenceName = "members_id_seq", allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.IDENTITY )
     val id: Long? = null,
 
-    @Column(name = "korean_name", nullable = false)
-    var koreanName: String,
+    // --- NAMEN ---
+    @Column(name = "last_name", nullable = false )
+    var lastName: String,
 
-    @Column(name = "discriminator")
+    @Column(name = "first_name", nullable = false)
+    var firstName: String,
+
     var discriminator: String? = null,
 
-    @Column(name = "gender")
-    var gender: String? = null,
+    // --- STAMMDATEN ---
+    @Enumerated(EnumType.STRING)
+    @Column(length = 3)
+    var gender: Gender? = null,
 
     @Column(name = "birth_date")
     var birthDate: LocalDate? = null,
@@ -32,43 +44,34 @@ class Member(
     @Column(name = "phone_number")
     var phoneNumber: String? = null,
 
-    @Column(name = "address_street")
-    var addressStreet: String? = null,
+    var email: String? = null,
 
+    // --- ADRESSE (Neu strukturiert) ---
+    var street: String? = null,
+
+    @Column(name = "zip_code")
+    var zipCode: String? = null,
+
+    var city: String? = null,
+
+    // --- KIRCHEN DATEN ---
     @Column(name = "registration_date")
     var registrationDate: LocalDate? = null,
 
-    @Column(name = "member_status")
-    var memberStatus: String = "ACTIVE"
+    @Enumerated(EnumType.STRING)
+    @Column(name = "member_status", nullable = false)
+    var memberStatus: MemberStatus = MemberStatus.ACTIVE,
+
+    var role: String? = null, // "직분? or 사역?"
+
+    // --- BEZIEHUNG ZUR GRUPPE (Foreign Key) ---
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "group_id")
+    var group: ChurchGroup? = null,
 
 ) : BaseEntity() {
-
-    // Helper für Frontend Anzeige
-    val displayName: String
-        get() = if (!discriminator.isNullOrBlank()) "$koreanName ($discriminator)" else koreanName
-
-    // --- SICHERE JPA IMPLEMENTIERUNG ---
-
-    // 1. Zwei Entities sind gleich, wenn ihre Klasse passt und die ID identisch ist (und nicht null)
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (other !is Member) return false
-
-        // Wenn ID null ist (noch nicht gespeichert), sind sie nie gleich (außer selbes Objekt)
-        if (id == null || other.id == null) return false
-
-        return id == other.id
-    }
-
-    // 2. HashCode sollte bei JPA Entities idealerweise fix sein oder nur auf ID basieren
-    // Ein konstanter HashCode ist bei JPA oft sicherer für Lazy Loading
-    override fun hashCode(): Int {
-        // Rückgabe der Klasse als HashCode verhindert Bugs, wenn ID sich nach Speichern ändert
-        return javaClass.hashCode()
-    }
-
-    // 3. ToString ohne Beziehungen, um Endlosschleifen zu verhindern
-    override fun toString(): String {
-        return "Member(id=$id, name='$koreanName')"
+    // Convenience Methode für vollen Namen
+    fun getFullName(): String {
+        return "$lastName$firstName" // Koreanisch: Keine Leerstelle
     }
 }
