@@ -1,6 +1,8 @@
 package com.hanmaum.dn.app.features.members.api.v1
 
+import com.hanmaum.dn.app.features.members.api.toDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.service.MemberService
@@ -19,8 +21,8 @@ class MemberController(
     }
 
     @GetMapping("/{id}")
-    fun getMember(@PathVariable id: Long): Member {
-        return memberService.getMember(id)
+    fun getMember(@PathVariable id: String): MemberDto {
+        return memberService.getMember(id).toDto()
     }
 
     @PostMapping
@@ -30,13 +32,13 @@ class MemberController(
     }
 
     @PutMapping("/{id}")
-    fun updateMember(@PathVariable id: Long, @RequestBody request: UpdateMemberRequest): Member {
-        return memberService.updateMember(id, request)
+    fun updateMember(@PathVariable id: String, @RequestBody request: UpdateMemberRequest): MemberDto {
+        return memberService.updateMember(id, request).toDto()
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    fun deleteMember(@PathVariable id: Long) {
-        memberService.deleteMember(id)
+    fun deleteMember(@PathVariable id: String) {
+        memberService.softDeleteMember(id)
     }
 }

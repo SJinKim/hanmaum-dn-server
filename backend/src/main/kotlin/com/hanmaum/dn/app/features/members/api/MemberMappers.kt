@@ -1,8 +1,10 @@
 package com.hanmaum.dn.app.features.members.api
 
+import com.hanmaum.dn.app.common.domainvalue.Baptism
 import com.hanmaum.dn.app.common.domainvalue.Gender
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.domain.Member
 
@@ -27,6 +29,15 @@ private fun mapStatus(statusStr: String?): MemberStatus {
     }
 }
 
+private fun mapBaptism(value: String?): Baptism? {
+    return try {
+        if (value.isNullOrBlank()) null
+        else Baptism.valueOf(value.uppercase())
+    } catch (e: IllegalArgumentException) {
+        Baptism.UNBAPTIZED // Default Wert
+    }
+}
+
 fun CreateMemberRequest.toEntity(): Member {
     return Member(
         // Namen direkt übernehmen
@@ -47,7 +58,8 @@ fun CreateMemberRequest.toEntity(): Member {
         city = this.city,
 
         registrationDate = this.registrationDate,
-        role = this.role
+        role = this.role,
+        baptism = mapBaptism(this.baptism)
     )
 }
 
@@ -70,4 +82,40 @@ fun Member.updateForm(request: UpdateMemberRequest) {
 
     this.memberStatus = mapStatus(request.memberStatus)
     this.role = request.role
+    this.baptism = mapBaptism(request.baptism)
+}
+
+fun Member.toDto(): MemberDto {
+    return MemberDto(
+        id = this.publicId.toString(),
+
+        lastName = this.lastName,
+        firstName = this.firstName,
+        discriminator = this.discriminator,
+
+        // Enum -> String Konvertierung (z.B. Gender.M -> "M")
+        gender = this.gender?.name,
+
+        // Enum -> String Konvertierung (z.B. Baptism.INFANT_BAPTIZED -> "INFANT_BAPTIZED")
+        baptism = this.baptism?.name,
+
+        birthDate = this.birthDate,
+        phoneNumber = this.phoneNumber,
+        email = this.email,
+
+        // Neue Adress-Felder
+        street = this.street,
+        zipCode = this.zipCode,
+        city = this.city,
+
+        registrationDate = this.registrationDate,
+
+        // Status Enum -> String
+        memberStatus = this.memberStatus.name,
+
+        role = this.role,
+
+        // Falls eine Gruppe verknüpft ist, holen wir den Namen
+        groupName = this.group?.name
+    )
 }

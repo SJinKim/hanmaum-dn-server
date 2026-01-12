@@ -12,19 +12,30 @@ import jakarta.persistence.EntityNotFoundException
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.stereotype.Service
 import java.time.LocalDateTime
+import java.util.UUID
 
 @Service
 class MemberService (
     private val membersRepository: MemberRepository,
     private val churchGroupRepository: ChurchGroupRepository
 ) {
+    // Helper: String -> UUID
+    private fun parseId(id: String): UUID {
+        return try {
+            UUID.fromString(id)
+        } catch (e: IllegalArgumentException) {
+            throw EntityNotFoundException("Invalid ID format")
+        }
+    }
+
     @Transactional(readOnly=true)
     fun getAllMembers(): List<Member> = membersRepository.findAll()
 
     @Transactional
-    fun getMember(id: Long): Member {
-        return membersRepository.findById(id)
-            .orElseThrow { EntityNotFoundException("Member with ID $id not found") }
+    fun getMember(publicIdStr: String): Member {
+        val uuid = parseId(publicIdStr)
+        return membersRepository.findByPublicId(uuid)
+            .orElseThrow { EntityNotFoundException("Member not found") }
     }
 
     @Transactional
@@ -40,8 +51,8 @@ class MemberService (
     }
 
     @Transactional
-    fun updateMember(id: Long, request: UpdateMemberRequest): Member {
-        val member = getMember(id)
+    fun updateMember(publicIdStr: String, request: UpdateMemberRequest): Member {
+        val member = getMember(publicIdStr)
         member.updateForm(request)
 
         if(request.groupId != null) {
@@ -60,16 +71,8 @@ class MemberService (
     }
 
     @Transactional
-    fun deleteMember(id: Long) {
-        if (!membersRepository.existsById(id)) {
-            throw EntityNotFoundException("Member with ID $id not found")
-        }
-        membersRepository.deleteById(id) // hard delete
-    }
-
-    @Transactional
-    fun softDeleteMember(id: Long) {
-        val member = getMember(id)
+    fun softDeleteMember(publicIdStr: String) {
+        val member = getMember(publicIdStr)
         member.deletedAt = LocalDateTime.now()
         member.memberStatus = MemberStatus.DELETED
         membersRepository.save(member)

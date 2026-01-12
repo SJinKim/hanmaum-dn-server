@@ -5,6 +5,8 @@ import com.hanmaum.dn.app.features.statistics.dto.ChartDataDto
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.stereotype.Repository
+import java.util.Optional
+import java.util.UUID
 
 @Repository
 interface MemberRepository : JpaRepository<Member, Long> {
@@ -66,4 +68,6 @@ interface MemberRepository : JpaRepository<Member, Long> {
     GROUP BY m.gender
 """)
     fun getGenderDistribution(): List<ChartDataDto>
+
+    fun findByPublicId(publicId: UUID): Optional<Member>
 }
