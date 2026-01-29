@@ -10,7 +10,11 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.core.authority.SimpleGrantedAuthority
-import org.springframework.security.oauth2.jwt.Jwt
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator
+import org.springframework.security.oauth2.core.OAuth2Error
+import org.springframework.security.oauth2.core.OAuth2TokenValidator
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult
+import org.springframework.security.oauth2.jwt.*
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.web.cors.CorsConfiguration
@@ -64,6 +68,46 @@ class SecurityConfig {
         }
     }
 
+    @Bean
+    fun jwtDecoder(): JwtDecoder {
+        // 1. Verbindung zu Keycloak (INTERN via Docker Network)
+        // Damit holen wir die Public Keys zum Prüfen der Unterschrift.
+        val serviceName = "hanmaumApp-keycloak"
+        val jwkSetUri = "http://$serviceName:8090/realms/hanmaum/protocol/openid-connect/certs"
+        val jwtDecoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build()
+
+        // 2. Liste der erlaubten Aussteller (Issuers)
+        // Das sind alle Namen, unter denen Keycloak erreichbar ist.
+        val allowedIssuers = listOf(
+            "http://10.0.2.2:8091/realms/hanmaum",                // Android Emulator
+            "http://localhost:8091/realms/hanmaum",               // iOS / Web Localhost
+            "http://$serviceName:8090/realms/hanmaum"      // Docker Intern
+        )
+
+        // 3. Eigener Validator: Prüft, ob der Token-Issuer in der Liste ist
+        val issuerValidator = OAuth2TokenValidator<Jwt> { jwt ->
+            val issuerClaim = jwt.getClaimAsString("iss")
+            if (allowedIssuers.contains(issuerClaim)) {
+                OAuth2TokenValidatorResult.success()
+            } else {
+                OAuth2TokenValidatorResult.failure(
+                    OAuth2Error(
+                        "invalid_issuer",
+                        "Dieser Issuer wird nicht akzeptiert: $issuerClaim",
+                        null
+                    )
+                )
+            }
+        }
+
+        // 4. Standard-Validator (Zeitstempel) + Unser Issuer Validator kombinieren
+        val timestampValidator = JwtTimestampValidator()
+        val combinedValidator = DelegatingOAuth2TokenValidator(timestampValidator, issuerValidator)
+
+        jwtDecoder.setJwtValidator(combinedValidator)
+
+        return jwtDecoder
+    }
     /**
      * CORS Konfiguration:
      * Erlaubt dem Angular Dashboard (localhost:4200), mit uns zu reden.

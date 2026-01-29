@@ -12,7 +12,7 @@ data class CarDto(
     val maxSeats: Int,
     val currentPassengers: Int,
     val departureLocation: String?,
-    val departureTime: LocalDateTime?,
+    val departureTime: LocalTime?,
 
     // UI Helfer
     val isFull: Boolean,
@@ -26,5 +26,5 @@ data class CreateCarRequest(
     val name: String?,
     val maxSeats: Int,
     val departureLocation: String?,
-    val departureTime: LocalDateTime?
+    val departureTime: LocalTime?
 )

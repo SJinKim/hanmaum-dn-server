@@ -1,7 +1,6 @@
 package com.hanmaum.dn.app.features.attendance.domain
 
 import com.hanmaum.dn.app.common.jpa.BaseEntity
-import com.hanmaum.dn.app.features.members.domain.Member
 import jakarta.persistence.*
 import java.time.DayOfWeek
 import java.time.LocalTime
@@ -27,6 +26,6 @@ class AttendanceDefinition(
     var title: String? = "Sonntagsgottesdienst",
 
     @Column(name = "is_active")
-    var isActive: Boolean = true
+    var active: Boolean = true
 
 ) : BaseEntity()

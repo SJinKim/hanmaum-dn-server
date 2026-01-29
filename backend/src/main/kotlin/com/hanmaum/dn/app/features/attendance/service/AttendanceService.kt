@@ -31,7 +31,7 @@ class AttendanceService(
         val currentDay = now.dayOfWeek
 
         // A. Gibt es eine aktive Definition für JETZT?
-        val activeDefinition = defRepo.findByDayOfWeekAndIsActiveTrue(currentDay)
+        val activeDefinition = defRepo.findByDayOfWeekAndActiveTrue(currentDay)
             .firstOrNull { def ->
                 currentTime.isAfter(def.startTime) && currentTime.isBefore(def.endTime)
             }

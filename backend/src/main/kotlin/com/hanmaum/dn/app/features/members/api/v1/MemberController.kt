@@ -10,7 +10,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.*
 
 @RestController
-@RequestMapping("/api/v1/members")
+@RequestMapping("/members")
 class MemberController(
     private val memberService: MemberService // <-- Service statt Repository!
 ) {

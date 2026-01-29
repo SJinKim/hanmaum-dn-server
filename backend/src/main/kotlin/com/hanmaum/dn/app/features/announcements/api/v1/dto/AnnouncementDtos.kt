@@ -4,13 +4,13 @@ import java.time.LocalDateTime
 
 // Was die App empfängt
 data class AnnouncementDto(
-    val id: Long,
+    val id: String,
     val title: String,
     val body: String,
+    val category: String,
     val startAt: LocalDateTime,
     val endAt: LocalDateTime?,
-    val isPinned: Boolean,
-    val createdAt: LocalDateTime?
+    val isPinned: Boolean
 )
 
 // Was der Admin (später Dashboard, jetzt via Swagger) sendet
@@ -19,5 +19,6 @@ data class CreateAnnouncementRequest(
     val body: String,
     val startAt: LocalDateTime = LocalDateTime.now(),
     val endAt: LocalDateTime? = null,
-    val isPinned: Boolean = false
+    val isPinned: Boolean = false,
+    val category: String
 )

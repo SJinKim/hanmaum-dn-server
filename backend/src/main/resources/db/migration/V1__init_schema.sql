@@ -55,7 +55,10 @@ CREATE TABLE attendance_logs
     date        DATE NOT NULL,
     category    VARCHAR(50) DEFAULT 'SUNDAY_SERVICE',
     status      VARCHAR(20) DEFAULT 'PRESENT',
-    created_at  TIMESTAMP DEFAULT NOW()
+    -- BaseEntity
+    created_at  TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP,
+    deleted_at TIMESTAMP
 );
 
 -- 5. INDEXES

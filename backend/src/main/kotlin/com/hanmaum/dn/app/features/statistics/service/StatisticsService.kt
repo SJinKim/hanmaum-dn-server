@@ -1,7 +1,7 @@
 package com.hanmaum.dn.app.features.statistics.service
 
-import com.hanmaum.dn.app.features.statistics.dto.ChartDataDto
-import com.hanmaum.dn.app.features.statistics.dto.DashboardStatsDto
+import com.hanmaum.dn.app.features.statistics.api.v1.dto.ChartDataDto
+import com.hanmaum.dn.app.features.statistics.api.v1.dto.DashboardStatsDto
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional

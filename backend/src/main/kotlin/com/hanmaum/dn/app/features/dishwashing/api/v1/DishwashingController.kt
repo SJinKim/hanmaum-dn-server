@@ -1,4 +1,4 @@
-package com.hanmaum.dn.app.features.dishwashing.api
+package com.hanmaum.dn.app.features.dishwashing.api.v1
 
 import org.springframework.web.bind.annotation.RequestMapping
 import com.hanmaum.dn.app.features.dishwashing.api.v1.dto.CreateDishwashingRequest
@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.*
 import java.time.LocalDate
 
 @RestController
-@RequestMapping("/api/v1/dishwashing")
+@RequestMapping("/dishwashing")
 class DishwashingController(private val service: DishwashingService) {
 
     // Für die App (User)

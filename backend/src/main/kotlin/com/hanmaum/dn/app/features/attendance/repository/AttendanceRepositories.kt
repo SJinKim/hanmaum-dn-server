@@ -10,7 +10,7 @@ import java.time.LocalDate
 @Repository
 interface AttendanceDefinitionRepository : JpaRepository<AttendanceDefinition, Long> {
     // Finde alle aktiven Regeln für einen bestimmten Wochentag
-    fun findByDayOfWeekAndIsActiveTrue(dayOfWeek: DayOfWeek): List<AttendanceDefinition>
+    fun findByDayOfWeekAndActiveTrue(dayOfWeek: DayOfWeek): List<AttendanceDefinition>
 }
 
 @Repository

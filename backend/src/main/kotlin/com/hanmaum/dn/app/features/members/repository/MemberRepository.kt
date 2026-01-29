@@ -1,7 +1,7 @@
 package com.hanmaum.dn.app.features.members.repository
 
 import com.hanmaum.dn.app.features.members.domain.Member
-import com.hanmaum.dn.app.features.statistics.dto.ChartDataDto
+import com.hanmaum.dn.app.features.statistics.api.v1.dto.ChartDataDto
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.stereotype.Repository
@@ -29,7 +29,7 @@ interface MemberRepository : JpaRepository<Member, Long> {
     // 4. Statistik: Städte Verteilung (Top 10)
     // mappen das Ergebnis direkt auf DTO
     @Query("""
-        SELECT new com.hanmaum.dn.app.features.statistics.dto.ChartDataDto(m.city, COUNT(m))
+        SELECT new com.hanmaum.dn.app.features.statistics.api.v1.dto.ChartDataDto(m.city, COUNT(m))
         FROM Member m
         WHERE m.deletedAt IS NULL AND m.city IS NOT NULL 
         GROUP BY m.city
@@ -56,7 +56,7 @@ interface MemberRepository : JpaRepository<Member, Long> {
 
     // 6. Geschlechterverteilung
     @Query("""
-    SELECT new com.hanmaum.dn.app.features.statistics.dto.ChartDataDto(
+    SELECT new com.hanmaum.dn.app.features.statistics.api.v1.dto.ChartDataDto(
         CASE WHEN m.gender = 'M' THEN '형제' 
              WHEN m.gender = 'F' THEN '자매' 
              ELSE 'Unbekannt' 

@@ -33,5 +33,5 @@ class Car(
     var departureLocation: String? = null,
 
     @Column(name = "departure_time")
-    var departureTime: LocalDateTime? = null,
+    var departureTime: LocalTime? = null,
 ) : BaseEntity()
