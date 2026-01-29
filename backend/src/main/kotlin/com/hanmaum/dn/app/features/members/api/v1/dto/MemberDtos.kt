@@ -1,23 +1,79 @@
 package com.hanmaum.dn.app.features.members.api.v1.dto
 
+import com.hanmaum.dn.app.common.domainvalue.Baptism
 import java.time.LocalDate
 
-data class CreateMemberRequest(
-    val koreanName: String,
-    val discriminator: String? = null,
-    val gender: String? = null,
+data class MemberDto(
+    val id: String, // fachliche ID
+
+    val lastName: String,
+    val firstName: String,
+    val discriminator: String? = null, // Zur Unterscheidung bei gleichen Namen (A, B, C)
+
+    val gender: String? = null,        // "M" oder "F"
+    val baptism: String? = null,       // "INFANT_BAPTIZED", "CONFIRMATION", etc.
+
     val birthDate: LocalDate? = null,
     val phoneNumber: String? = null,
-    val addressStreet: String? = null,
+    val email: String? = null,
+
+    // Adresse
+    val street: String? = null,
+    val zipCode: String? = null,
+    val city: String? = null,
+
     val registrationDate: LocalDate? = null,
+    val memberStatus: String,          // "ACTIVE", "DELETED" etc.
+
+    val role: String? = null,          // z.B. "Teacher", "Student"
+    val groupName: String? = null      // Name der Gruppe (z.B. "Sarang")
+)
+
+data class CreateMemberRequest(
+    // 1. Namen (Getrennt, wie in DB)
+    val lastName: String,
+    val firstName: String,
+    val discriminator: String? = null,
+
+    // 2. Stammdaten
+    val gender: String? = null, // "M", "F" (Frontend schickt String)
+    val baptism: String? = null,
+
+    val birthDate: LocalDate? = null,
+    val phoneNumber: String? = null,
+    val email: String? = null,
+
+    // 3. Adresse (Jetzt 3 Felder statt addressStreet)
+    val street: String? = null,
+    val zipCode: String? = null,
+    val city: String? = null,
+
+    val registrationDate: LocalDate? = null,
+    val role: String? = null,
+
+    // Optional: Falls du beim Erstellen schon eine Gruppe zuweisen willst
+    val groupId: Long? = null
 )
 
 data class UpdateMemberRequest(
-    val koreanName: String,
+    val lastName: String,
+    val firstName: String,
     val discriminator: String? = null,
+
     val gender: String? = null,
+    val baptism: String? = null,
+
     val birthDate: LocalDate? = null,
     val phoneNumber: String? = null,
-    val addressStreet: String? = null,
-    val memberStatus: String
+    val email: String? = null,
+
+    val street: String? = null,
+    val zipCode: String? = null,
+    val city: String? = null,
+
+    val registrationDate: LocalDate? = null,
+    val memberStatus: String, // z.B. "ACTIVE", "INACTIVE"
+
+    val role: String? = null,
+    val groupId: Long? = null,
 )

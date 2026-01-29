@@ -1,0 +1,6 @@
+// src/app/features/dashboard/dashboard.component.scss
+
+// Beispiel: Wenn du die Toolbar-Höhe fixieren willst
+:host ::ng-deep .p-toolbar {
+  // PrimeNG Styles überschreiben, falls nötig
+}

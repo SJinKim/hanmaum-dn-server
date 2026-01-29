@@ -5,7 +5,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://localhost:8091/realms/hanmaum
+          jwk-set-uri: http://hanmaumApp-keycloak:8090/realms/hanmaum/protocol/openid-connect/certs
 
   # 1. Datenbank Verbindung
   datasource:
