@@ -1,12 +1,16 @@
 package com.hanmaum.dn.app.features.members.api.v1
 
+import com.hanmaum.dn.app.common.dto.ApiResponse
 import com.hanmaum.dn.app.features.members.api.toDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
+import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
+import com.hanmaum.dn.app.features.members.api.v1.dto.RegisterMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.service.MemberService
 import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
 @RestController
@@ -40,5 +44,27 @@ class MemberController(
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun deleteMember(@PathVariable id: String) {
         memberService.softDeleteMember(id)
+    }
+
+    @PostMapping
+    fun registerMember(@RequestBody request: RegisterMemberRequest): ResponseEntity<ApiResponse<Unit>> {
+        return try {
+            memberService.registerMember(request)
+
+            // 201 Created + Standard Body
+            ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(message = "등록이 완료되었습니다."))
+
+        } catch (e: IllegalArgumentException) {
+            // 409 Conflict (z.B. Email existiert schon)
+            ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(e.message ?: "이미 등록된 이메일 주소입니다."))
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            // 400 Bad Request (Sonstiger Fehler)
+            ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error("등록이 실패하였습니다."))
+        }
     }
 }

@@ -1,17 +1,18 @@
 spring:
   application:
     name: church-dn-backend
+  # ==== SECURITY ====
   security:
     oauth2:
       resourceserver:
         jwt:
-          jwk-set-uri: http://hanmaumApp-keycloak:8090/realms/hanmaum/protocol/openid-connect/certs
+          jwk-set-uri: http://${KEYCLOAK_SERVER_URL_DOCKER}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/certs
 
-  # 1. Datenbank Verbindung
+  # === Datenbank Verbindung ===
   datasource:
-    url: jdbc:postgresql://localhost:5433/dn_youth_hanmaum_db
-    username: user1
-    password: user1password
+    url: jdbc:postgresql://localhost:5433/${DB_HANMAUM_DN_NAME}
+    username: ${DB_HANMAUM_DN_USER}
+    password: ${DB_HANMAUM_DN_SECRET}
     driver-class-name: org.postgresql.Driver
 
   # 2. JPA / Hibernate Einstellungen
@@ -38,3 +39,11 @@ spring:
 # Server Port (Standard ist 8080)
 server:
   port: 8080
+
+# === EIGENE KONFIGURATION FÜR DEN ADMIN CLIENT ===
+app:
+  keycloak:
+    server-url: ${KEYCLOAK_SERVER_URL_DOCKER}
+    realm: ${KEYCLOAK_REALM}
+    admin-client-id: ${KEYCLOAK_BACKEND_CLIENT_ID}
+    admin-client-secret: ${KEYCLOAK_BACKEND_CLIENT_SECRET}

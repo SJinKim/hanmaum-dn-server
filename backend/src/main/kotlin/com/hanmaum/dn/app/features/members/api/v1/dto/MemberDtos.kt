@@ -77,3 +77,34 @@ data class UpdateMemberRequest(
     val role: String? = null,
     val groupId: Long? = null,
 )
+
+data class RegisterMemberRequest(
+    // PFLICHTFELDER
+    val firstName: String,
+    val lastName: String,
+    val password: String,
+    val email: String,
+    val city: String,
+
+    // OPTIONAL
+    val baptism: String, // Enum String
+    val gender: String? = null,
+    val birthDate: LocalDate? = null, // Nutze LocalDate im Backend!
+    val phoneNumber: String? = null,
+    val street: String? = null,
+    val zipCode: String? = null
+)
+
+data class MemberResponse(
+    val id: Long,
+    val firstName: String,
+    val lastName: String,
+    val email: String,
+
+    // READ ONLY Felder für den User
+    val role: String,       // "MEMBER"
+    val groupName: String?, // "Jugendgruppe" statt ID 3
+
+    val city: String
+    // Discriminator lassen wir weg!
+)
