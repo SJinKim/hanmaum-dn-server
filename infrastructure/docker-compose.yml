@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Deine existierende Datenbank (nichts ändern!)
   hanmaumApp-db:
@@ -7,9 +5,9 @@ services:
     container_name: hanmaumApp-db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${DB_HANMAUM_DN_NAME}
+      POSTGRES_USER: ${DB_HANMAUM_DN_USER}
+      POSTGRES_PASSWORD: ${DB_HANMAUM_DN_SECRET}
     ports:
       - "5433:5432"
     volumes:
@@ -35,9 +33,9 @@ services:
 
       # --- Postgres Verbindung ---
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://hanmaumApp-db:5432/${KEYCLOAK_POSTGRES_DB}
+      KC_DB_URL: ${DB_HANMAUM_DN_URL}/${KEYCLOAK_POSTGRES_DB}
       KC_DB_USERNAME: ${KEYCLOAK_POSTGRES_USER}
-      KC_DB_PASSWORD: ${KEYCLOAK_POSTGRES_PASSWORD}
+      KC_DB_PASSWORD: ${KEYCLOAK_POSTGRES_SECRET}
 
       KC_DB_URL_PROPERTIES: "?currentSchema=public"
 
@@ -49,6 +47,8 @@ services:
     ports:
       - '8091:8090'
       - '9001:9000'
+    env_file:
+      - .env
     volumes:
       - ./docker/keycloak/data:/opt/keycloak/data
         # Hier muss deine realm-export.json liegen, damit --import-realm sie findet
@@ -59,7 +59,7 @@ services:
   # -----------------------------------------------------------------
   backend:
     build:
-      context: ../backend
+      context: ./backend
       dockerfile: Dockerfile
     container_name: hanmaumApp-backend
     restart: unless-stopped
@@ -67,12 +67,15 @@ services:
       - "8080:8080" # App ist von außen erreichbar
     environment:
       # WICHTIG: Hier nutzen wir den internen Docker-Namen und Port der DB
-      SPRING_DATASOURCE_URL: jdbc:postgresql://hanmaumApp-db:5432/${POSTGRES_DB}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_DATASOURCE_URL: ${DB_HANMAUM_DN_URL}/${DB_HANMAUM_DN_NAME}
+      SPRING_DATASOURCE_USERNAME: ${DB_HANMAUM_DN_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_HANMAUM_DN_SECRET}
       SPRING_FLYWAY_ENABLED: "true"
-      # Keycloak Konfiguration für Spring Boot (Beispiel)
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://hanmaumApp-keycloak:8090/realms/${KEYCLOAK_HANMAUM_REALM}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${KEYCLOAK_SERVER_URL_DOCKER}/realms/${KC_HANMAUM_REALM}
+      KEYCLOAK_AUTH_SERVER_URL: ${KEYCLOAK_SERVER_URL_DOCKER}
+
+    env_file:
+      - .env
     depends_on:
       hanmaumApp-db:
         condition: service_healthy

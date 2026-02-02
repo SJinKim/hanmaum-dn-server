@@ -39,6 +39,16 @@ dependencies {
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.13")
 
     implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
+
+    // Enthält UserRepresentation, CredentialRepresentation und den Client
+    implementation("org.keycloak:keycloak-admin-client:24.0.1")
+
+    // Falls du Spring Boot 3 nutzt (Jakarta EE), brauchst du oft auch das RESTEasy Backend:
+    implementation("org.jboss.resteasy:resteasy-client:6.2.7.Final")
+    implementation("org.jboss.resteasy:resteasy-jackson2-provider:6.2.7.Final")
+
+    // Liest .env Dateien und macht sie als Spring Properties verfügbar
+    implementation("me.paulschwarz:spring-dotenv:4.0.0")
 }
 
 kotlin {

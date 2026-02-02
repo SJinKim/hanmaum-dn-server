@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.members.api.v1.dto
 
 import com.hanmaum.dn.app.common.domainvalue.Baptism
+import jakarta.validation.constraints.NotBlank
 import java.time.LocalDate
 
 data class MemberDto(
@@ -76,4 +77,44 @@ data class UpdateMemberRequest(
 
     val role: String? = null,
     val groupId: Long? = null,
+)
+
+data class RegisterMemberRequest(
+    // PFLICHTFELDER
+    @field:NotBlank(message = "Vorname ist Pflicht")
+    val firstName: String,
+
+    @field:NotBlank(message = "Nachname ist Pflicht")
+    val lastName: String,
+
+    @field:NotBlank
+    val password: String,
+
+    @field:NotBlank(message = "Muss eine gültige E-Mail sein")
+    val email: String,
+
+    @field:NotBlank(message = "Stadt ist Pflicht")
+    val city: String,
+
+    // OPTIONAL
+    val baptism: String, // Enum String
+    val gender: String? = null,
+    val birthDate: LocalDate? = null, // Nutze LocalDate im Backend!
+    val phoneNumber: String? = null,
+    val street: String? = null,
+    val zipCode: String? = null
+)
+
+data class MemberResponse(
+    val id: Long,
+    val firstName: String,
+    val lastName: String,
+    val email: String,
+
+    // READ ONLY Felder für den User
+    val role: String,       // "MEMBER"
+    val groupName: String?, // "Jugendgruppe" statt ID 3
+
+    val city: String
+    // Discriminator lassen wir weg!
 )

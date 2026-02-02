@@ -61,13 +61,13 @@ class Member(
 
     // --- KIRCHEN DATEN ---
     @Column(name = "registration_date")
-    var registrationDate: LocalDate? = null,
+    var registrationDate: LocalDate? = LocalDate.now(),
 
     @Enumerated(EnumType.STRING)
     @Column(name = "member_status", nullable = false)
     var memberStatus: MemberStatus = MemberStatus.ACTIVE,
 
-    var role: String? = null, // "직분? or 사역?"
+    var role: String? = "", // "직분? or 사역?"
 
     // --- BEZIEHUNG ZUR GRUPPE (Foreign Key) ---
     @ManyToOne(fetch = FetchType.LAZY)

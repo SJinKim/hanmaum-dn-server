@@ -4,6 +4,7 @@ import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.statistics.api.v1.dto.ChartDataDto
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
 import java.util.Optional
 import java.util.UUID
@@ -12,6 +13,7 @@ import java.util.UUID
 interface MemberRepository : JpaRepository<Member, Long> {
     // 1. Gesamtanzahl (Aktive)
     fun countByDeletedAtIsNull(): Long
+    fun findByEmail(email: String?): Member?
 
     // 2. Einfach: Neue Mitglieder dieses Jahr (Postgres spezifisch: EXTRACT YEAR)
     @Query(value = "SELECT COUNT(*) FROM members WHERE deleted_at IS NULL AND EXTRACT(YEAR FROM registration_date) = EXTRACT(YEAR FROM CURRENT_DATE)", nativeQuery = true)
@@ -70,4 +72,15 @@ interface MemberRepository : JpaRepository<Member, Long> {
     fun getGenderDistribution(): List<ChartDataDto>
 
     fun findByPublicId(publicId: UUID): Optional<Member>
+    fun findAllByFirstNameAndLastName(firstName: String, lastName: String): List<Member>
+
+    @Query("""
+        SELECT m FROM Member m 
+        WHERE LOWER(REPLACE(REPLACE(m.lastName, '-', ''), ' ', '')) = LOWER(REPLACE(REPLACE(:lastName, '-', ''), ' ', ''))
+        AND LOWER(REPLACE(REPLACE(m.firstName, '-', ''), ' ', '')) = LOWER(REPLACE(REPLACE(:firstName, '-', ''), ' ', ''))
+    """)
+    fun findSimilarNames(
+        @Param("firstName") firstName: String,
+        @Param("lastName") lastName: String
+    ): List<Member>
 }
