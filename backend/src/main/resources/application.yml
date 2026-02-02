@@ -43,7 +43,7 @@ server:
 # === EIGENE KONFIGURATION FÜR DEN ADMIN CLIENT ===
 app:
   keycloak:
-    server-url: ${KEYCLOAK_SERVER_URL_DOCKER}
+    server-url_docker: ${KEYCLOAK_SERVER_URL_DOCKER}
     realm: ${KEYCLOAK_REALM}
     admin-client-id: ${KEYCLOAK_BACKEND_CLIENT_ID}
     admin-client-secret: ${KEYCLOAK_BACKEND_CLIENT_SECRET}

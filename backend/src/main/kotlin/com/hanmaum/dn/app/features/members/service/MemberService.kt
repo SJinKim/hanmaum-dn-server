@@ -105,15 +105,18 @@ class MemberService (
 
         // 2. Discriminator Logik
         val takenDiscriminators = existingMembers
-            .mapNotNull { it.discriminator }
+            .map { it.discriminator }
             .toSet()
 
-        var charCode = 'A'
-        var currentDiscriminator = charCode.toString()
+        var currentDiscriminator: String? = null
 
-        // Loop: A -> B -> C -> ... bis einer frei ist
-        while (takenDiscriminators.contains(currentDiscriminator)) {
-            charCode++
+        // Loop: null -> A -> B -> C -> ... bis einer frei ist
+        if (takenDiscriminators.contains(null)) {
+            var charCode = 'A'
+            // Loop: Prüfe A, B, C... solange bis einer frei ist
+            while (takenDiscriminators.contains(charCode.toString())) {
+                charCode++
+            }
             currentDiscriminator = charCode.toString()
         }
 
@@ -141,7 +144,7 @@ class MemberService (
 
         )
 
-        val savedMemeber = memberRepository.save(newMember)
+        val savedMember = memberRepository.save(newMember)
 
         // 2 User in KC anglegen
         val keycloakUser = UserRepresentation().apply {
@@ -163,9 +166,10 @@ class MemberService (
         val response: Response = keycloak.realm(realm).users().create(keycloakUser)
 
         if(response.status != 201) {
-            throw RuntimeException("Keycloak Fehler: ${response.status} - ${response.statusInfo}")
+            val errorBody = response.readEntity(String::class.java)
+            throw RuntimeException("Keycloak Fehler: $errorBody")
         }
-        return savedMemeber
+        return savedMember
     }
 
     // Beispiel für das Lesen (Login/Profil)

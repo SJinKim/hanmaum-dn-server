@@ -3,6 +3,7 @@ package com.hanmaum.dn.app.common.config
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.convert.converter.Converter
+import org.springframework.http.HttpMethod
 import org.springframework.security.authentication.AbstractAuthenticationToken
 import org.springframework.security.config.Customizer
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
@@ -34,6 +35,7 @@ class SecurityConfig {
             .cors(Customizer.withDefaults())
             .authorizeHttpRequests { auth ->
                 auth
+                    .requestMatchers(HttpMethod.POST, "/api/v1/members/register").permitAll()
                     .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/actuator/health", "/actuator/info").permitAll()
                     .anyRequest().authenticated()
             }

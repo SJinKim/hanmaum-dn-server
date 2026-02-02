@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.members.api.v1.dto
 
 import com.hanmaum.dn.app.common.domainvalue.Baptism
+import jakarta.validation.constraints.NotBlank
 import java.time.LocalDate
 
 data class MemberDto(
@@ -80,10 +81,19 @@ data class UpdateMemberRequest(
 
 data class RegisterMemberRequest(
     // PFLICHTFELDER
+    @field:NotBlank(message = "Vorname ist Pflicht")
     val firstName: String,
+
+    @field:NotBlank(message = "Nachname ist Pflicht")
     val lastName: String,
+
+    @field:NotBlank
     val password: String,
+
+    @field:NotBlank(message = "Muss eine gültige E-Mail sein")
     val email: String,
+
+    @field:NotBlank(message = "Stadt ist Pflicht")
     val city: String,
 
     // OPTIONAL

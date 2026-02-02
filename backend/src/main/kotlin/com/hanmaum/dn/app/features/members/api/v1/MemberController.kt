@@ -4,7 +4,6 @@ import com.hanmaum.dn.app.common.dto.ApiResponse
 import com.hanmaum.dn.app.features.members.api.toDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
-import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
 import com.hanmaum.dn.app.features.members.api.v1.dto.RegisterMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.domain.Member
@@ -46,7 +45,7 @@ class MemberController(
         memberService.softDeleteMember(id)
     }
 
-    @PostMapping
+    @PostMapping("/register")
     fun registerMember(@RequestBody request: RegisterMemberRequest): ResponseEntity<ApiResponse<Unit>> {
         return try {
             memberService.registerMember(request)
