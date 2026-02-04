@@ -83,3 +83,5 @@ baseline.json
 
 assets/demo/
 *.sql
+
+/infrastructure/architectureLog/*

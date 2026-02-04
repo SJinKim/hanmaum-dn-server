@@ -5,6 +5,7 @@ import com.hanmaum.dn.app.common.domainvalue.Gender
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
+import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.domain.Member
 
@@ -117,5 +118,18 @@ fun Member.toDto(): MemberDto {
 
         // Falls eine Gruppe verknüpft ist, holen wir den Namen
         groupName = this.group?.name
+    )
+}
+
+fun Member.toResponse(): MemberResponse {
+    return MemberResponse(
+        id = this.id ?: throw IllegalStateException("ID darf bei Response nicht null sein"),
+        firstName = this.firstName,
+        lastName = this.lastName,
+        email = this.email,
+        status = this.memberStatus,
+        role = this.role ?: "",
+        groupName = this.group?.name,
+        city = this.city ?: ""
     )
 }

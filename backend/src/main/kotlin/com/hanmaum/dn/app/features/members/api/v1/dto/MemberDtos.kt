@@ -1,6 +1,6 @@
 package com.hanmaum.dn.app.features.members.api.v1.dto
 
-import com.hanmaum.dn.app.common.domainvalue.Baptism
+import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import jakarta.validation.constraints.NotBlank
 import java.time.LocalDate
 
@@ -97,7 +97,7 @@ data class RegisterMemberRequest(
     val city: String,
 
     // OPTIONAL
-    val baptism: String, // Enum String
+    val baptism: String? = null, // Enum String
     val gender: String? = null,
     val birthDate: LocalDate? = null, // Nutze LocalDate im Backend!
     val phoneNumber: String? = null,
@@ -109,12 +109,12 @@ data class MemberResponse(
     val id: Long,
     val firstName: String,
     val lastName: String,
-    val email: String,
+    val email: String?,
 
     // READ ONLY Felder für den User
     val role: String,       // "MEMBER"
     val groupName: String?, // "Jugendgruppe" statt ID 3
 
-    val city: String
-    // Discriminator lassen wir weg!
+    val city: String,
+    val status: MemberStatus,
 )

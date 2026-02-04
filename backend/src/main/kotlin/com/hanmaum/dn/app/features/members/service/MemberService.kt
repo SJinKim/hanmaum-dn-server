@@ -5,6 +5,7 @@ import com.hanmaum.dn.app.common.domainvalue.Gender
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
 import com.hanmaum.dn.app.features.members.api.toEntity
+import com.hanmaum.dn.app.features.members.api.toResponse
 import com.hanmaum.dn.app.features.members.api.updateForm
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
@@ -18,9 +19,10 @@ import org.keycloak.admin.client.Keycloak
 import org.keycloak.representations.idm.CredentialRepresentation
 import org.keycloak.representations.idm.UserRepresentation
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.data.repository.Repository
+import org.springframework.http.HttpStatus
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.stereotype.Service
+import org.springframework.web.server.ResponseStatusException
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
@@ -140,7 +142,7 @@ class MemberService (
             role = "", // Startet leer
             group = null, // Startet ohne Gruppe
             registrationDate = LocalDate.now(), // Heute
-            memberStatus = MemberStatus.ACTIVE, // Default aktiv
+            memberStatus = MemberStatus.PENDING, // Default aktiv
 
         )
 
@@ -172,19 +174,9 @@ class MemberService (
         return savedMember
     }
 
-    // Beispiel für das Lesen (Login/Profil)
+    @Transactional(readOnly = true)
     fun getMemberProfile(email: String): MemberResponse {
-        val member = memberRepository.findByEmail(email)
-            ?: throw RuntimeException("User not found")
-
-        return MemberResponse(
-            id = member.id!!,
-            firstName = member.firstName,
-            lastName = member.lastName,
-            email = member.email ?: "",
-            role = member.role ?: "",
-            groupName = member.group?.name,
-            city = member.city ?: ""
-        )
+        val member = memberRepository.findByEmail(email) ?: throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "Access denied")
+        return member.toResponse()
     }
 }
