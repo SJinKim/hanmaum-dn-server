@@ -20,36 +20,36 @@ import org.keycloak.representations.idm.CredentialRepresentation
 import org.keycloak.representations.idm.UserRepresentation
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
-import org.springframework.transaction.annotation.Transactional
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
 
 @Service
-class MemberService (
+class MemberService(
     private val memberRepository: MemberRepository,
     private val churchGroupRepository: ChurchGroupRepository,
     private val keycloak: Keycloak,
-    @Value($$"${app.keycloak.realm}") private val realm: String
+    @Value($$"${app.keycloak.realm}") private val realm: String,
 ) {
     // Helper: String -> UUID
-    private fun parseId(id: String): UUID {
-        return try {
+    private fun parseId(id: String): UUID =
+        try {
             UUID.fromString(id)
         } catch (e: IllegalArgumentException) {
             throw EntityNotFoundException("Invalid ID format")
         }
-    }
 
-    @Transactional(readOnly=true)
+    @Transactional(readOnly = true)
     fun getAllMembers(): List<Member> = memberRepository.findAll()
 
     @Transactional
     fun getMember(publicIdStr: String): Member {
         val uuid = parseId(publicIdStr)
-        return memberRepository.findByPublicId(uuid)
+        return memberRepository
+            .findByPublicId(uuid)
             .orElseThrow { EntityNotFoundException("Member not found") }
     }
 
@@ -57,23 +57,30 @@ class MemberService (
     fun createMember(request: CreateMemberRequest): Member {
         val newMember = request.toEntity()
 
-        if(request.groupId != null) {
-            val group = churchGroupRepository.findById(request.groupId)
-                .orElseThrow{ EntityNotFoundException("Group with ID ${request.groupId} not found") }
+        if (request.groupId != null) {
+            val group =
+                churchGroupRepository
+                    .findById(request.groupId)
+                    .orElseThrow { EntityNotFoundException("Group with ID ${request.groupId} not found") }
             newMember.group = group
         }
         return memberRepository.save(newMember)
     }
 
     @Transactional
-    fun updateMember(publicIdStr: String, request: UpdateMemberRequest): Member {
+    fun updateMember(
+        publicIdStr: String,
+        request: UpdateMemberRequest,
+    ): Member {
         val member = getMember(publicIdStr)
         member.updateForm(request)
 
-        if(request.groupId != null) {
+        if (request.groupId != null) {
             if (member.group?.id != request.groupId) {
-                val group = churchGroupRepository.findById(request.groupId)
-                    .orElseThrow { EntityNotFoundException("Group with ID ${request.groupId} not found") }
+                val group =
+                    churchGroupRepository
+                        .findById(request.groupId)
+                        .orElseThrow { EntityNotFoundException("Group with ID ${request.groupId} not found") }
                 member.group = group
             }
         } else {
@@ -95,10 +102,9 @@ class MemberService (
 
     @Transactional
     fun registerMember(req: RegisterMemberRequest): Member {
-
         val existingUser = memberRepository.findByEmail(req.email)
 
-        if(existingUser != null) {
+        if (existingUser != null) {
             throw IllegalArgumentException("이미 가입된 이메일입니다. Already existing email: ${existingUser.email}")
         }
 
@@ -106,9 +112,10 @@ class MemberService (
         val existingMembers = memberRepository.findSimilarNames(req.firstName, req.lastName)
 
         // 2. Discriminator Logik
-        val takenDiscriminators = existingMembers
-            .map { it.discriminator }
-            .toSet()
+        val takenDiscriminators =
+            existingMembers
+                .map { it.discriminator }
+                .toSet()
 
         var currentDiscriminator: String? = null
 
@@ -123,51 +130,60 @@ class MemberService (
         }
 
         // 3. Defaults & Entity Erstellung
-        val newMember = Member(
-            lastName = req.lastName,
-            firstName = req.firstName,
-            discriminator = currentDiscriminator,
-            email = req.email,
-
-            gender = try { req.gender?.let { Gender.valueOf(it) } } catch (e: Exception) { null },
-            baptism = try { req.baptism?.let { Baptism.valueOf(it) } } catch (e: Exception) { Baptism.UNBAPTIZED },
-
-            city = req.city,
-            birthDate = req.birthDate,
-            phoneNumber = req.phoneNumber,
-            street = req.street,
-            zipCode = req.zipCode,
-
-            // --- FESTE WERTE (Business Logic) ---
-            role = "", // Startet leer
-            group = null, // Startet ohne Gruppe
-            registrationDate = LocalDate.now(), // Heute
-            memberStatus = MemberStatus.PENDING, // Default aktiv
-
-        )
+        val newMember =
+            Member(
+                lastName = req.lastName,
+                firstName = req.firstName,
+                discriminator = currentDiscriminator,
+                email = req.email,
+                gender =
+                    try {
+                        req.gender?.let { Gender.valueOf(it) }
+                    } catch (e: Exception) {
+                        null
+                    },
+                baptism =
+                    try {
+                        req.baptism?.let { Baptism.valueOf(it) }
+                    } catch (e: Exception) {
+                        Baptism.UNBAPTIZED
+                    },
+                city = req.city,
+                birthDate = req.birthDate,
+                phoneNumber = req.phoneNumber,
+                street = req.street,
+                zipCode = req.zipCode,
+                // --- FESTE WERTE (Business Logic) ---
+                role = "", // Startet leer
+                group = null, // Startet ohne Gruppe
+                registrationDate = LocalDate.now(), // Heute
+                memberStatus = MemberStatus.PENDING, // Default aktiv
+            )
 
         val savedMember = memberRepository.save(newMember)
 
         // 2 User in KC anglegen
-        val keycloakUser = UserRepresentation().apply {
-            username = req.email
-            email = req.email
-            firstName = req.firstName
-            lastName = req.lastName
-            isEnabled = true
-            isEmailVerified = false
+        val keycloakUser =
+            UserRepresentation().apply {
+                username = req.email
+                email = req.email
+                firstName = req.firstName
+                lastName = req.lastName
+                isEnabled = true
+                isEmailVerified = false
 
-            val cred = CredentialRepresentation().apply {
-                type = CredentialRepresentation.PASSWORD
-                value = req.password
-                isTemporary = false
+                val cred =
+                    CredentialRepresentation().apply {
+                        type = CredentialRepresentation.PASSWORD
+                        value = req.password
+                        isTemporary = false
+                    }
+                credentials = listOf(cred)
             }
-            credentials = listOf(cred)
-        }
 
         val response: Response = keycloak.realm(realm).users().create(keycloakUser)
 
-        if(response.status != 201) {
+        if (response.status != 201) {
             val errorBody = response.readEntity(String::class.java)
             throw RuntimeException("Keycloak Fehler: $errorBody")
         }

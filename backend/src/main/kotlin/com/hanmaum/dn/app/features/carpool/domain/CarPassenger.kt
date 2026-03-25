@@ -6,16 +6,11 @@ import jakarta.persistence.*
 
 @Entity
 @Table(name = "car_passengers")
-class CarPassenger (
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    val id: Long? = null,
-
+class CarPassenger(
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "car_id", nullable = false)
     val car: Car,
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "member_id", nullable = false)
-    val member: Member
+    val member: Member,
 ) : BaseEntity()

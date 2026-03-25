@@ -11,28 +11,28 @@ import java.time.LocalDate
 @RestController
 @RequestMapping("/carpool")
 class CarpoolController(
-    private val carpoolService: CarpoolService
+    private val carpoolService: CarpoolService,
 ) {
     @GetMapping
     fun getCars(
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) date: LocalDate,
         // Später holen wir die ID aus dem SecurityContext (Token)
         // Für jetzt simulieren wir es via Header oder Parameter, oder du lässt es null
-        @RequestParam(required = false) myMemberId: String?
-    ): List<CarDto> {
-        return carpoolService.getCarsForDate(date, myMemberId)
-    }
+        @RequestParam(required = false) myMemberId: String?,
+    ): List<CarDto> = carpoolService.getCarsForDate(date, myMemberId)
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    fun createCar(@RequestBody req: CreateCarRequest) {
+    fun createCar(
+        @RequestBody req: CreateCarRequest,
+    ) {
         carpoolService.createCar(req)
     }
 
     @PostMapping("/{carId}/join")
     fun joinCar(
         @PathVariable carId: Long,
-        @RequestParam memberId: String
+        @RequestParam memberId: String,
     ) {
         carpoolService.joinCar(carId, memberId)
     }
@@ -41,7 +41,7 @@ class CarpoolController(
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun leaveCar(
         @PathVariable carid: Long,
-        @RequestParam memberId: String
+        @RequestParam memberId: String,
     ) {
         carpoolService.leaveCar(carid, memberId)
     }

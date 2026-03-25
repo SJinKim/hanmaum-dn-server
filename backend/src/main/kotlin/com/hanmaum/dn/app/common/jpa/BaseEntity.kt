@@ -1,24 +1,47 @@
 package com.hanmaum.dn.app.common.jpa
 
 import jakarta.persistence.Column
+import jakarta.persistence.GeneratedValue
+import jakarta.persistence.GenerationType
+import jakarta.persistence.Id
 import jakarta.persistence.MappedSuperclass
 import org.hibernate.annotations.CreationTimestamp
 import org.hibernate.annotations.UpdateTimestamp
+import java.io.Serializable
 import java.time.LocalDateTime
+import java.util.UUID
+import org.hibernate.Hibernate
+
 
 @MappedSuperclass
-abstract class BaseEntity {
+abstract class BaseEntity : Serializable {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id", nullable = false, updatable = false)
+    var id: Long? = null
+
+    @Column(name = "public_id", nullable = false, unique = true, updatable = false)
+    val publicId: UUID = UUID.randomUUID()
 
     @CreationTimestamp
-    @Column(name="created_at", nullable = false, updatable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     var createdAt: LocalDateTime? = LocalDateTime.now()
 
     @UpdateTimestamp
-    @Column(name="updated_at")
+    @Column(name = "updated_at")
     var updatedAt: LocalDateTime? = null
 
-    @Column(name="deleted_at")
+    @Column(name = "deleted_at")
     var deletedAt: LocalDateTime? = null
 
     fun isActive(): Boolean = deletedAt == null
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other == null || Hibernate.getClass(this) != Hibernate.getClass(other)) return false
+        other as BaseEntity
+        return publicId == other.publicId
+    }
+
+    override fun hashCode(): Int = publicId.hashCode()
 }

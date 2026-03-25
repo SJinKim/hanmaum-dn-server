@@ -1,8 +1,8 @@
 package com.hanmaum.dn.app.features.statistics.service
 
+import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.statistics.api.v1.dto.ChartDataDto
 import com.hanmaum.dn.app.features.statistics.api.v1.dto.DashboardStatsDto
-import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -12,7 +12,7 @@ import java.math.RoundingMode
 class StatisticsService(
     private val memberRepository: MemberRepository,
 ) {
-    @Transactional(readOnly=true)
+    @Transactional(readOnly = true)
     fun getDashboardStats(): DashboardStatsDto {
         // 1 Einfache KPIs laden
         val totalMembers = memberRepository.countByDeletedAtIsNull()
@@ -20,9 +20,11 @@ class StatisticsService(
 
         // Durchschnittsalter runden
         val avgAgeRaw = memberRepository.getAverageAge()
-        val avgAge = BigDecimal.valueOf(avgAgeRaw)
-            .setScale(1, RoundingMode.HALF_UP)
-            .toDouble()
+        val avgAge =
+            BigDecimal
+                .valueOf(avgAgeRaw)
+                .setScale(1, RoundingMode.HALF_UP)
+                .toDouble()
 
         // 2. Diagramm-Daten laden
 
@@ -37,13 +39,14 @@ class StatisticsService(
         // index[0] = label (String), index[1] = count (Number)
         val rawAgeGroups = memberRepository.getAgeGroupsNative()
 
-        val ageStats = rawAgeGroups.map { row ->
-            ChartDataDto(
-                label = row[0] as String,
-                // Postgres COUNT gibt BigInteger oder Long zurück, sicherheitshalber casten
-                value = (row[1] as Number).toLong()
-            )
-        }
+        val ageStats =
+            rawAgeGroups.map { row ->
+                ChartDataDto(
+                    label = row[0] as String,
+                    // Postgres COUNT gibt BigInteger oder Long zurück, sicherheitshalber casten
+                    value = (row[1] as Number).toLong(),
+                )
+            }
 
         // 3. Alles zusammenpacken
         return DashboardStatsDto(
@@ -52,7 +55,7 @@ class StatisticsService(
             averageAge = avgAge,
             cityDistribution = cityStats,
             ageDistribution = ageStats,
-            genderDistribution = genderStats
+            genderDistribution = genderStats,
         )
     }
 }

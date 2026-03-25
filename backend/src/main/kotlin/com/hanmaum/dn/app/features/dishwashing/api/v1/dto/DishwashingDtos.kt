@@ -6,12 +6,12 @@ import java.time.LocalDate
 data class DishwashingDayDto(
     val date: LocalDate,
     val groupNames: List<String>,
-    val note: String?
+    val note: String?,
 )
 
 // REQUEST: Admin legt fest
 data class CreateDishwashingRequest(
     val date: LocalDate,
     val groupIds: List<Long>, // Admin sendet hier die IDs der 2 Gruppen
-    val note: String? = null
+    val note: String? = null,
 )

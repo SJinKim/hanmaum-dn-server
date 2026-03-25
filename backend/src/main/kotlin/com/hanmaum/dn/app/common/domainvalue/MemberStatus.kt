@@ -2,7 +2,7 @@ package com.hanmaum.dn.app.common.domainvalue
 
 enum class MemberStatus {
     ACTIVE,
-    INACTIVE,
     DELETED,
-    PENDING
+    PENDING,
+    REJECTED,
 }
