@@ -12,9 +12,3 @@ Types: feat | fix | refactor | test | chore | docs | perf | revert
 1. ./gradlew test && ./gradlew ktlintCheck
 2. ng test --watch=false --browsers=ChromeHeadless
 3. Update CHANGELOG.md
-
-## After Push — Keep main in sync
-After a successful push on a feature branch:
-```bash
-git checkout main
-git pull origin main

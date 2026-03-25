@@ -9,3 +9,8 @@ Tasks:
 - Summarize git log for a specific path
 
 Return: structured summary with file paths, key findings, no code edits.
+
+Constraints:
+- Max depth: 3 directory levels unless explicitly asked for more
+- Do not read file contents unless directly relevant to the task
+- Return summaries, not raw file dumps
