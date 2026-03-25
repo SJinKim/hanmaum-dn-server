@@ -3,12 +3,8 @@ package com.hanmaum.dn.app.features.groups.domain
 import com.hanmaum.dn.app.common.jpa.BaseEntity
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
-import jakarta.persistence.GeneratedValue
-import jakarta.persistence.GenerationType
-import jakarta.persistence.Id
 import jakarta.persistence.Table
 import jakarta.persistence.UniqueConstraint
-import java.time.LocalDateTime
 
 @Entity
 @Table(name = "church_groups", uniqueConstraints = [UniqueConstraint(columnNames = ["division", "name"])])
@@ -16,7 +12,7 @@ class ChurchGroup(
     @Column(nullable = false)
     var division: String? = null,
     @Column(nullable = false)
-    var name: String
+    var name: String,
 ) : BaseEntity() {
     fun getFullName(): String = if (division != null) "$division - $name" else name
 }

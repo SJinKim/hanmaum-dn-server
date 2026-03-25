@@ -1,6 +1,17 @@
 {
   "permissions": {
-    "allow": ["mcp__playwright"],
+    "allow": [
+      "mcp__playwright",
+      "Bash(./gradlew build:*)",
+      "Bash(./gradlew test:*)",
+      "Bash(./gradlew ktlintFormat)",
+      "Bash(./gradlew dependencies:*)",
+      "Bash(./gradlew compileTestKotlin)",
+      "Bash(head -30 grep -A 5 '<failure\\\\|<error' /Users/seungjinkim/Documents/Private_Projects/dn-app/backend/build/test-results/test/TEST-com.hanmaum.dn.app.features.attendance.service.AttendanceServiceTest.xml)",
+      "Bash(./gradlew cleanTest test --tests \"com.hanmaum.dn.app.features.*\")",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ],
     "deny": []
   },
   "statusLine": {

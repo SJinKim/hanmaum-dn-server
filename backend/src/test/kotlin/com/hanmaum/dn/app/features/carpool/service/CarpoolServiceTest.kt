@@ -8,17 +8,19 @@ import com.hanmaum.dn.app.features.carpool.repository.CarRepository
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import jakarta.persistence.EntityNotFoundException
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
-import org.mockito.ArgumentMatchers.any
 import org.mockito.ArgumentMatchers.anyLong
 import org.mockito.InjectMocks
 import org.mockito.Mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
+import org.mockito.kotlin.any
 import java.time.LocalDate
 import java.time.LocalTime
 import java.util.Optional
@@ -26,9 +28,10 @@ import java.util.UUID
 
 @ExtendWith(MockitoExtension::class)
 class CarpoolServiceTest {
-
     @Mock private lateinit var carRepository: CarRepository
+
     @Mock private lateinit var passengerRepository: CarPassengerRepository
+
     @Mock private lateinit var memberRepository: MemberRepository
 
     @InjectMocks
@@ -36,20 +39,30 @@ class CarpoolServiceTest {
 
     private val sessionDate = LocalDate.of(2026, 3, 29)
 
-    private fun member(id: Long, firstName: String = "철수", lastName: String = "김"): Member {
+    private fun member(
+        id: Long,
+        firstName: String = "철수",
+        lastName: String = "김",
+    ): Member {
         val m = Member(lastName = lastName, firstName = firstName)
         m.id = id
         return m
     }
 
-    private fun car(id: Long, driver: Member, maxSeats: Int = 4, currentPassengers: Int = 0): Car {
-        val c = Car(
-            driver = driver,
-            sessionDate = sessionDate,
-            name = "테스트 차",
-            maxSeats = maxSeats,
-            currentPassengers = currentPassengers,
-        )
+    private fun car(
+        id: Long,
+        driver: Member,
+        maxSeats: Int = 4,
+        currentPassengers: Int = 0,
+    ): Car {
+        val c =
+            Car(
+                driver = driver,
+                sessionDate = sessionDate,
+                name = "테스트 차",
+                maxSeats = maxSeats,
+                currentPassengers = currentPassengers,
+            )
         c.id = id
         return c
     }
@@ -58,7 +71,7 @@ class CarpoolServiceTest {
 
     @Test
     fun `getCarsForDate returns empty list when no cars`() {
-        `when`(carRepository.findAllBySessionDate(any(LocalDate::class.java))).thenReturn(emptyList())
+        `when`(carRepository.findAllBySessionDate(any<LocalDate>())).thenReturn(emptyList())
 
         assertTrue(carpoolService.getCarsForDate(sessionDate, null).isEmpty())
     }
@@ -69,7 +82,7 @@ class CarpoolServiceTest {
         val c = car(10L, driver, maxSeats = 4, currentPassengers = 2)
         c.departureLocation = "강남역"
         c.departureTime = LocalTime.of(10, 0)
-        `when`(carRepository.findAllBySessionDate(any(LocalDate::class.java))).thenReturn(listOf(c))
+        `when`(carRepository.findAllBySessionDate(any<LocalDate>())).thenReturn(listOf(c))
 
         val result = carpoolService.getCarsForDate(sessionDate, null)
 
@@ -90,7 +103,7 @@ class CarpoolServiceTest {
     fun `getCarsForDate marks car as full when seats exhausted`() {
         val driver = member(1L)
         val c = car(10L, driver, maxSeats = 3, currentPassengers = 3)
-        `when`(carRepository.findAllBySessionDate(any(LocalDate::class.java))).thenReturn(listOf(c))
+        `when`(carRepository.findAllBySessionDate(any<LocalDate>())).thenReturn(listOf(c))
 
         val result = carpoolService.getCarsForDate(sessionDate, null)
 
@@ -102,8 +115,8 @@ class CarpoolServiceTest {
         val driver = member(1L, "이", "드라이버")
         val currentMember = member(2L, "현재", "유저")
         val c = car(10L, driver)
-        `when`(carRepository.findAllBySessionDate(any(LocalDate::class.java))).thenReturn(listOf(c))
-        `when`(memberRepository.findByPublicId(any(UUID::class.java))).thenReturn(Optional.of(currentMember))
+        `when`(carRepository.findAllBySessionDate(any<LocalDate>())).thenReturn(listOf(c))
+        `when`(memberRepository.findByPublicId(any<UUID>())).thenReturn(Optional.of(currentMember))
         `when`(passengerRepository.findByCarIdAndMemberId(10L, 2L))
             .thenReturn(Optional.of(CarPassenger(car = c, member = currentMember)))
 
@@ -117,8 +130,8 @@ class CarpoolServiceTest {
         val driver = member(1L)
         val currentMember = member(2L)
         val c = car(10L, driver)
-        `when`(carRepository.findAllBySessionDate(any(LocalDate::class.java))).thenReturn(listOf(c))
-        `when`(memberRepository.findByPublicId(any(UUID::class.java))).thenReturn(Optional.of(currentMember))
+        `when`(carRepository.findAllBySessionDate(any<LocalDate>())).thenReturn(listOf(c))
+        `when`(memberRepository.findByPublicId(any<UUID>())).thenReturn(Optional.of(currentMember))
         `when`(passengerRepository.findByCarIdAndMemberId(10L, 2L)).thenReturn(Optional.empty())
 
         val result = carpoolService.getCarsForDate(sessionDate, currentMember.publicId.toString())
@@ -130,17 +143,19 @@ class CarpoolServiceTest {
 
     @Test
     fun `createCar throws EntityNotFoundException when driver not found`() {
-        `when`(memberRepository.findByPublicId(any(UUID::class.java))).thenReturn(Optional.empty())
+        `when`(memberRepository.findByPublicId(any<UUID>())).thenReturn(Optional.empty())
 
         assertThrows<EntityNotFoundException> {
-            carpoolService.createCar(CreateCarRequest(
-                driverMemberId = UUID.randomUUID().toString(),
-                sessionDate = sessionDate,
-                name = null,
-                maxSeats = 4,
-                departureLocation = null,
-                departureTime = null,
-            ))
+            carpoolService.createCar(
+                CreateCarRequest(
+                    driverMemberId = UUID.randomUUID().toString(),
+                    sessionDate = sessionDate,
+                    name = null,
+                    maxSeats = 4,
+                    departureLocation = null,
+                    departureTime = null,
+                ),
+            )
         }
     }
 
@@ -148,17 +163,20 @@ class CarpoolServiceTest {
     fun `createCar saves car and returns its id`() {
         val driver = member(1L)
         val savedCar = car(99L, driver)
-        `when`(memberRepository.findByPublicId(any(UUID::class.java))).thenReturn(Optional.of(driver))
-        `when`(carRepository.save(any(Car::class.java))).thenReturn(savedCar)
+        `when`(memberRepository.findByPublicId(any<UUID>())).thenReturn(Optional.of(driver))
+        `when`(carRepository.save(any<Car>())).thenReturn(savedCar)
 
-        val id = carpoolService.createCar(CreateCarRequest(
-            driverMemberId = driver.publicId.toString(),
-            sessionDate = sessionDate,
-            name = "테스트 차",
-            maxSeats = 4,
-            departureLocation = null,
-            departureTime = null,
-        ))
+        val id =
+            carpoolService.createCar(
+                CreateCarRequest(
+                    driverMemberId = driver.publicId.toString(),
+                    sessionDate = sessionDate,
+                    name = "테스트 차",
+                    maxSeats = 4,
+                    departureLocation = null,
+                    departureTime = null,
+                ),
+            )
 
         assertEquals(99L, id)
     }
@@ -178,7 +196,7 @@ class CarpoolServiceTest {
     fun `joinCar throws EntityNotFoundException when member not found`() {
         val driver = member(1L)
         `when`(carRepository.findById(anyLong())).thenReturn(Optional.of(car(1L, driver)))
-        `when`(memberRepository.findByPublicId(any(UUID::class.java))).thenReturn(Optional.empty())
+        `when`(memberRepository.findByPublicId(any<UUID>())).thenReturn(Optional.empty())
 
         assertThrows<EntityNotFoundException> {
             carpoolService.joinCar(1L, UUID.randomUUID().toString())
@@ -191,7 +209,7 @@ class CarpoolServiceTest {
         val passenger = member(2L)
         val fullCar = car(1L, driver, maxSeats = 2, currentPassengers = 2)
         `when`(carRepository.findById(1L)).thenReturn(Optional.of(fullCar))
-        `when`(memberRepository.findByPublicId(any(UUID::class.java))).thenReturn(Optional.of(passenger))
+        `when`(memberRepository.findByPublicId(any<UUID>())).thenReturn(Optional.of(passenger))
 
         val ex = assertThrows<IllegalStateException> { carpoolService.joinCar(1L, passenger.publicId.toString()) }
         assertEquals("Car is full", ex.message)
@@ -203,7 +221,7 @@ class CarpoolServiceTest {
         val passenger = member(2L)
         val c = car(1L, driver, maxSeats = 4)
         `when`(carRepository.findById(1L)).thenReturn(Optional.of(c))
-        `when`(memberRepository.findByPublicId(any(UUID::class.java))).thenReturn(Optional.of(passenger))
+        `when`(memberRepository.findByPublicId(any<UUID>())).thenReturn(Optional.of(passenger))
         `when`(passengerRepository.isMemberAlreadyDriving(2L, sessionDate)).thenReturn(true)
 
         val ex = assertThrows<IllegalStateException> { carpoolService.joinCar(1L, passenger.publicId.toString()) }
@@ -216,22 +234,22 @@ class CarpoolServiceTest {
         val passenger = member(2L)
         val c = car(1L, driver, maxSeats = 4, currentPassengers = 1)
         `when`(carRepository.findById(1L)).thenReturn(Optional.of(c))
-        `when`(memberRepository.findByPublicId(any(UUID::class.java))).thenReturn(Optional.of(passenger))
+        `when`(memberRepository.findByPublicId(any<UUID>())).thenReturn(Optional.of(passenger))
         `when`(passengerRepository.isMemberAlreadyDriving(2L, sessionDate)).thenReturn(false)
-        `when`(passengerRepository.save(any(CarPassenger::class.java))).thenAnswer { it.arguments[0] }
-        `when`(carRepository.save(any(Car::class.java))).thenAnswer { it.arguments[0] }
+        `when`(passengerRepository.save(any<CarPassenger>())).thenAnswer { it.arguments[0] }
+        `when`(carRepository.save(any<Car>())).thenAnswer { it.arguments[0] }
 
         carpoolService.joinCar(1L, passenger.publicId.toString())
 
         assertEquals(2, c.currentPassengers)
-        verify(passengerRepository).save(any(CarPassenger::class.java))
+        verify(passengerRepository).save(any<CarPassenger>())
     }
 
     // --- leaveCar ---
 
     @Test
     fun `leaveCar throws EntityNotFoundException when member not found`() {
-        `when`(memberRepository.findByPublicId(any(UUID::class.java))).thenReturn(Optional.empty())
+        `when`(memberRepository.findByPublicId(any<UUID>())).thenReturn(Optional.empty())
 
         assertThrows<EntityNotFoundException> {
             carpoolService.leaveCar(1L, UUID.randomUUID().toString())
@@ -241,7 +259,7 @@ class CarpoolServiceTest {
     @Test
     fun `leaveCar throws EntityNotFoundException when passenger entry not found`() {
         val m = member(2L)
-        `when`(memberRepository.findByPublicId(any(UUID::class.java))).thenReturn(Optional.of(m))
+        `when`(memberRepository.findByPublicId(any<UUID>())).thenReturn(Optional.of(m))
         `when`(passengerRepository.findByCarIdAndMemberId(1L, 2L)).thenReturn(Optional.empty())
 
         assertThrows<EntityNotFoundException> {
@@ -255,9 +273,9 @@ class CarpoolServiceTest {
         val passenger = member(2L)
         val c = car(1L, driver, maxSeats = 4, currentPassengers = 2)
         val entry = CarPassenger(car = c, member = passenger)
-        `when`(memberRepository.findByPublicId(any(UUID::class.java))).thenReturn(Optional.of(passenger))
+        `when`(memberRepository.findByPublicId(any<UUID>())).thenReturn(Optional.of(passenger))
         `when`(passengerRepository.findByCarIdAndMemberId(1L, 2L)).thenReturn(Optional.of(entry))
-        `when`(carRepository.save(any(Car::class.java))).thenAnswer { it.arguments[0] }
+        `when`(carRepository.save(any<Car>())).thenAnswer { it.arguments[0] }
 
         carpoolService.leaveCar(1L, passenger.publicId.toString())
 

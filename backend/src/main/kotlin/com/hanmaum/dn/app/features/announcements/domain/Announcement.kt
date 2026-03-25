@@ -2,9 +2,12 @@ package com.hanmaum.dn.app.features.announcements.domain
 
 import com.hanmaum.dn.app.common.domainvalue.AnnouncementCategory
 import com.hanmaum.dn.app.common.jpa.BaseEntity
-import jakarta.persistence.*
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
+import jakarta.persistence.Table
 import java.time.LocalDateTime
-import java.util.UUID
 
 @Entity
 @Table(name = "announcements")

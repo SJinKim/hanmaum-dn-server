@@ -6,22 +6,23 @@ import com.hanmaum.dn.app.features.dishwashing.repository.DishwashingRepository
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
 import jakarta.persistence.EntityNotFoundException
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
-import org.mockito.ArgumentCaptor
-import org.mockito.ArgumentMatchers.any
 import org.mockito.InjectMocks
 import org.mockito.Mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
+import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
 import java.time.LocalDate
 
 @ExtendWith(MockitoExtension::class)
 class DishwashingServiceTest {
-
     @Mock
     private lateinit var dishwashingRepository: DishwashingRepository
 
@@ -31,20 +32,26 @@ class DishwashingServiceTest {
     @InjectMocks
     private lateinit var dishwashingService: DishwashingService
 
-    private fun group(id: Long, name: String): ChurchGroup {
+    private fun group(
+        id: Long,
+        name: String,
+    ): ChurchGroup {
         val g = ChurchGroup(name = name)
         g.id = id
         return g
     }
 
-    private fun schedule(date: LocalDate, group: ChurchGroup, note: String? = null): DishwashingSchedule =
-        DishwashingSchedule(scheduledDate = date, group = group, note = note)
+    private fun schedule(
+        date: LocalDate,
+        group: ChurchGroup,
+        note: String? = null,
+    ): DishwashingSchedule = DishwashingSchedule(scheduledDate = date, group = group, note = note)
 
     // --- getUpcomingSchedule ---
 
     @Test
     fun `getUpcomingSchedule returns empty list when no schedules`() {
-        `when`(dishwashingRepository.findAllByScheduledDateGreaterThanEqualOrderByScheduledDateAsc(any(LocalDate::class.java)))
+        `when`(dishwashingRepository.findAllByScheduledDateGreaterThanEqualOrderByScheduledDateAsc(any<LocalDate>()))
             .thenReturn(emptyList())
 
         assertTrue(dishwashingService.getUpcomingSchedule().isEmpty())
@@ -58,12 +65,14 @@ class DishwashingServiceTest {
         val g2 = group(2L, "믿음조")
         val g3 = group(3L, "소망조")
 
-        `when`(dishwashingRepository.findAllByScheduledDateGreaterThanEqualOrderByScheduledDateAsc(any(LocalDate::class.java)))
-            .thenReturn(listOf(
-                schedule(date1, g1, "특별 행사"),
-                schedule(date1, g2, "특별 행사"),
-                schedule(date2, g3),
-            ))
+        `when`(dishwashingRepository.findAllByScheduledDateGreaterThanEqualOrderByScheduledDateAsc(any<LocalDate>()))
+            .thenReturn(
+                listOf(
+                    schedule(date1, g1, "특별 행사"),
+                    schedule(date1, g2, "특별 행사"),
+                    schedule(date2, g3),
+                ),
+            )
 
         val result = dishwashingService.getUpcomingSchedule()
 
@@ -82,11 +91,13 @@ class DishwashingServiceTest {
     @Test
     fun `getUpcomingSchedule takes note from first entry of each day`() {
         val date = LocalDate.of(2026, 4, 5)
-        `when`(dishwashingRepository.findAllByScheduledDateGreaterThanEqualOrderByScheduledDateAsc(any(LocalDate::class.java)))
-            .thenReturn(listOf(
-                schedule(date, group(1L, "A"), "첫 번째 노트"),
-                schedule(date, group(2L, "B"), "두 번째 노트"),
-            ))
+        `when`(dishwashingRepository.findAllByScheduledDateGreaterThanEqualOrderByScheduledDateAsc(any<LocalDate>()))
+            .thenReturn(
+                listOf(
+                    schedule(date, group(1L, "A"), "첫 번째 노트"),
+                    schedule(date, group(2L, "B"), "두 번째 노트"),
+                ),
+            )
 
         val result = dishwashingService.getUpcomingSchedule()
 
@@ -100,7 +111,7 @@ class DishwashingServiceTest {
         val date = LocalDate.of(2026, 4, 5)
         val req = CreateDishwashingRequest(date = date, groupIds = listOf(1L))
         `when`(churchGroupRepository.findAllById(listOf(1L))).thenReturn(listOf(group(1L, "A")))
-        `when`(dishwashingRepository.saveAll(any())).thenReturn(emptyList())
+        `when`(dishwashingRepository.saveAll(any<Iterable<DishwashingSchedule>>())).thenReturn(emptyList())
 
         dishwashingService.createSchedule(req)
 
@@ -120,14 +131,13 @@ class DishwashingServiceTest {
         val date = LocalDate.of(2026, 4, 5)
         val req = CreateDishwashingRequest(date = date, groupIds = listOf(1L, 2L), note = "메모")
         `when`(churchGroupRepository.findAllById(listOf(1L, 2L))).thenReturn(listOf(group(1L, "A"), group(2L, "B")))
-        val captor = ArgumentCaptor.forClass(Iterable::class.java)
-        `when`(dishwashingRepository.saveAll(any())).thenReturn(emptyList())
+        val captor = argumentCaptor<Iterable<DishwashingSchedule>>()
+        `when`(dishwashingRepository.saveAll(any<Iterable<DishwashingSchedule>>())).thenReturn(emptyList())
 
         dishwashingService.createSchedule(req)
 
         verify(dishwashingRepository).saveAll(captor.capture())
-        @Suppress("UNCHECKED_CAST")
-        val saved = (captor.value as Iterable<DishwashingSchedule>).toList()
+        val saved = captor.firstValue.toList()
         assertEquals(2, saved.size)
         assertTrue(saved.all { it.note == "메모" })
         assertTrue(saved.all { it.scheduledDate == date })

@@ -12,52 +12,67 @@ import com.hanmaum.dn.app.features.groups.repository.GroupMeetingRepository
 import com.hanmaum.dn.app.features.groups.repository.MeetingAttendanceRepository
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
-import org.mockito.ArgumentCaptor
-import org.mockito.ArgumentMatchers.any
 import org.mockito.ArgumentMatchers.anyLong
 import org.mockito.InjectMocks
 import org.mockito.Mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
+import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
 import java.time.LocalDateTime
 import java.util.Optional
 import java.util.UUID
 
 @ExtendWith(MockitoExtension::class)
 class GroupMeetingServiceTest {
-
     @Mock private lateinit var meetingRepo: GroupMeetingRepository
+
     @Mock private lateinit var attendanceRepo: MeetingAttendanceRepository
+
     @Mock private lateinit var groupRepo: ChurchGroupRepository
+
     @Mock private lateinit var memberRepo: MemberRepository
 
     @InjectMocks
     private lateinit var groupMeetingService: GroupMeetingService
 
-    private fun group(id: Long, name: String = "다니엘조"): ChurchGroup {
+    private fun group(
+        id: Long,
+        name: String = "다니엘조",
+    ): ChurchGroup {
         val g = ChurchGroup(name = name)
         g.id = id
         return g
     }
 
-    private fun member(id: Long, firstName: String = "철수", lastName: String = "김", grp: ChurchGroup? = null): Member {
+    private fun member(
+        id: Long,
+        firstName: String = "철수",
+        lastName: String = "김",
+        grp: ChurchGroup? = null,
+    ): Member {
         val m = Member(lastName = lastName, firstName = firstName)
         m.id = id
         m.group = grp
         return m
     }
 
-    private fun meeting(id: Long, group: ChurchGroup): GroupMeeting {
-        val m = GroupMeeting(
-            group = group,
-            meetingTime = LocalDateTime.of(2026, 3, 22, 14, 0),
-            location = "교회",
-        )
+    private fun meeting(
+        id: Long,
+        group: ChurchGroup,
+    ): GroupMeeting {
+        val m =
+            GroupMeeting(
+                group = group,
+                meetingTime = LocalDateTime.of(2026, 3, 22, 14, 0),
+                location = "교회",
+            )
         m.id = id
         return m
     }
@@ -70,7 +85,7 @@ class GroupMeetingServiceTest {
 
         assertThrows<EntityNotFoundException> {
             groupMeetingService.createMeeting(
-                CreateMeetingRequest(groupId = 1L, meetingTime = LocalDateTime.now(), location = "교회")
+                CreateMeetingRequest(groupId = 1L, meetingTime = LocalDateTime.now(), location = "교회"),
             )
         }
     }
@@ -80,11 +95,12 @@ class GroupMeetingServiceTest {
         val g = group(1L)
         val saved = meeting(42L, g)
         `when`(groupRepo.findById(1L)).thenReturn(Optional.of(g))
-        `when`(meetingRepo.save(any(GroupMeeting::class.java))).thenReturn(saved)
+        `when`(meetingRepo.save(any<GroupMeeting>())).thenReturn(saved)
 
-        val id = groupMeetingService.createMeeting(
-            CreateMeetingRequest(groupId = 1L, meetingTime = LocalDateTime.of(2026, 4, 6, 14, 0), location = "교회")
-        )
+        val id =
+            groupMeetingService.createMeeting(
+                CreateMeetingRequest(groupId = 1L, meetingTime = LocalDateTime.of(2026, 4, 6, 14, 0), location = "교회"),
+            )
 
         assertEquals(42L, id)
     }
@@ -105,12 +121,12 @@ class GroupMeetingServiceTest {
         val g = group(1L)
         val m = meeting(10L, g)
         `when`(meetingRepo.findById(10L)).thenReturn(Optional.of(m))
-        `when`(attendanceRepo.saveAll(any())).thenReturn(emptyList())
+        `when`(attendanceRepo.saveAll(any<Iterable<MeetingAttendance>>())).thenReturn(emptyList())
 
         groupMeetingService.submitReport(10L, SubmitMeetingReportRequest(entries = emptyList()))
 
         verify(attendanceRepo).deleteAllByMeetingId(10L)
-        verify(attendanceRepo).saveAll(any())
+        verify(attendanceRepo).saveAll(any<Iterable<MeetingAttendance>>())
     }
 
     @Test
@@ -118,19 +134,19 @@ class GroupMeetingServiceTest {
         val g = group(1L)
         val m = meeting(10L, g)
         val member1 = member(1L)
-        val req = SubmitMeetingReportRequest(
-            entries = listOf(ReportEntry(memberId = member1.publicId.toString(), isPresent = true, prayerRequest = "건강"))
-        )
+        val req =
+            SubmitMeetingReportRequest(
+                entries = listOf(ReportEntry(memberId = member1.publicId.toString(), isPresent = true, prayerRequest = "건강")),
+            )
         `when`(meetingRepo.findById(10L)).thenReturn(Optional.of(m))
-        `when`(memberRepo.findByPublicId(any(UUID::class.java))).thenReturn(Optional.of(member1))
-        val captor = ArgumentCaptor.forClass(Iterable::class.java)
-        `when`(attendanceRepo.saveAll(any())).thenReturn(emptyList())
+        `when`(memberRepo.findByPublicId(any<UUID>())).thenReturn(Optional.of(member1))
+        val captor = argumentCaptor<Iterable<MeetingAttendance>>()
+        `when`(attendanceRepo.saveAll(any<Iterable<MeetingAttendance>>())).thenReturn(emptyList())
 
         groupMeetingService.submitReport(10L, req)
 
         verify(attendanceRepo).saveAll(captor.capture())
-        @Suppress("UNCHECKED_CAST")
-        val saved = (captor.value as Iterable<MeetingAttendance>).toList()
+        val saved = captor.firstValue.toList()
         assertEquals("PRESENT", saved[0].status)
         assertEquals("건강", saved[0].prayerRequest)
     }
@@ -140,19 +156,19 @@ class GroupMeetingServiceTest {
         val g = group(1L)
         val m = meeting(10L, g)
         val member1 = member(1L)
-        val req = SubmitMeetingReportRequest(
-            entries = listOf(ReportEntry(memberId = member1.publicId.toString(), isPresent = false, prayerRequest = null))
-        )
+        val req =
+            SubmitMeetingReportRequest(
+                entries = listOf(ReportEntry(memberId = member1.publicId.toString(), isPresent = false, prayerRequest = null)),
+            )
         `when`(meetingRepo.findById(10L)).thenReturn(Optional.of(m))
-        `when`(memberRepo.findByPublicId(any(UUID::class.java))).thenReturn(Optional.of(member1))
-        val captor = ArgumentCaptor.forClass(Iterable::class.java)
-        `when`(attendanceRepo.saveAll(any())).thenReturn(emptyList())
+        `when`(memberRepo.findByPublicId(any<UUID>())).thenReturn(Optional.of(member1))
+        val captor = argumentCaptor<Iterable<MeetingAttendance>>()
+        `when`(attendanceRepo.saveAll(any<Iterable<MeetingAttendance>>())).thenReturn(emptyList())
 
         groupMeetingService.submitReport(10L, req)
 
         verify(attendanceRepo).saveAll(captor.capture())
-        @Suppress("UNCHECKED_CAST")
-        val saved = (captor.value as Iterable<MeetingAttendance>).toList()
+        val saved = captor.firstValue.toList()
         assertEquals("ABSENT", saved[0].status)
     }
 
@@ -174,7 +190,7 @@ class GroupMeetingServiceTest {
         val m = meeting(10L, g1)
         val requester = member(2L, grp = g2)
         `when`(meetingRepo.findById(10L)).thenReturn(Optional.of(m))
-        `when`(memberRepo.findByPublicId(any(UUID::class.java))).thenReturn(Optional.of(requester))
+        `when`(memberRepo.findByPublicId(any<UUID>())).thenReturn(Optional.of(requester))
 
         assertThrows<IllegalAccessException> {
             groupMeetingService.getMeetingDetails(10L, requester.publicId.toString(), false)
@@ -187,7 +203,7 @@ class GroupMeetingServiceTest {
         val m = meeting(10L, g)
         val requester = member(2L, grp = g)
         `when`(meetingRepo.findById(10L)).thenReturn(Optional.of(m))
-        `when`(memberRepo.findByPublicId(any(UUID::class.java))).thenReturn(Optional.of(requester))
+        `when`(memberRepo.findByPublicId(any<UUID>())).thenReturn(Optional.of(requester))
         `when`(attendanceRepo.findAllByMeetingId(10L)).thenReturn(emptyList())
 
         val detail = groupMeetingService.getMeetingDetails(10L, requester.publicId.toString(), false)
@@ -247,7 +263,7 @@ class GroupMeetingServiceTest {
     fun `getMeetings returns only own group meetings for non-admin`() {
         val g = group(1L, "다니엘조")
         val requester = member(2L, grp = g)
-        `when`(memberRepo.findByPublicId(any(UUID::class.java))).thenReturn(Optional.of(requester))
+        `when`(memberRepo.findByPublicId(any<UUID>())).thenReturn(Optional.of(requester))
         `when`(meetingRepo.findAllByGroupIdOrderByMeetingTimeDesc(1L)).thenReturn(listOf(meeting(1L, g)))
 
         val result = groupMeetingService.getMeetings(requester.publicId.toString(), false)
@@ -259,7 +275,7 @@ class GroupMeetingServiceTest {
     @Test
     fun `getMeetings returns empty list when non-admin has no group`() {
         val requester = member(2L, grp = null)
-        `when`(memberRepo.findByPublicId(any(UUID::class.java))).thenReturn(Optional.of(requester))
+        `when`(memberRepo.findByPublicId(any<UUID>())).thenReturn(Optional.of(requester))
 
         val result = groupMeetingService.getMeetings(requester.publicId.toString(), false)
 

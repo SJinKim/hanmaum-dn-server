@@ -2,7 +2,12 @@ package com.hanmaum.dn.app.features.dishwashing.domain
 
 import com.hanmaum.dn.app.common.jpa.BaseEntity
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
-import jakarta.persistence.*
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.FetchType
+import jakarta.persistence.JoinColumn
+import jakarta.persistence.ManyToOne
+import jakarta.persistence.Table
 import java.time.LocalDate
 
 @Entity
