@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": ["mcp__playwright"],
+    "deny": []
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "npx -y ccstatusline@latest",
+    "padding": 0
+  }
+}
