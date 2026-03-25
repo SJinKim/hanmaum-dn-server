@@ -85,3 +85,4 @@ assets/demo/
 *.sql
 
 /infrastructure/architectureLog/*
+/postgres-init/application.old.yml
