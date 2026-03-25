@@ -13,7 +13,6 @@ import java.math.BigInteger
 
 @ExtendWith(MockitoExtension::class)
 class StatisticsServiceTest {
-
     @Mock
     private lateinit var memberRepository: MemberRepository
 
@@ -66,10 +65,13 @@ class StatisticsServiceTest {
 
     @Test
     fun `getDashboardStats maps age group rows to ChartDataDto`() {
-        setupMocks(ageGroups = listOf(
-            arrayOf<Any>("20대", 10L),
-            arrayOf<Any>("30대", 7L),
-        ))
+        setupMocks(
+            ageGroups =
+                listOf(
+                    arrayOf<Any>("20대", 10L),
+                    arrayOf<Any>("30대", 7L),
+                ),
+        )
 
         val stats = statisticsService.getDashboardStats()
 
@@ -103,10 +105,11 @@ class StatisticsServiceTest {
 
     @Test
     fun `getDashboardStats passes through gender distribution unchanged`() {
-        val genders = listOf(
-            ChartDataDto("형제", 20L),
-            ChartDataDto("자매", 22L),
-        )
+        val genders =
+            listOf(
+                ChartDataDto("형제", 20L),
+                ChartDataDto("자매", 22L),
+            )
         setupMocks(genders = genders)
 
         val stats = statisticsService.getDashboardStats()

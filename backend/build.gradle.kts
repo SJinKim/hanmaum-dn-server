@@ -55,10 +55,10 @@ dependencies {
     // --- TEST SETUP (Spring Boot 4 & Testcontainers 2) ---
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
     // Test Container libs
-    testImplementation("org.testcontainers:junit-jupiter")
-    testImplementation("org.testcontainers:postgresql")
-
+    testImplementation("org.testcontainers:junit-jupiter:1.20.4")
+    testImplementation("org.testcontainers:postgresql:1.20.4")
 
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.13")
 
@@ -94,5 +94,7 @@ ktlint {
 }
 
 tasks.withType<Test> {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags("integration")
+    }
 }

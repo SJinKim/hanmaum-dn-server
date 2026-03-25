@@ -7,14 +7,18 @@ import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.domain.Member
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.LocalDate
 
 class MemberMappersTest {
-
-    private fun memberWithId(id: Long, firstName: String = "철수", lastName: String = "김"): Member {
+    private fun memberWithId(
+        id: Long,
+        firstName: String = "철수",
+        lastName: String = "김",
+    ): Member {
         val m = Member(lastName = lastName, firstName = firstName)
         m.id = id
         return m
@@ -100,20 +104,21 @@ class MemberMappersTest {
 
     @Test
     fun `toEntity maps all fields correctly`() {
-        val req = CreateMemberRequest(
-            lastName = "김",
-            firstName = "철수",
-            discriminator = "A",
-            gender = "M",
-            baptism = "UNBAPTIZED",
-            birthDate = LocalDate.of(1995, 5, 15),
-            phoneNumber = "010-1234-5678",
-            email = "test@example.com",
-            street = "테스트로 1",
-            zipCode = "12345",
-            city = "서울",
-            role = "청년부원",
-        )
+        val req =
+            CreateMemberRequest(
+                lastName = "김",
+                firstName = "철수",
+                discriminator = "A",
+                gender = "M",
+                baptism = "UNBAPTIZED",
+                birthDate = LocalDate.of(1995, 5, 15),
+                phoneNumber = "010-1234-5678",
+                email = "test@example.com",
+                street = "테스트로 1",
+                zipCode = "12345",
+                city = "서울",
+                role = "청년부원",
+            )
         val entity = req.toEntity()
 
         assertEquals("김", entity.lastName)
@@ -135,20 +140,21 @@ class MemberMappersTest {
     @Test
     fun `updateForm updates all fields`() {
         val member = Member(lastName = "김", firstName = "철수")
-        val req = UpdateMemberRequest(
-            lastName = "이",
-            firstName = "영희",
-            discriminator = "B",
-            gender = "F",
-            baptism = "UNBAPTIZED",
-            phoneNumber = "010-9999-8888",
-            email = "updated@example.com",
-            street = "새 주소",
-            zipCode = "99999",
-            city = "부산",
-            memberStatus = "PENDING",
-            role = "리더",
-        )
+        val req =
+            UpdateMemberRequest(
+                lastName = "이",
+                firstName = "영희",
+                discriminator = "B",
+                gender = "F",
+                baptism = "UNBAPTIZED",
+                phoneNumber = "010-9999-8888",
+                email = "updated@example.com",
+                street = "새 주소",
+                zipCode = "99999",
+                city = "부산",
+                memberStatus = "PENDING",
+                role = "리더",
+            )
         member.updateForm(req)
 
         assertEquals("이", member.lastName)
@@ -192,14 +198,15 @@ class MemberMappersTest {
 
     @Test
     fun `toDto maps all basic fields`() {
-        val member = Member(
-            lastName = "박",
-            firstName = "준호",
-            gender = Gender.M,
-            memberStatus = MemberStatus.ACTIVE,
-            city = "서울",
-            role = "팀장",
-        )
+        val member =
+            Member(
+                lastName = "박",
+                firstName = "준호",
+                gender = Gender.M,
+                memberStatus = MemberStatus.ACTIVE,
+                city = "서울",
+                role = "팀장",
+            )
         val dto = member.toDto()
 
         assertEquals("박", dto.lastName)

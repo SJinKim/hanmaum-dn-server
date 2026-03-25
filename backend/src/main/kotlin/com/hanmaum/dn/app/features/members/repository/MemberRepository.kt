@@ -18,7 +18,11 @@ interface MemberRepository : JpaRepository<Member, Long> {
 
     // 2. Einfach: Neue Mitglieder dieses Jahr (Postgres spezifisch: EXTRACT YEAR)
     @Query(
-        value = "SELECT COUNT(*) FROM members WHERE deleted_at IS NULL AND EXTRACT(YEAR FROM registration_date) = EXTRACT(YEAR FROM CURRENT_DATE)",
+        value = """
+            SELECT COUNT(*) FROM members
+            WHERE deleted_at IS NULL
+            AND EXTRACT(YEAR FROM registration_date) = EXTRACT(YEAR FROM CURRENT_DATE)
+        """,
         nativeQuery = true,
     )
     fun countNewMembersYtd(): Long

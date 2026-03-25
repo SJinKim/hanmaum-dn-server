@@ -1,7 +1,11 @@
 package com.hanmaum.dn.app.features.groups.service
 
 import com.hanmaum.dn.app.common.exception.EntityNotFoundException
-import com.hanmaum.dn.app.features.groups.api.v1.dto.*
+import com.hanmaum.dn.app.features.groups.api.v1.dto.AttendanceEntryDto
+import com.hanmaum.dn.app.features.groups.api.v1.dto.CreateMeetingRequest
+import com.hanmaum.dn.app.features.groups.api.v1.dto.GroupMeetingDto
+import com.hanmaum.dn.app.features.groups.api.v1.dto.MeetingDetailDto
+import com.hanmaum.dn.app.features.groups.api.v1.dto.SubmitMeetingReportRequest
 import com.hanmaum.dn.app.features.groups.domain.GroupMeeting
 import com.hanmaum.dn.app.features.groups.domain.MeetingAttendance
 import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
