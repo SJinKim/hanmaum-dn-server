@@ -1,0 +1,19 @@
+# === LOKALE ENTWICKLUNG (DEV) ===
+spring:
+  datasource:
+    # Verbindet sich mit deinem lokalen Docker (Port 5433)
+    url: jdbc:postgresql://localhost:5433/${DB_HANMAUM_DN_NAME}
+    username: ${DB_HANMAUM_DN_USER}
+    password: ${DB_HANMAUM_DN_SECRET}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    show-sql: true # Sehr wichtig für lokales Debugging!
+    hibernate:
+      ddl-auto: validate
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:8091/realms/${KEYCLOAK_REALM}/protocol/openid-connect/certs
