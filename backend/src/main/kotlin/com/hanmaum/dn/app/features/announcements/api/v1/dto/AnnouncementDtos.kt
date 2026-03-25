@@ -10,7 +10,7 @@ data class AnnouncementDto(
     val category: String,
     val startAt: LocalDateTime,
     val endAt: LocalDateTime?,
-    val isPinned: Boolean
+    val isPinned: Boolean,
 )
 
 // Was der Admin (später Dashboard, jetzt via Swagger) sendet
@@ -20,5 +20,5 @@ data class CreateAnnouncementRequest(
     val startAt: LocalDateTime = LocalDateTime.now(),
     val endAt: LocalDateTime? = null,
     val isPinned: Boolean = false,
-    val category: String
+    val category: String,
 )

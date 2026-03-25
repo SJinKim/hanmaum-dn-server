@@ -7,9 +7,6 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/members") // Gleicher Pfad wie v1!
 class MemberControllerV2 {
-
     @GetMapping
-    fun getAllMembersV2(): String {
-        return "Hier ist die ZUKUNFT (Version 2) - Neues JSON Format!"
-    }
+    fun getAllMembersV2(): String = "Hier ist die ZUKUNFT (Version 2) - Neues JSON Format!"
 }

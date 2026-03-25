@@ -12,18 +12,16 @@ import org.springframework.web.bind.annotation.RestController
 
 @RestController
 @RequestMapping("/announcements")
-class AnnouncementController (
-    private val announcementService: AnnouncementService
+class AnnouncementController(
+    private val announcementService: AnnouncementService,
 ) {
     // Öffentlich für die App (oder nur für eingeloggte User)
     @GetMapping
-    fun getAnnouncements(): List<AnnouncementDto> {
-        return announcementService.getActiveAnnouncements().map { it.toDto() }
-    }
+    fun getAnnouncements(): List<AnnouncementDto> = announcementService.getActiveAnnouncements().map { it.toDto() }
 
     // Admin Only (später absichern mit @PreAuthorize)
     @PostMapping
-    fun createAnnouncement(@RequestBody createAnnouncementRequest: CreateAnnouncementRequest) : AnnouncementDto {
-        return announcementService.createAnnouncement(createAnnouncementRequest).toDto()
-    }
+    fun createAnnouncement(
+        @RequestBody createAnnouncementRequest: CreateAnnouncementRequest,
+    ): AnnouncementDto = announcementService.createAnnouncement(createAnnouncementRequest).toDto()
 }

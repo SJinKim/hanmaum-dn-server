@@ -1,7 +1,6 @@
 package com.hanmaum.dn.app.features.carpool.api.v1.dto
 
 import java.time.LocalDate
-import java.time.LocalDateTime
 import java.time.LocalTime
 
 // Was die App anzeigt
@@ -13,10 +12,9 @@ data class CarDto(
     val currentPassengers: Int,
     val departureLocation: String?,
     val departureTime: LocalTime?,
-
     // UI Helfer
     val isFull: Boolean,
-    val isJoinedByMe: Boolean // True, wenn der User, der anfragt, hier drin sitzt
+    val isJoinedByMe: Boolean, // True, wenn der User, der anfragt, hier drin sitzt
 )
 
 // Auto erstellen (Admin oder Fahrer)
@@ -26,5 +24,5 @@ data class CreateCarRequest(
     val name: String?,
     val maxSeats: Int,
     val departureLocation: String?,
-    val departureTime: LocalTime?
+    val departureTime: LocalTime?,
 )

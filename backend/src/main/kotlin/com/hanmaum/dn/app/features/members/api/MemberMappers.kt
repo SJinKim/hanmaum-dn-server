@@ -10,59 +10,58 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.domain.Member
 
 // Hilfsfunktion: String -> Enum
-private fun mapGender(genderStr: String?): Gender? {
-    return when (genderStr?.uppercase()) {
+private fun mapGender(genderStr: String?): Gender? =
+    when (genderStr?.uppercase()) {
         "M", "남", "MALE" -> Gender.M
         "F", "여", "FEMALE" -> Gender.F
         else -> null
     }
-}
 
 // Hilfsfunktion für Status
 private fun mapStatus(statusStr: String?): MemberStatus {
     // Falls null, nehmen wir an, es soll ACTIVE bleiben oder ignoriert werden?
     // Hier sagen wir: Wenn unbekannt, dann ACTIVE (oder wirf Fehler)
     return try {
-        if (statusStr == null) MemberStatus.ACTIVE
-        else MemberStatus.valueOf(statusStr.uppercase()) // "active" -> ACTIVE
+        if (statusStr == null) {
+            MemberStatus.ACTIVE
+        } else {
+            MemberStatus.valueOf(statusStr.uppercase()) // "active" -> ACTIVE
+        }
     } catch (e: IllegalArgumentException) {
         MemberStatus.ACTIVE // Fallback, falls Quatsch gesendet wird
     }
 }
 
-private fun mapBaptism(value: String?): Baptism? {
-    return try {
-        if (value.isNullOrBlank()) null
-        else Baptism.valueOf(value.uppercase())
+private fun mapBaptism(value: String?): Baptism? =
+    try {
+        if (value.isNullOrBlank()) {
+            null
+        } else {
+            Baptism.valueOf(value.uppercase())
+        }
     } catch (e: IllegalArgumentException) {
         Baptism.UNBAPTIZED // Default Wert
     }
-}
 
-fun CreateMemberRequest.toEntity(): Member {
-    return Member(
+fun CreateMemberRequest.toEntity(): Member =
+    Member(
         // Namen direkt übernehmen
         lastName = this.lastName,
         firstName = this.firstName,
         discriminator = this.discriminator,
-
         // Gender konvertieren
         gender = mapGender(this.gender),
-
         birthDate = this.birthDate,
         phoneNumber = this.phoneNumber,
         email = this.email,
-
         // Adresse (Strukturiert)
         street = this.street,
         zipCode = this.zipCode,
         city = this.city,
-
         registrationDate = this.registrationDate,
         role = this.role,
-        baptism = mapBaptism(this.baptism)
+        baptism = mapBaptism(this.baptism),
     )
-}
 
 fun Member.updateForm(request: UpdateMemberRequest) {
     // Einfaches Update der Felder
@@ -86,43 +85,33 @@ fun Member.updateForm(request: UpdateMemberRequest) {
     this.baptism = mapBaptism(request.baptism)
 }
 
-fun Member.toDto(): MemberDto {
-    return MemberDto(
+fun Member.toDto(): MemberDto =
+    MemberDto(
         id = this.publicId.toString(),
-
         lastName = this.lastName,
         firstName = this.firstName,
         discriminator = this.discriminator,
-
         // Enum -> String Konvertierung (z.B. Gender.M -> "M")
         gender = this.gender?.name,
-
         // Enum -> String Konvertierung (z.B. Baptism.INFANT_BAPTIZED -> "INFANT_BAPTIZED")
         baptism = this.baptism?.name,
-
         birthDate = this.birthDate,
         phoneNumber = this.phoneNumber,
         email = this.email,
-
         // Neue Adress-Felder
         street = this.street,
         zipCode = this.zipCode,
         city = this.city,
-
         registrationDate = this.registrationDate,
-
         // Status Enum -> String
         memberStatus = this.memberStatus.name,
-
         role = this.role,
-
         // Falls eine Gruppe verknüpft ist, holen wir den Namen
-        groupName = this.group?.name
+        groupName = this.group?.name,
     )
-}
 
-fun Member.toResponse(): MemberResponse {
-    return MemberResponse(
+fun Member.toResponse(): MemberResponse =
+    MemberResponse(
         id = this.id ?: throw IllegalStateException("ID darf bei Response nicht null sein"),
         firstName = this.firstName,
         lastName = this.lastName,
@@ -130,6 +119,5 @@ fun Member.toResponse(): MemberResponse {
         status = this.memberStatus,
         role = this.role ?: "",
         groupName = this.group?.name,
-        city = this.city ?: ""
+        city = this.city ?: "",
     )
-}

@@ -7,17 +7,11 @@ import java.time.LocalDate
 
 @Entity
 @Table(name = "dishwashing_schedule")
-class DishwashingSchedule (
-    @Id
-    @GeneratedValue(GenerationType.IDENTITY)
-    val id: Long? = null,
-
+class DishwashingSchedule(
     @Column(name = "scheduled_date", nullable = false)
     val scheduledDate: LocalDate,
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "group_id", nullable = false)
     val group: ChurchGroup,
-
-    var note: String? = null
+    var note: String? = null,
 ) : BaseEntity()

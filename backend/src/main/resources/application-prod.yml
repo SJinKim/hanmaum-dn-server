@@ -1,0 +1,23 @@
+# === PRODUKTION (LIVE SERVER) ===
+spring:
+  datasource:
+    # Die echten Server-Daten werden beim Start als ENV-Variablen übergeben
+    url: ${PROD_DB_URL}
+    username: ${PROD_DB_USER}
+    password: ${PROD_DB_PASSWORD}
+
+  jpa:
+    show-sql: false # SQL ausblenden (spart extrem viel Server-Leistung!)
+    hibernate:
+      ddl-auto: validate # Auf Prod darf Hibernate NIEMALS Tabellen ändern!
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Echte, öffentliche HTTPS-URL deines Keycloaks
+          jwk-set-uri: https://auth.deinedomain.com/realms/hanmaum/protocol/openid-connect/certs
+
+logging:
+  level:
+    root: INFO # Keine Debug-Logs in Produktion

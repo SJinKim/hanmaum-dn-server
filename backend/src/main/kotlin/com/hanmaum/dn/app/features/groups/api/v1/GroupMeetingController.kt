@@ -10,18 +10,24 @@ import org.springframework.web.bind.annotation.*
 
 @RestController
 @RequestMapping("/group-meetings")
-class GroupMeetingController(private val service: GroupMeetingService) {
-
+class GroupMeetingController(
+    private val service: GroupMeetingService,
+) {
     // ADMIN: Meeting erstellen
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    fun createMeeting(@RequestBody req: CreateMeetingRequest) {
+    fun createMeeting(
+        @RequestBody req: CreateMeetingRequest,
+    ) {
         service.createMeeting(req)
     }
 
     // LEADER: Bericht (Gebete) einreichen
     @PostMapping("/{id}/report")
-    fun submitReport(@PathVariable id: Long, @RequestBody req: SubmitMeetingReportRequest) {
+    fun submitReport(
+        @PathVariable id: Long,
+        @RequestBody req: SubmitMeetingReportRequest,
+    ) {
         service.submitReport(id, req)
     }
 
@@ -29,18 +35,14 @@ class GroupMeetingController(private val service: GroupMeetingService) {
     @GetMapping
     fun getMeetings(
         @RequestParam myMemberId: String, // Public UUID
-        @RequestParam(defaultValue = "false") isAdmin: Boolean // Später echtes Role Checking!
-    ): List<GroupMeetingDto> {
-        return service.getMeetings(myMemberId, isAdmin)
-    }
+        @RequestParam(defaultValue = "false") isAdmin: Boolean, // Später echtes Role Checking!
+    ): List<GroupMeetingDto> = service.getMeetings(myMemberId, isAdmin)
 
     // USER & ADMIN: Details (Gebete) sehen -> Mit Security Check im Service
     @GetMapping("/{id}")
     fun getMeetingDetails(
         @PathVariable id: Long,
         @RequestParam myMemberId: String,
-        @RequestParam(defaultValue = "false") isAdmin: Boolean
-    ): MeetingDetailDto {
-        return service.getMeetingDetails(id, myMemberId, isAdmin)
-    }
+        @RequestParam(defaultValue = "false") isAdmin: Boolean,
+    ): MeetingDetailDto = service.getMeetingDetails(id, myMemberId, isAdmin)
 }

@@ -11,9 +11,9 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
 
 @Service
-class DishwashingService (
+class DishwashingService(
     private val dishwashingRepository: DishwashingRepository,
-    private val churchGroupRepository: ChurchGroupRepository
+    private val churchGroupRepository: ChurchGroupRepository,
 ) {
     // 1. GET (Read Only für User)
     @Transactional(readOnly = true)
@@ -33,7 +33,7 @@ class DishwashingService (
                 // Hole von allen Einträgen an diesem Tag den Gruppennamen
                 groupNames = entries.map { it.group.name },
                 // Nimm die Notiz vom ersten Eintrag (sollte eh gleich sein)
-                note = entries.firstOrNull()?.note
+                note = entries.firstOrNull()?.note,
             )
         }
     }
@@ -52,13 +52,14 @@ class DishwashingService (
         }
 
         // Für jede Gruppe einen Eintrag speichern
-        val schedules = groups.map { group ->
-            DishwashingSchedule(
-                scheduledDate = req.date,
-                group = group,
-                note = req.note
-            )
-        }
+        val schedules =
+            groups.map { group ->
+                DishwashingSchedule(
+                    scheduledDate = req.date,
+                    group = group,
+                    note = req.note,
+                )
+            }
         dishwashingRepository.saveAll(schedules)
     }
 

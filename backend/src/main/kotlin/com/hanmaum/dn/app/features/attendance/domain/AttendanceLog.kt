@@ -9,21 +9,13 @@ import java.time.LocalDate
 @Entity
 @Table(name = "attendance_logs")
 class AttendanceLog(
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    val id: Long? = null,
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "member_id", nullable = false)
     val member: Member,
-
     @Column(nullable = false)
     val date: LocalDate,
-
     @Column(nullable = false)
     val category: String = "SUNDAY_SERVICE", // Könnte später ein Enum sein
-
     @Column(nullable = false)
-    val status: String = "PRESENT" // PRESENT, LATE, ONLINE...
-
+    val status: String = "PRESENT", // PRESENT, LATE, ONLINE...
 ) : BaseEntity()

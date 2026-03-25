@@ -9,7 +9,7 @@ data class CheckInStatusResponse(
     val isCheckInActive: Boolean, // True = Button Grün, False = Grau
     val activeDefinitionTitle: String?, // z.B. "Sonntagsgottesdienst"
     val alreadyCheckedIn: Boolean, // True = User hat heute schon gedrückt
-    val message: String? // Info für den User (z.B. "Check-in startet um 11:00")
+    val message: String?, // Info für den User (z.B. "Check-in startet um 11:00")
 )
 
 // Request: User drückt den Button
@@ -24,7 +24,7 @@ data class AttendanceLogDto(
     val date: LocalDate,
     val category: String,
     val status: String,
-    val checkInTime: LocalTime?
+    val checkInTime: LocalTime?,
 )
 
 // Admin: Definition anlegen
@@ -32,5 +32,5 @@ data class CreateDefinitionRequest(
     val dayOfWeek: DayOfWeek,
     val startTime: LocalTime,
     val endTime: LocalTime,
-    val title: String
+    val title: String,
 )

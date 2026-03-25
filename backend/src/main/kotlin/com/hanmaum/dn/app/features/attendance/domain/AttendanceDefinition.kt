@@ -9,23 +9,14 @@ import java.time.LocalTime
 @Entity
 @Table(name = "attendance_definitions")
 class AttendanceDefinition(
-    @Id
-    @GeneratedValue(GenerationType.IDENTITY)
-    val id: Long? = null,
-
     @Enumerated(EnumType.STRING)
     @Column(name = "day_of_week", nullable = false)
     val dayOfWeek: DayOfWeek,
-
     @Column(name = "start_time", nullable = false)
     val startTime: LocalTime,
-
     @Column(name = "end_time", nullable = false)
     var endTime: LocalTime,
-
     var title: String? = "Sonntagsgottesdienst",
-
     @Column(name = "is_active")
-    var active: Boolean = true
-
+    var active: Boolean = true,
 ) : BaseEntity()

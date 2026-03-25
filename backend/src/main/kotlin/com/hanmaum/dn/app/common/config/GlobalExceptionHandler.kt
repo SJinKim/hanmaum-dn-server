@@ -11,7 +11,6 @@ import org.springframework.web.servlet.NoHandlerFoundException
 
 @RestControllerAdvice
 class GlobalExceptionHandler {
-
     private val logger = LoggerFactory.getLogger(GlobalExceptionHandler::class.java)
 
     // Ressource nicht gefunden: "Resource not found", aber kein warum oder welche tabelle
@@ -20,11 +19,12 @@ class GlobalExceptionHandler {
         // intern echten Fehler loggen:
         logger.warn("Not found requested: ${e.message}")
 
-        val response = ErrorResponse(
-            status = HttpStatus.NOT_FOUND.value(),
-            error = "Not Found",
-            message = "The requested resource could not be found."
-        )
+        val response =
+            ErrorResponse(
+                status = HttpStatus.NOT_FOUND.value(),
+                error = "Not Found",
+                message = "The requested resource could not be found.",
+            )
         return ResponseEntity(response, HttpStatus.NOT_FOUND)
     }
 
@@ -34,11 +34,12 @@ class GlobalExceptionHandler {
         // echten Fehler (Stacktrace) nur ins Server-Log schreiben
         logger.error("Critical internal error", e)
 
-        val response = ErrorResponse(
-            status = HttpStatus.INTERNAL_SERVER_ERROR.value(),
-            error = "Internal Server Error",
-            message = "An unexpected error occurred. Please contact support."
-        )
+        val response =
+            ErrorResponse(
+                status = HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                error = "Internal Server Error",
+                message = "An unexpected error occurred. Please contact support.",
+            )
         return ResponseEntity(response, HttpStatus.INTERNAL_SERVER_ERROR)
     }
 }

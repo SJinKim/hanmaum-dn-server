@@ -16,7 +16,11 @@ interface AttendanceDefinitionRepository : JpaRepository<AttendanceDefinition, L
 @Repository
 interface AttendanceLogRepository : JpaRepository<AttendanceLog, Long> {
     // Prüfen, ob Member an diesem Datum schon eingeloggt ist
-    fun existsByMemberIdAndDateAndCategory(memberId: Long, date: LocalDate, category: String): Boolean
+    fun existsByMemberIdAndDateAndCategory(
+        memberId: Long,
+        date: LocalDate,
+        category: String,
+    ): Boolean
 
     // Historie für einen Member
     fun findAllByMemberIdOrderByDateDesc(memberId: Long): List<AttendanceLog>
