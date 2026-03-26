@@ -10,7 +10,10 @@
       "Bash(head -30 grep -A 5 '<failure\\\\|<error' /Users/seungjinkim/Documents/Private_Projects/dn-app/backend/build/test-results/test/TEST-com.hanmaum.dn.app.features.attendance.service.AttendanceServiceTest.xml)",
       "Bash(./gradlew cleanTest test --tests \"com.hanmaum.dn.app.features.*\")",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git:*)",
+      "Bash(rm -f */.git/index.lock)",
+      "Bash(rm -f .git/index.lock)"
     ],
     "deny": []
   },
