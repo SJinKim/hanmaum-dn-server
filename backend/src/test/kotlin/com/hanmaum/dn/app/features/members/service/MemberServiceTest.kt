@@ -28,6 +28,8 @@ import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
+import org.springframework.data.domain.PageImpl
+import org.springframework.data.domain.Pageable
 import org.springframework.web.server.ResponseStatusException
 import java.util.Optional
 import java.util.UUID
@@ -77,6 +79,9 @@ class MemberServiceTest {
         `when`(realmResource.users()).thenReturn(usersResource)
         `when`(usersResource.create(any<UserRepresentation>())).thenReturn(kcResponse)
         `when`(kcResponse.status).thenReturn(statusCode)
+        if (statusCode == 201) {
+            `when`(kcResponse.location).thenReturn(null)
+        }
     }
 
     private fun registerReq(
@@ -91,44 +96,41 @@ class MemberServiceTest {
         city = "서울",
     )
 
-    // --- getMember ---
+    // --- getMemberByPublicId ---
 
     @Test
-    fun `getMember throws EntityNotFoundException for invalid UUID string`() {
+    fun `getMemberByPublicId throws EntityNotFoundException when member not found`() {
+        val id = UUID.randomUUID()
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(id)).thenReturn(Optional.empty())
+
         assertThrows<EntityNotFoundException> {
-            memberService.getMember("not-a-uuid")
+            memberService.getMemberByPublicId(id)
         }
     }
 
     @Test
-    fun `getMember throws EntityNotFoundException when member not found`() {
-        `when`(memberRepository.findByPublicId(any<UUID>())).thenReturn(Optional.empty())
-
-        assertThrows<EntityNotFoundException> {
-            memberService.getMember(UUID.randomUUID().toString())
-        }
-    }
-
-    @Test
-    fun `getMember returns member when found`() {
+    fun `getMemberByPublicId returns MemberDto when found`() {
         val member = memberWithId(1L)
-        `when`(memberRepository.findByPublicId(any<UUID>())).thenReturn(Optional.of(member))
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
 
-        val result = memberService.getMember(member.publicId.toString())
+        val result = memberService.getMemberByPublicId(member.publicId)
 
-        assertEquals(member, result)
+        assertEquals(member.publicId.toString(), result.publicId)
+        assertEquals(member.firstName, result.firstName)
     }
 
-    // --- getAllMembers ---
+    // --- getMembers ---
 
     @Test
-    fun `getAllMembers delegates to repository`() {
+    fun `getMembers delegates to repository with pageable`() {
         val members = listOf(memberWithId(1L), memberWithId(2L))
-        `when`(memberRepository.findAll()).thenReturn(members)
+        `when`(memberRepository.findActiveMembers(any(), any<Pageable>()))
+            .thenReturn(PageImpl(members))
 
-        val result = memberService.getAllMembers()
+        val result = memberService.getMembers(null, 0, 20)
 
-        assertEquals(members, result)
+        assertEquals(2, result.totalElements)
     }
 
     // --- createMember ---
@@ -140,7 +142,7 @@ class MemberServiceTest {
 
         val result = memberService.createMember(req)
 
-        assertNull(result.group)
+        assertNull(result.groupName)
         verify(churchGroupRepository, never()).findById(anyLong())
     }
 
@@ -153,7 +155,7 @@ class MemberServiceTest {
 
         val result = memberService.createMember(req)
 
-        assertEquals("다니엘조", result.group?.name)
+        assertEquals("다니엘조", result.groupName)
     }
 
     @Test
@@ -164,22 +166,27 @@ class MemberServiceTest {
         assertThrows<EntityNotFoundException> { memberService.createMember(req) }
     }
 
+    @Test
+    fun `createMember throws conflict when email already in use`() {
+        val req = CreateMemberRequest(lastName = "김", firstName = "철수", email = "dup@example.com")
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull("dup@example.com"))
+            .thenReturn(memberWithId(1L))
+
+        assertThrows<ResponseStatusException> { memberService.createMember(req) }
+    }
+
     // --- updateMember ---
 
     @Test
     fun `updateMember does not call groupRepository when groupId is null`() {
         val member = memberWithId(1L)
-        `when`(memberRepository.findByPublicId(any<UUID>())).thenReturn(Optional.of(member))
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
 
         memberService.updateMember(
-            member.publicId.toString(),
-            UpdateMemberRequest(
-                lastName = "김",
-                firstName = "철수",
-                memberStatus = "ACTIVE",
-                groupId = null,
-            ),
+            member.publicId,
+            UpdateMemberRequest(lastName = "김", firstName = "철수", groupId = null),
         )
 
         verify(churchGroupRepository, never()).findById(anyLong())
@@ -191,15 +198,16 @@ class MemberServiceTest {
         val newGroup = group(2L, "새 그룹")
         val member = memberWithId(10L)
         member.group = oldGroup
-        val req = UpdateMemberRequest(lastName = "김", firstName = "철수", memberStatus = "ACTIVE", groupId = 2L)
+        val req = UpdateMemberRequest(lastName = "김", firstName = "철수", groupId = 2L)
 
-        `when`(memberRepository.findByPublicId(any<UUID>())).thenReturn(Optional.of(member))
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
         `when`(churchGroupRepository.findById(2L)).thenReturn(Optional.of(newGroup))
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
 
-        val result = memberService.updateMember(member.publicId.toString(), req)
+        val result = memberService.updateMember(member.publicId, req)
 
-        assertEquals("새 그룹", result.group?.name)
+        assertEquals("새 그룹", result.groupName)
     }
 
     @Test
@@ -207,12 +215,13 @@ class MemberServiceTest {
         val grp = group(1L, "기존 그룹")
         val member = memberWithId(10L)
         member.group = grp
-        val req = UpdateMemberRequest(lastName = "김", firstName = "철수", memberStatus = "ACTIVE", groupId = 1L)
+        val req = UpdateMemberRequest(lastName = "김", firstName = "철수", groupId = 1L)
 
-        `when`(memberRepository.findByPublicId(any<UUID>())).thenReturn(Optional.of(member))
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
 
-        memberService.updateMember(member.publicId.toString(), req)
+        memberService.updateMember(member.publicId, req)
 
         verify(churchGroupRepository, never()).findById(anyLong())
     }
@@ -222,10 +231,11 @@ class MemberServiceTest {
     @Test
     fun `softDeleteMember sets deletedAt and status to DELETED`() {
         val member = memberWithId(1L)
-        `when`(memberRepository.findByPublicId(any<UUID>())).thenReturn(Optional.of(member))
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
 
-        memberService.softDeleteMember(member.publicId.toString())
+        memberService.softDeleteMember(member.publicId)
 
         assertNotNull(member.deletedAt)
         assertEquals(MemberStatus.DELETED, member.memberStatus)
@@ -234,11 +244,11 @@ class MemberServiceTest {
     // --- registerMember ---
 
     @Test
-    fun `registerMember throws IllegalArgumentException when email already exists`() {
+    fun `registerMember throws conflict when email already exists`() {
         val existing = memberWithId(1L)
-        `when`(memberRepository.findByEmail("test@example.com")).thenReturn(existing)
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull("test@example.com")).thenReturn(existing)
 
-        assertThrows<IllegalArgumentException> {
+        assertThrows<ResponseStatusException> {
             memberService.registerMember(registerReq(email = "test@example.com"))
         }
     }
@@ -246,7 +256,7 @@ class MemberServiceTest {
     @Test
     fun `registerMember assigns null discriminator for first member with that name`() {
         val req = registerReq()
-        `when`(memberRepository.findByEmail(req.email)).thenReturn(null)
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
         `when`(memberRepository.findSimilarNames(req.firstName, req.lastName)).thenReturn(emptyList())
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
         setupKeycloakMock()
@@ -260,7 +270,7 @@ class MemberServiceTest {
     fun `registerMember assigns discriminator A when one member with null discriminator exists`() {
         val req = registerReq(email = "new@example.com")
         val existingMember = Member(lastName = "김", firstName = "철수", discriminator = null)
-        `when`(memberRepository.findByEmail(req.email)).thenReturn(null)
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
         `when`(memberRepository.findSimilarNames(req.firstName, req.lastName)).thenReturn(listOf(existingMember))
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
         setupKeycloakMock()
@@ -275,7 +285,7 @@ class MemberServiceTest {
         val req = registerReq(email = "newer@example.com")
         val e1 = Member(lastName = "김", firstName = "철수", discriminator = null)
         val e2 = Member(lastName = "김", firstName = "철수", discriminator = "A")
-        `when`(memberRepository.findByEmail(req.email)).thenReturn(null)
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
         `when`(memberRepository.findSimilarNames(req.firstName, req.lastName)).thenReturn(listOf(e1, e2))
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
         setupKeycloakMock()
@@ -294,7 +304,7 @@ class MemberServiceTest {
                 Member(lastName = "김", firstName = "철수", discriminator = "A"),
                 Member(lastName = "김", firstName = "철수", discriminator = "B"),
             )
-        `when`(memberRepository.findByEmail(req.email)).thenReturn(null)
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
         `when`(memberRepository.findSimilarNames(req.firstName, req.lastName)).thenReturn(members)
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
         setupKeycloakMock()
@@ -307,7 +317,7 @@ class MemberServiceTest {
     @Test
     fun `registerMember throws RuntimeException when Keycloak returns non-201`() {
         val req = registerReq()
-        `when`(memberRepository.findByEmail(req.email)).thenReturn(null)
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
         `when`(memberRepository.findSimilarNames(req.firstName, req.lastName)).thenReturn(emptyList())
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
         setupKeycloakMock(statusCode = 409)
@@ -317,16 +327,16 @@ class MemberServiceTest {
     }
 
     @Test
-    fun `registerMember sets member status to PENDING and no group`() {
+    fun `registerMember sets member status to ACTIVE and no group`() {
         val req = registerReq()
-        `when`(memberRepository.findByEmail(req.email)).thenReturn(null)
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
         `when`(memberRepository.findSimilarNames(req.firstName, req.lastName)).thenReturn(emptyList())
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
         setupKeycloakMock()
 
         val result = memberService.registerMember(req)
 
-        assertEquals(MemberStatus.PENDING, result.memberStatus)
+        assertEquals(MemberStatus.ACTIVE, result.memberStatus)
         assertNull(result.group)
     }
 
@@ -334,23 +344,27 @@ class MemberServiceTest {
 
     @Test
     fun `getMemberProfile throws ResponseStatusException when member not found`() {
-        `when`(memberRepository.findByEmail("unknown@example.com")).thenReturn(null)
+        val keycloakSub = UUID.randomUUID().toString()
+        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(null)
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull(keycloakSub)).thenReturn(null)
 
         assertThrows<ResponseStatusException> {
-            memberService.getMemberProfile("unknown@example.com")
+            memberService.getMemberProfile(keycloakSub)
         }
     }
 
     @Test
-    fun `getMemberProfile returns MemberResponse when found`() {
+    fun `getMemberProfile returns MemberResponse by keycloakId`() {
+        val keycloakSub = UUID.randomUUID().toString()
         val member = memberWithId(1L, "철수", "김")
         member.email = "found@example.com"
         member.city = "서울"
-        `when`(memberRepository.findByEmail("found@example.com")).thenReturn(member)
+        member.keycloakId = keycloakSub
+        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(member)
 
-        val response = memberService.getMemberProfile("found@example.com")
+        val response = memberService.getMemberProfile(keycloakSub)
 
-        assertEquals(1L, response.id)
+        assertEquals(member.publicId.toString(), response.publicId)
         assertEquals("철수", response.firstName)
         assertEquals("김", response.lastName)
         assertEquals("서울", response.city)

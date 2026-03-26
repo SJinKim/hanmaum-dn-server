@@ -95,9 +95,9 @@ class MemberMappersTest {
     }
 
     @Test
-    fun `toEntity maps invalid baptism to UNBAPTIZED as fallback`() {
+    fun `toEntity maps invalid baptism to null`() {
         val entity = CreateMemberRequest(lastName = "김", firstName = "철수", baptism = "INVALID").toEntity()
-        assertEquals(Baptism.UNBAPTIZED, entity.baptism)
+        assertNull(entity.baptism) // invalid enum value → null (no silent fallback)
     }
 
     // --- CreateMemberRequest.toEntity() field mapping ---
@@ -117,7 +117,7 @@ class MemberMappersTest {
                 street = "테스트로 1",
                 zipCode = "12345",
                 city = "서울",
-                role = "청년부원",
+                churchRole = "청년부원",
             )
         val entity = req.toEntity()
 
@@ -132,13 +132,13 @@ class MemberMappersTest {
         assertEquals("테스트로 1", entity.street)
         assertEquals("12345", entity.zipCode)
         assertEquals("서울", entity.city)
-        assertEquals("청년부원", entity.role)
+        assertEquals("청년부원", entity.churchRole)
     }
 
-    // --- Member.updateForm() ---
+    // --- Member.applyPatch() ---
 
     @Test
-    fun `updateForm updates all fields`() {
+    fun `applyPatch updates provided fields only`() {
         val member = Member(lastName = "김", firstName = "철수")
         val req =
             UpdateMemberRequest(
@@ -152,10 +152,10 @@ class MemberMappersTest {
                 street = "새 주소",
                 zipCode = "99999",
                 city = "부산",
-                memberStatus = "PENDING",
-                role = "리더",
+                memberStatus = "ACTIVE",
+                churchRole = "리더",
             )
-        member.updateForm(req)
+        member.applyPatch(req)
 
         assertEquals("이", member.lastName)
         assertEquals("영희", member.firstName)
@@ -167,33 +167,56 @@ class MemberMappersTest {
         assertEquals("새 주소", member.street)
         assertEquals("99999", member.zipCode)
         assertEquals("부산", member.city)
-        assertEquals(MemberStatus.PENDING, member.memberStatus)
-        assertEquals("리더", member.role)
-    }
-
-    @Test
-    fun `updateForm maps invalid memberStatus to ACTIVE as fallback`() {
-        val member = Member(lastName = "김", firstName = "철수", memberStatus = MemberStatus.PENDING)
-        val req = UpdateMemberRequest(lastName = "김", firstName = "철수", memberStatus = "GIBBERISH")
-        member.updateForm(req)
         assertEquals(MemberStatus.ACTIVE, member.memberStatus)
+        assertEquals("리더", member.churchRole)
     }
 
     @Test
-    fun `updateForm maps valid lowercase memberStatus`() {
+    fun `applyPatch throws IllegalArgumentException for unknown memberStatus`() {
+        val member = Member(lastName = "김", firstName = "철수")
+        val req = UpdateMemberRequest(memberStatus = "GIBBERISH")
+        assertThrows<IllegalArgumentException> { member.applyPatch(req) }
+    }
+
+    @Test
+    fun `applyPatch throws IllegalStateException when trying to set DELETED via patch`() {
+        val member = Member(lastName = "김", firstName = "철수")
+        val req = UpdateMemberRequest(memberStatus = "DELETED")
+        assertThrows<IllegalStateException> { member.applyPatch(req) }
+    }
+
+    @Test
+    fun `applyPatch throws IllegalStateException when member is already DELETED`() {
+        val member = Member(lastName = "김", firstName = "철수", memberStatus = MemberStatus.DELETED)
+        val req = UpdateMemberRequest(lastName = "이")
+        assertThrows<IllegalStateException> { member.applyPatch(req) }
+    }
+
+    @Test
+    fun `applyPatch maps valid lowercase memberStatus`() {
         val member = Member(lastName = "김", firstName = "철수", memberStatus = MemberStatus.ACTIVE)
-        val req = UpdateMemberRequest(lastName = "김", firstName = "철수", memberStatus = "pending")
-        member.updateForm(req)
-        assertEquals(MemberStatus.PENDING, member.memberStatus)
+        val req = UpdateMemberRequest(memberStatus = "inactive")
+        member.applyPatch(req)
+        assertEquals(MemberStatus.INACTIVE, member.memberStatus)
+    }
+
+    @Test
+    fun `applyPatch does not change fields when corresponding request field is null`() {
+        val member = Member(lastName = "김", firstName = "철수", memberStatus = MemberStatus.ACTIVE)
+        member.city = "서울"
+        val req = UpdateMemberRequest() // all null
+        member.applyPatch(req)
+        assertEquals("서울", member.city) // unchanged
+        assertEquals("김", member.lastName) // unchanged
     }
 
     // --- Member.toDto() ---
 
     @Test
-    fun `toDto maps publicId as string id`() {
+    fun `toDto maps publicId as string`() {
         val member = Member(lastName = "박", firstName = "준호", memberStatus = MemberStatus.ACTIVE)
         val dto = member.toDto()
-        assertEquals(member.publicId.toString(), dto.id)
+        assertEquals(member.publicId.toString(), dto.publicId)
     }
 
     @Test
@@ -205,7 +228,7 @@ class MemberMappersTest {
                 gender = Gender.M,
                 memberStatus = MemberStatus.ACTIVE,
                 city = "서울",
-                role = "팀장",
+                churchRole = "팀장",
             )
         val dto = member.toDto()
 
@@ -214,7 +237,7 @@ class MemberMappersTest {
         assertEquals("M", dto.gender)
         assertEquals("ACTIVE", dto.memberStatus)
         assertEquals("서울", dto.city)
-        assertEquals("팀장", dto.role)
+        assertEquals("팀장", dto.churchRole)
         assertNull(dto.groupName)
     }
 
@@ -236,9 +259,10 @@ class MemberMappersTest {
     // --- Member.toResponse() ---
 
     @Test
-    fun `toResponse throws IllegalStateException when id is null`() {
-        val member = Member(lastName = "김", firstName = "철수")
-        assertThrows<IllegalStateException> { member.toResponse() }
+    fun `toResponse uses publicId not internal id`() {
+        val member = memberWithId(42L, "철수", "김")
+        val response = member.toResponse()
+        assertEquals(member.publicId.toString(), response.publicId)
     }
 
     @Test
@@ -246,33 +270,33 @@ class MemberMappersTest {
         val member = memberWithId(42L, "철수", "김")
         member.email = "test@example.com"
         member.memberStatus = MemberStatus.ACTIVE
-        member.role = "청년부원"
+        member.churchRole = "청년부원"
         member.city = "서울"
 
         val response = member.toResponse()
 
-        assertEquals(42L, response.id)
+        assertEquals(member.publicId.toString(), response.publicId)
         assertEquals("철수", response.firstName)
         assertEquals("김", response.lastName)
         assertEquals("test@example.com", response.email)
         assertEquals(MemberStatus.ACTIVE, response.status)
-        assertEquals("청년부원", response.role)
+        assertEquals("청년부원", response.churchRole)
         assertEquals("서울", response.city)
         assertNull(response.groupName)
     }
 
     @Test
-    fun `toResponse maps null city to empty string`() {
+    fun `toResponse maps null city to null`() {
         val member = memberWithId(1L)
         member.city = null
-        assertEquals("", member.toResponse().city)
+        assertNull(member.toResponse().city)
     }
 
     @Test
-    fun `toResponse maps null role to empty string`() {
+    fun `toResponse maps null churchRole to null`() {
         val member = memberWithId(1L)
-        member.role = null
-        assertEquals("", member.toResponse().role)
+        member.churchRole = null
+        assertNull(member.toResponse().churchRole)
     }
 
     @Test

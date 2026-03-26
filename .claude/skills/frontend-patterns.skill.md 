@@ -12,3 +12,9 @@
 - No business logic in components → delegate to services
 - API types → TypeScript interface in models/
 - Env config → environment.ts / environment.prod.ts only
+
+## Dumb Frontend Rule
+- No business logic in components or services — backend decides everything
+- No hardcoded labels, statuses, or config values in TypeScript/HTML
+- Enums and status lists are fetched from API, not duplicated in frontend
+- Components only: receive data → render → emit events
