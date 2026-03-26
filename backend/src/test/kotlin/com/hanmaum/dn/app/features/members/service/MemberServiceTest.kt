@@ -28,6 +28,7 @@ import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
 import org.springframework.web.server.ResponseStatusException
@@ -125,7 +126,7 @@ class MemberServiceTest {
     @Test
     fun `getMembers delegates to repository with pageable`() {
         val members = listOf(memberWithId(1L), memberWithId(2L))
-        `when`(memberRepository.findActiveMembers(any(), any<Pageable>()))
+        `when`(memberRepository.findActiveMembers(anyOrNull(), any<Pageable>()))
             .thenReturn(PageImpl(members))
 
         val result = memberService.getMembers(null, 0, 20)
