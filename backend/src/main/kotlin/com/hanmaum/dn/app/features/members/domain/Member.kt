@@ -55,6 +55,7 @@ class Member(
     @Column(name = "baptism")
     var baptism: Baptism? = null,
     // --- AUTH ---
+
     /** Keycloak subject UUID. Populated on registerMember(); null for admin-created members. */
     @Column(name = "keycloak_id", unique = true)
     var keycloakId: String? = null,

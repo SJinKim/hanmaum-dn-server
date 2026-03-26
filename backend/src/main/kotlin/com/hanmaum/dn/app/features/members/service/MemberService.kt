@@ -216,7 +216,11 @@ class MemberService(
             throw RuntimeException("Keycloak 사용자 생성 실패 (HTTP ${kcResponse.status}): $body")
         }
 
-        val keycloakId = kcResponse.location?.path?.substringAfterLast("/").orEmpty()
+        val keycloakId =
+            kcResponse.location
+                ?.path
+                ?.substringAfterLast("/")
+                .orEmpty()
         if (keycloakId.isNotBlank()) {
             savedMember.keycloakId = keycloakId
             memberRepository.save(savedMember)
