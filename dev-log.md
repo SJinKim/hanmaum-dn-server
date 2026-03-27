@@ -1,5 +1,56 @@
 # dev-log — hanmaum D+N
 
+## 2026-03-27
+
+### Feature
+- F2: Ministry + Registration
+
+### Blockers
+1. **`dn-app/.git/index.lock` stale — AGAIN** (same sandbox restriction)
+   - All code is written to disk but could not be committed.
+   - **Action required (user):** `rm Private_Projects/dn-app/.git/index.lock`
+   - Then: `cd Private_Projects/dn-app && git checkout dev && git pull`
+   - Then: `git checkout -b feature/ministry-registration-backend`
+   - Then: `git add backend/src/main/kotlin/com/hanmaum/dn/app/features/ministry/ backend/src/main/resources/db/migration/V1774598535211__ministry_schema_align_spec.sql backend/src/test/kotlin/com/hanmaum/dn/app/features/ministry/`
+   - Then: `git commit -m "feat(ministry): complete F2 ministry + registration backend to DoD"`
+   - Build verify: `./gradlew build` — must pass with 0 errors.
+2. No network access — `./gradlew build` must run on host.
+
+### Completed (code on disk, commit pending host action above)
+- **F2 Ministry + Registration Backend — all DoD items delivered:**
+
+  **Entity changes:**
+  - `Ministry.kt` — split `description: String` → `shortDescription: String (max 200)` + `longDescription: String? (TEXT)`
+  - `MinistryRegistration.kt` — changed `memberId: Long` → `member: Member` (`@ManyToOne` FK proper)
+
+  **New Flyway migration:**
+  - `V1774598535211__ministry_schema_align_spec.sql`
+    - Renames `ministries.description` → `short_description VARCHAR(200)`
+    - Adds `long_description TEXT NULL`
+    - Adds FK constraint `ministry_registrations.member_id → members(id) ON DELETE CASCADE`
+
+  **New files (all in `backend/src/main/kotlin/...features/ministry/`):**
+  - `repository/MinistryRepository.kt` — findAllActive(active?), existsByName, findByPublicId
+  - `repository/MinistryRegistrationRepository.kt` — findByMinistryId(?period), existsByMinistryIdAndMember_IdAndPeriod
+  - `api/v1/dto/MinistryDtos.kt` — MinistrySummaryDto, MinistryDto, LeaderDto, RegistrationDto, Create/Update/CreateRegistrationRequest (all validated)
+  - `api/MinistryMappers.kt` — extension functions: toEntity, applyPatch, toSummaryDto, toDto, toLeaderDto, MinistryRegistration.toDto
+  - `service/MinistryService.kt` — full business logic: 409 on duplicate name/registration, 403 on unauthorized withdraw, 400 on inactive ministry, 404 on all lookups, @Transactional on all writes
+  - `api/v1/MinistryController.kt` — all 8 endpoints with correct roles and HTTP status codes
+
+  **Tests:**
+  - `backend/src/test/.../ministry/service/MinistryServiceTest.kt` — 12 tests covering all happy paths + 409/403/400/404 error cases
+
+### In Progress
+- Nothing (F2 backend complete, pending commit)
+
+### Next Session
+1. **Commit F2 backend** (host — see Blocker #1 above for exact commands)
+2. `./gradlew build` — must pass; fix any compilation errors
+3. **F2 Dashboard** — build Angular ministry list + detail + registration views (wired to `/api/v1/ministries`)
+4. Check if F1 Dashboard needs any fixes (ng build has never run; may have TS errors)
+
+---
+
 ## 2026-03-26
 
 ### Feature
@@ -77,31 +128,45 @@
   15. **Tests updated** — updated `MemberServiceTest.kt` and `MemberMappersTest.kt` to match new signatures
 
 ### In Progress
-- None — backend work complete but uncommitted
+- F1 Dashboard scaffold written; commit blocked by sandbox index.lock (see below)
+
+### F1 Dashboard Scaffold — completed this session
+All 32 files created in `dn-app-dashboard/`. Angular 21 standalone, PrimeNG 19, Tailwind 3, Keycloak-js 26.
+
+**Commit blocked by sandbox** — same `index.lock` issue. Run on host:
+```bash
+cd Private_Projects/dn-app-dashboard
+rm .git/index.lock
+git commit -m "chore: scaffold Angular 21 dashboard for F1 Member Management"
+npm install
+ng build --configuration production
+```
+
+**Files in scaffold:**
+```
+package.json, angular.json, tsconfig*.json, tailwind.config.js, .gitignore
+src/main.ts, src/index.html, src/styles.scss, src/proxy.conf.json
+src/environments/environment{.prod}.ts
+src/app/app.config.ts              — APP_INITIALIZER (Keycloak), JWT interceptor, PrimeNG Aura theme
+src/app/app.routes.ts              — lazy member routes behind authGuard
+src/app/app.component.{ts,html,scss} — Menubar shell + logout
+src/app/core/services/auth.service.ts     — Keycloak PKCE init, token refresh, signals
+src/app/core/services/api.service.ts      — Generic HTTP + ApiResponse unwrapping
+src/app/core/interceptors/jwt.interceptor.ts — Bearer token attachment
+src/app/core/guards/auth.guard.ts         — authGuard + adminGuard
+src/app/core/models/api-response.model.ts — ApiResponse<T>, PageResponse<T>
+src/app/core/models/member.model.ts       — MemberSummary, Member, DTOs, enums, labels
+src/app/features/members/member.service.ts         — getMembers/getMember/create/update/delete
+src/app/features/members/members.routes.ts
+src/app/features/members/members-list/members-list.component.{ts,html}
+src/app/features/members/member-detail/member-detail.component.{ts,html}
+src/app/features/members/member-edit/member-edit.component.{ts,html}
+```
 
 ### Next Session
-1. **Resolve git lock first**: `rm Private_Projects/dn-app/.git/index.lock` on host
-2. Stash state: `git stash list` — stash@{0} contains pre-session main branch state. Either pop or drop.
-3. Switch to `dev`: `git checkout dev && git pull origin dev`
-4. Create feature branch: `git checkout -b feature/member-management-backend`
-5. Stage all changed files: `git add` (see list below) and commit: `feat(member): complete F1 backend to DoD`
-6. Run `./gradlew build` — must pass before proceeding
-7. After backend build passes → update MVP.md F1 Backend: 🔄 → ✅
-8. Next layer: **F1 Dashboard** — scaffold `dn-app-dashboard` (Angular 21 + PrimeNG + Tailwind + Keycloak PKCE)
-
-### Files Changed (need staging + commit)
-
-```
-backend/src/main/kotlin/com/hanmaum/dn/app/features/members/domain/Member.kt
-backend/src/main/kotlin/com/hanmaum/dn/app/features/members/api/v1/dto/MemberDtos.kt
-backend/src/main/kotlin/com/hanmaum/dn/app/features/members/api/MemberMappers.kt
-backend/src/main/kotlin/com/hanmaum/dn/app/features/members/repository/MemberRepository.kt
-backend/src/main/kotlin/com/hanmaum/dn/app/features/members/service/MemberService.kt
-backend/src/main/kotlin/com/hanmaum/dn/app/features/members/api/v1/MemberController.kt
-backend/src/main/kotlin/com/hanmaum/dn/app/features/members/api/v2/MemberControllerV2.kt
-backend/src/main/kotlin/com/hanmaum/dn/app/common/domainvalue/MemberStatus.kt
-backend/src/main/resources/db/migration/V1774557470475__add_member_keycloak_id_profile_image_inactive_status.sql
-backend/src/test/kotlin/com/hanmaum/dn/app/features/members/service/MemberServiceTest.kt
-backend/src/test/kotlin/com/hanmaum/dn/app/features/members/api/MemberMappersTest.kt
-dev-log.md
-```
+1. **Commit dashboard** (host): `cd dn-app-dashboard && rm .git/index.lock && git commit`
+2. `npm install && ng build --configuration production` — must pass; fix any TS errors found
+3. Fix backend git: `cd dn-app && rm .git/index.lock && git checkout dev && git pull`
+4. `git checkout -b feature/member-management-backend` then commit backend changes
+5. After both builds pass → MVP.md: F1 Backend ✅, F1 Dashboard ✅
+6. Next feature: **F2 Ministry backend** (domain written; needs service, controller, mapper, tests)
