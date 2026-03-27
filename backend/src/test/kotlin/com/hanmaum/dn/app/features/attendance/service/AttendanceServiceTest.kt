@@ -32,9 +32,10 @@ import java.util.UUID
 
 @ExtendWith(MockitoExtension::class)
 class AttendanceServiceTest {
-
     @Mock private lateinit var definitionRepo: AttendanceDefinitionRepository
+
     @Mock private lateinit var logRepo: AttendanceLogRepository
+
     @Mock private lateinit var memberRepo: MemberRepository
 
     private lateinit var service: AttendanceService
@@ -53,31 +54,43 @@ class AttendanceServiceTest {
         windowEnd: LocalTime = LocalTime.of(12, 0),
         isActive: Boolean = true,
     ): AttendanceDefinition {
-        val d = AttendanceDefinition(
-            title = "주일예배",
-            dayOfWeek = dayOfWeek,
-            windowStart = windowStart,
-            windowEnd = windowEnd,
-            isActive = isActive,
-        )
+        val d =
+            AttendanceDefinition(
+                title = "주일예배",
+                dayOfWeek = dayOfWeek,
+                windowStart = windowStart,
+                windowEnd = windowEnd,
+                isActive = isActive,
+            )
         setId(d, id)
         return d
     }
 
-    private fun makeMember(id: Long = 1L, keycloakId: String = "kc-001"): Member {
+    private fun makeMember(
+        id: Long = 1L,
+        keycloakId: String = "kc-001",
+    ): Member {
         val m = Member(lastName = "김", firstName = "철수")
         setId(m, id)
         setField(m, Member::class.java, "keycloakId", keycloakId)
         return m
     }
 
-    private fun setId(entity: Any, id: Long) {
+    private fun setId(
+        entity: Any,
+        id: Long,
+    ) {
         val f: Field = entity.javaClass.superclass.getDeclaredField("id")
         f.isAccessible = true
         f.set(entity, id)
     }
 
-    private fun setField(entity: Any, clazz: Class<*>, name: String, value: Any?) {
+    private fun setField(
+        entity: Any,
+        clazz: Class<*>,
+        name: String,
+        value: Any?,
+    ) {
         val f: Field = clazz.getDeclaredField(name)
         f.isAccessible = true
         f.set(entity, value)
@@ -87,12 +100,13 @@ class AttendanceServiceTest {
 
     @Test
     fun `createDefinition - happy path returns DefinitionDto`() {
-        val req = CreateDefinitionRequest(
-            title = "주일예배",
-            dayOfWeek = DayOfWeek.SUNDAY,
-            windowStart = LocalTime.of(10, 0),
-            windowEnd = LocalTime.of(12, 0),
-        )
+        val req =
+            CreateDefinitionRequest(
+                title = "주일예배",
+                dayOfWeek = DayOfWeek.SUNDAY,
+                windowStart = LocalTime.of(10, 0),
+                windowEnd = LocalTime.of(12, 0),
+            )
         val saved = makeDefinition()
         `when`(definitionRepo.save(any())).thenReturn(saved)
 
@@ -104,12 +118,13 @@ class AttendanceServiceTest {
 
     @Test
     fun `createDefinition - 400 when windowEnd is before windowStart`() {
-        val req = CreateDefinitionRequest(
-            title = "잘못된 시간",
-            dayOfWeek = DayOfWeek.SUNDAY,
-            windowStart = LocalTime.of(12, 0),
-            windowEnd = LocalTime.of(10, 0),
-        )
+        val req =
+            CreateDefinitionRequest(
+                title = "잘못된 시간",
+                dayOfWeek = DayOfWeek.SUNDAY,
+                windowStart = LocalTime.of(12, 0),
+                windowEnd = LocalTime.of(10, 0),
+            )
 
         val ex = assertThrows<ResponseStatusException> { service.createDefinition(req) }
         assertEquals(400, ex.statusCode.value())
@@ -164,11 +179,12 @@ class AttendanceServiceTest {
     @Test
     fun `checkIn - happy path creates log and returns dto`() {
         val member = makeMember()
-        val def = makeDefinition(
-            dayOfWeek = DayOfWeek.SUNDAY,
-            windowStart = LocalTime.MIN,
-            windowEnd = LocalTime.MAX,
-        )
+        val def =
+            makeDefinition(
+                dayOfWeek = DayOfWeek.SUNDAY,
+                windowStart = LocalTime.MIN,
+                windowEnd = LocalTime.MAX,
+            )
         val log = AttendanceLog(definition = def, member = member, attendanceDate = LocalDate.now())
         setId(log, 10L)
 
@@ -195,10 +211,11 @@ class AttendanceServiceTest {
     fun `checkIn - 400 when no active definition window matches current time`() {
         val member = makeMember()
         `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
-        val def = makeDefinition(
-            windowStart = LocalTime.of(0, 0),
-            windowEnd = LocalTime.of(0, 1),
-        )
+        val def =
+            makeDefinition(
+                windowStart = LocalTime.of(0, 0),
+                windowEnd = LocalTime.of(0, 1),
+            )
         `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNull(any())).thenReturn(listOf(def))
 
         val ex = assertThrows<ResponseStatusException> { service.checkIn("kc-001") }
@@ -208,10 +225,11 @@ class AttendanceServiceTest {
     @Test
     fun `checkIn - 409 when already checked in today`() {
         val member = makeMember()
-        val def = makeDefinition(
-            windowStart = LocalTime.MIN,
-            windowEnd = LocalTime.MAX,
-        )
+        val def =
+            makeDefinition(
+                windowStart = LocalTime.MIN,
+                windowEnd = LocalTime.MAX,
+            )
 
         `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
         `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNull(any())).thenReturn(listOf(def))

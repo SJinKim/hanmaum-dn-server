@@ -139,7 +139,7 @@ _Depends on: F1_
 |---|---------|---------|-----------|-----|
 | 1 | Member Management | ✅ | 🔄 | 🔲 |
 | 2 | Ministry + Registration | ✅ | 🔲 | 🔲 |
-| 3 | Attendance Tracking | 🔄 | 🔲 | 🔲 |
+| 3 | Attendance Tracking | ✅ | 🔲 | 🔲 |
 
 🔲 not started · 🔄 in progress · ✅ done
 

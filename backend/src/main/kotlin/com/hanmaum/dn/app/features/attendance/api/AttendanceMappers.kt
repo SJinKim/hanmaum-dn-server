@@ -36,5 +36,4 @@ fun List<AttendanceLog>.toStatsDto(): List<AttendanceStatsDto> =
                 memberName = "${member.lastName}${member.firstName}",
                 attendanceCount = logs.count { it.attended },
             )
-        }
-        .sortedByDescending { it.attendanceCount }
+        }.sortedByDescending { it.attendanceCount }

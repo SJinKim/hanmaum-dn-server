@@ -13,7 +13,6 @@ import java.util.UUID
 
 @Repository
 interface AttendanceDefinitionRepository : JpaRepository<AttendanceDefinition, Long> {
-
     fun findByPublicIdAndDeletedAtIsNull(publicId: UUID): Optional<AttendanceDefinition>
 
     /** All non-deleted definitions; [activeOnly] true filters to isActive=true only. */
@@ -25,7 +24,9 @@ interface AttendanceDefinitionRepository : JpaRepository<AttendanceDefinition, L
         ORDER BY d.dayOfWeek ASC, d.windowStart ASC
         """,
     )
-    fun findAll(@Param("activeOnly") activeOnly: Boolean): List<AttendanceDefinition>
+    fun findAll(
+        @Param("activeOnly") activeOnly: Boolean,
+    ): List<AttendanceDefinition>
 
     /** Active definitions for a given day of week — used during check-in window lookup. */
     fun findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNull(dayOfWeek: DayOfWeek): List<AttendanceDefinition>
@@ -33,7 +34,6 @@ interface AttendanceDefinitionRepository : JpaRepository<AttendanceDefinition, L
 
 @Repository
 interface AttendanceLogRepository : JpaRepository<AttendanceLog, Long> {
-
     /** Duplicate guard: has this member already checked in for this definition on this date? */
     fun existsByMemberIdAndDefinitionIdAndAttendanceDateAndDeletedAtIsNull(
         memberId: Long,
