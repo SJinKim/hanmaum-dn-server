@@ -47,13 +47,6 @@ class AttendanceService(
     @Transactional(readOnly = true)
     fun getDefinitions(activeOnly: Boolean): List<DefinitionDto> = definitionRepo.findAll(activeOnly).map { it.toDto() }
 
-    @Transactional(readOnly = true)
-    fun getDefinition(publicId: UUID): DefinitionDto =
-        definitionRepo
-            .findByPublicIdAndDeletedAtIsNull(publicId)
-            .orElseThrow { EntityNotFoundException("AttendanceDefinition not found: $publicId") }
-            .toDto()
-
     @Transactional
     fun updateDefinition(
         publicId: UUID,
@@ -69,6 +62,12 @@ class AttendanceService(
         req.windowStart?.let { definition.windowStart = it }
         req.windowEnd?.let { definition.windowEnd = it }
         req.isActive?.let { definition.isActive = it }
+
+        val effectiveStart = req.windowStart ?: definition.windowStart
+        val effectiveEnd = req.windowEnd ?: definition.windowEnd
+        if (!effectiveEnd.isAfter(effectiveStart)) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "종료 시간은 시작 시간 이후여야 합니다.")
+        }
 
         return definition.toDto()
     }
@@ -99,7 +98,7 @@ class AttendanceService(
             definitionRepo
                 .findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNull(currentDay)
                 .firstOrNull { def ->
-                    currentTime.isAfter(def.windowStart) && currentTime.isBefore(def.windowEnd)
+                    !currentTime.isBefore(def.windowStart) && currentTime.isBefore(def.windowEnd)
                 } ?: throw ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
                 "현재 활성화된 출석 체크인 시간이 없습니다.",
