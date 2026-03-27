@@ -10,6 +10,8 @@ import com.hanmaum.dn.app.features.attendance.service.AttendanceService
 import jakarta.validation.Valid
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
+import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.web.bind.annotation.DeleteMapping
@@ -28,76 +30,106 @@ import java.util.UUID
 @RestController
 @RequestMapping("/api/v1/attendance")
 class AttendanceController(
-    private val service: AttendanceService,
+    private val attendanceService: AttendanceService,
 ) {
-    // ─── Definition CRUD ───────────────────────────────────────────────────────
+    // ─── Definitions ───────────────────────────────────────────────────────────
 
     @PostMapping("/definitions")
-    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('ADMIN')")
     fun createDefinition(
-        @Valid @RequestBody req: CreateDefinitionRequest,
-    ): ApiResponse<DefinitionDto> =
-        ApiResponse.success(service.createDefinition(req), "출석 정의가 생성되었습니다.")
+        @Valid @RequestBody request: CreateDefinitionRequest,
+    ): ResponseEntity<ApiResponse<DefinitionDto>> {
+        val created = attendanceService.createDefinition(request)
+        return ResponseEntity
+            .status(HttpStatus.CREATED)
+            .body(ApiResponse.success(data = created, message = "출석 정의가 생성되었습니다."))
+    }
 
     @GetMapping("/definitions")
+    @PreAuthorize("isAuthenticated()")
     fun getDefinitions(
-        @RequestParam(defaultValue = "false") activeOnly: Boolean,
-    ): ApiResponse<List<DefinitionDto>> =
-        ApiResponse.success(service.getDefinitions(activeOnly), "출석 정의 목록입니다.")
-
-    @GetMapping("/definitions/{publicId}")
-    fun getDefinition(
-        @PathVariable publicId: UUID,
-    ): ApiResponse<DefinitionDto> =
-        ApiResponse.success(service.getDefinition(publicId), "출석 정의입니다.")
+        @RequestParam(defaultValue = "false") active: Boolean,
+    ): ResponseEntity<ApiResponse<List<DefinitionDto>>> {
+        val definitions = attendanceService.getDefinitions(active)
+        return ResponseEntity.ok(ApiResponse.success(data = definitions))
+    }
 
     @PatchMapping("/definitions/{publicId}")
+    @PreAuthorize("hasRole('ADMIN')")
     fun updateDefinition(
         @PathVariable publicId: UUID,
-        @Valid @RequestBody req: UpdateDefinitionRequest,
-    ): ApiResponse<DefinitionDto> =
-        ApiResponse.success(service.updateDefinition(publicId, req), "출석 정의가 수정되었습니다.")
+        @Valid @RequestBody request: UpdateDefinitionRequest,
+    ): ResponseEntity<ApiResponse<DefinitionDto>> {
+        val updated = attendanceService.updateDefinition(publicId, request)
+        return ResponseEntity.ok(ApiResponse.success(data = updated))
+    }
 
     @DeleteMapping("/definitions/{publicId}")
+    @PreAuthorize("hasRole('ADMIN')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun deactivateDefinition(
         @PathVariable publicId: UUID,
     ) {
-        service.deactivateDefinition(publicId)
+        attendanceService.deactivateDefinition(publicId)
     }
 
     // ─── Check-in ─────────────────────────────────────────────────────────────
 
     @PostMapping("/check-in")
-    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("isAuthenticated()")
     fun checkIn(
         @AuthenticationPrincipal jwt: Jwt,
-    ): ApiResponse<AttendanceLogDto> =
-        ApiResponse.success(service.checkIn(jwt.subject), "출석 체크인 완료입니다.")
+    ): ResponseEntity<ApiResponse<AttendanceLogDto>> {
+        val log = attendanceService.checkIn(jwt.subject)
+        return ResponseEntity
+            .status(HttpStatus.CREATED)
+            .body(ApiResponse.success(data = log, message = "출석 체크인 완료."))
+    }
 
     // ─── Logs ─────────────────────────────────────────────────────────────────
 
     @GetMapping("/logs")
+    @PreAuthorize("hasRole('ADMIN')")
     fun getLogs(
-        @RequestParam(required = false) memberPublicId: UUID?,
-        @RequestParam(required = false) definitionPublicId: UUID?,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) to: LocalDate,
-    ): ApiResponse<List<AttendanceLogDto>> =
-        ApiResponse.success(service.getLogs(memberPublicId, definitionPublicId, from, to), "출석 로그 목록입니다.")
+        @RequestParam(required = false) memberId: UUID?,
+        @RequestParam(required = false) definitionId: UUID?,
+        @RequestParam(required = false)
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+        from: LocalDate?,
+        @RequestParam(required = false)
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+        to: LocalDate?,
+    ): ResponseEntity<ApiResponse<List<AttendanceLogDto>>> {
+        val effectiveFrom = from ?: LocalDate.now().minusDays(30)
+        val effectiveTo = to ?: LocalDate.now()
+        val logs = attendanceService.getLogs(memberId, definitionId, effectiveFrom, effectiveTo)
+        return ResponseEntity.ok(ApiResponse.success(data = logs))
+    }
 
-    @GetMapping("/my-logs")
+    @GetMapping("/logs/me")
+    @PreAuthorize("isAuthenticated()")
     fun getMyLogs(
         @AuthenticationPrincipal jwt: Jwt,
-    ): ApiResponse<List<AttendanceLogDto>> =
-        ApiResponse.success(service.getMyLogs(jwt.subject), "내 출석 로그입니다.")
+    ): ResponseEntity<ApiResponse<List<AttendanceLogDto>>> {
+        val logs = attendanceService.getMyLogs(jwt.subject)
+        return ResponseEntity.ok(ApiResponse.success(data = logs))
+    }
 
     // ─── Stats ────────────────────────────────────────────────────────────────
 
     @GetMapping("/stats")
+    @PreAuthorize("hasRole('ADMIN')")
     fun getStats(
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) to: LocalDate,
-    ): ApiResponse<List<AttendanceStatsDto>> =
-        ApiResponse.success(service.getStats(from, to), "출석 통계입니다.")
+        @RequestParam(required = false)
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+        from: LocalDate?,
+        @RequestParam(required = false)
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+        to: LocalDate?,
+    ): ResponseEntity<ApiResponse<List<AttendanceStatsDto>>> {
+        val effectiveFrom = from ?: LocalDate.now().minusDays(30)
+        val effectiveTo = to ?: LocalDate.now()
+        val stats = attendanceService.getStats(effectiveFrom, effectiveTo)
+        return ResponseEntity.ok(ApiResponse.success(data = stats))
+    }
 }
