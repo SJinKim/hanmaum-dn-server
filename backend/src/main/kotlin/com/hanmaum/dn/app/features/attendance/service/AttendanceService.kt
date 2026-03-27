@@ -1,131 +1,156 @@
 package com.hanmaum.dn.app.features.attendance.service
 
+import com.hanmaum.dn.app.features.attendance.api.toDto
+import com.hanmaum.dn.app.features.attendance.api.toStatsDto
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceLogDto
-import com.hanmaum.dn.app.features.attendance.api.v1.dto.CheckInRequest
-import com.hanmaum.dn.app.features.attendance.api.v1.dto.CheckInStatusResponse
+import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceStatsDto
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.CreateDefinitionRequest
+import com.hanmaum.dn.app.features.attendance.api.v1.dto.DefinitionDto
+import com.hanmaum.dn.app.features.attendance.api.v1.dto.UpdateDefinitionRequest
 import com.hanmaum.dn.app.features.attendance.domain.AttendanceDefinition
 import com.hanmaum.dn.app.features.attendance.domain.AttendanceLog
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceDefinitionRepository
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import jakarta.persistence.EntityNotFoundException
+import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.server.ResponseStatusException
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
 
 @Service
 class AttendanceService(
-    private val defRepo: AttendanceDefinitionRepository,
+    private val definitionRepo: AttendanceDefinitionRepository,
     private val logRepo: AttendanceLogRepository,
     private val memberRepo: MemberRepository,
 ) {
-    // 1. Status prüfen (Für die App-Startseite)
+    // ─── Definition CRUD ───────────────────────────────────────────────────────
+
+    @Transactional
+    fun createDefinition(req: CreateDefinitionRequest): DefinitionDto {
+        if (!req.windowEnd.isAfter(req.windowStart)) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "종료 시간은 시작 시간 이후여야 합니다.")
+        }
+        val definition = AttendanceDefinition(
+            title = req.title,
+            dayOfWeek = req.dayOfWeek,
+            windowStart = req.windowStart,
+            windowEnd = req.windowEnd,
+        )
+        return definitionRepo.save(definition).toDto()
+    }
+
     @Transactional(readOnly = true)
-    fun getCheckInStatus(memberPublicId: String): CheckInStatusResponse {
+    fun getDefinitions(activeOnly: Boolean): List<DefinitionDto> =
+        definitionRepo.findAll(activeOnly).map { it.toDto() }
+
+    @Transactional(readOnly = true)
+    fun getDefinition(publicId: UUID): DefinitionDto =
+        definitionRepo
+            .findByPublicIdAndDeletedAtIsNull(publicId)
+            .orElseThrow { EntityNotFoundException("AttendanceDefinition not found: $publicId") }
+            .toDto()
+
+    @Transactional
+    fun updateDefinition(publicId: UUID, req: UpdateDefinitionRequest): DefinitionDto {
+        val definition = definitionRepo
+            .findByPublicIdAndDeletedAtIsNull(publicId)
+            .orElseThrow { EntityNotFoundException("AttendanceDefinition not found: $publicId") }
+
+        req.title?.let { definition.title = it }
+        req.dayOfWeek?.let { definition.dayOfWeek = it }
+        req.windowStart?.let { definition.windowStart = it }
+        req.windowEnd?.let { definition.windowEnd = it }
+        req.isActive?.let { definition.isActive = it }
+
+        return definition.toDto()
+    }
+
+    @Transactional
+    fun deactivateDefinition(publicId: UUID) {
+        val definition = definitionRepo
+            .findByPublicIdAndDeletedAtIsNull(publicId)
+            .orElseThrow { EntityNotFoundException("AttendanceDefinition not found: $publicId") }
+        definition.deletedAt = LocalDateTime.now()
+    }
+
+    // ─── Check-in ─────────────────────────────────────────────────────────────
+
+    @Transactional
+    fun checkIn(keycloakSubject: String): AttendanceLogDto {
+        val member = memberRepo.findByKeycloakIdAndDeletedAtIsNull(keycloakSubject)
+            ?: throw EntityNotFoundException("Member not found for subject: $keycloakSubject")
+
         val now = LocalDateTime.now()
         val today = now.toLocalDate()
         val currentTime = now.toLocalTime()
         val currentDay = now.dayOfWeek
 
-        // A. Gibt es eine aktive Definition für JETZT?
-        val activeDefinition =
-            defRepo
-                .findByDayOfWeekAndActiveTrue(currentDay)
-                .firstOrNull { def ->
-                    currentTime.isAfter(def.startTime) && currentTime.isBefore(def.endTime)
-                }
+        val matchingDefinition = definitionRepo
+            .findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNull(currentDay)
+            .firstOrNull { def ->
+                currentTime.isAfter(def.windowStart) && currentTime.isBefore(def.windowEnd)
+            } ?: throw ResponseStatusException(
+            HttpStatus.BAD_REQUEST,
+            "현재 활성화된 출석 체크인 시간이 없습니다.",
+        )
 
-        // B. Hat der User heute schon eingecheckt?
-        val member =
-            memberRepo
-                .findByPublicId(UUID.fromString(memberPublicId))
-                .orElseThrow { EntityNotFoundException("member not found") }
-
-        val alreadyCheckedIn =
-            logRepo.existsByMemberIdAndDateAndCategory(
-                member.id!!,
-                today,
-                "SUNDAY_SERVICE",
-            )
-
-        // C. Entscheidung
-        return if (activeDefinition != null) {
-            CheckInStatusResponse(
-                isCheckInActive = !alreadyCheckedIn, // Aktiv nur, wenn noch nicht eingecheckt
-                activeDefinitionTitle = activeDefinition.title,
-                alreadyCheckedIn = alreadyCheckedIn,
-                message = if (alreadyCheckedIn) "Du bist bereits eingecheckt ✅" else "Check-in offen! 👋",
-            )
-        } else {
-            CheckInStatusResponse(
-                isCheckInActive = false,
-                activeDefinitionTitle = null,
-                alreadyCheckedIn = alreadyCheckedIn,
-                message = "Kein Check-in Zeitraum aktiv 💤",
-            )
-        }
-    }
-
-    // 2. Check-in durchführen
-    @Transactional
-    fun checkIn(req: CheckInRequest) {
-        // Logik wiederholen (Security First: Vertraue nie dem Frontend allein)
-        val status = getCheckInStatus(req.memberId)
-
-        if (status.alreadyCheckedIn) {
-            throw IllegalStateException("Already checked in today")
-        }
-        if (!status.isCheckInActive && status.activeDefinitionTitle == null) {
-            // Streng genommen müsste man hier Exception werfen,
-            // aber für Kulanz könnte man es auch durchlassen, wenn es nur um Sekunden geht.
-            // Wir werfen hier strikt:
-            throw IllegalStateException("Check-in is currently closed")
+        val duplicate = logRepo.existsByMemberIdAndDefinitionIdAndAttendanceDateAndDeletedAtIsNull(
+            member.id!!,
+            matchingDefinition.id!!,
+            today,
+        )
+        if (duplicate) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "이미 오늘 출석 체크인 했습니다.")
         }
 
-        val member = memberRepo.findByPublicId(UUID.fromString(req.memberId)).get() // Existiert sicher, da oben geprüft
-
-        val log =
+        val log = logRepo.save(
             AttendanceLog(
+                definition = matchingDefinition,
                 member = member,
-                date = LocalDateTime.now().toLocalDate(),
-                category = "SUNDAY_SERVICE",
-                status = "PRESENT",
-            )
-        logRepo.save(log)
+                attendanceDate = today,
+                attended = true,
+            ),
+        )
+        return log.toDto()
     }
 
-    // 3. Admin: Regel erstellen
-    @Transactional
-    fun createDefinition(req: CreateDefinitionRequest): Long {
-        val def =
-            AttendanceDefinition(
-                dayOfWeek = req.dayOfWeek,
-                startTime = req.startTime,
-                endTime = req.endTime,
-                title = req.title,
-            )
-        return defRepo.save(def).id!!
-    }
+    // ─── Logs ─────────────────────────────────────────────────────────────────
 
-    // 4. Historie holen
     @Transactional(readOnly = true)
-    fun getMyHistory(memberPublicId: String): List<AttendanceLogDto> {
-        val member =
-            memberRepo
-                .findByPublicId(UUID.fromString(memberPublicId))
-                .orElseThrow { EntityNotFoundException("Member not found") }
-
-        return logRepo.findAllByMemberIdOrderByDateDesc(member.id!!).map { log ->
-            AttendanceLogDto(
-                id = log.id!!,
-                date = log.date,
-                category = log.category,
-                status = log.status,
-                // created_at kommt aus BaseEntity, evtl. mappen oder null wenn nicht verfügbar
-                checkInTime = null, // TODO: BaseEntity createdAt getter nutzen
-            )
+    fun getLogs(
+        memberPublicId: UUID?,
+        definitionPublicId: UUID?,
+        from: LocalDate,
+        to: LocalDate,
+    ): List<AttendanceLogDto> {
+        val memberId = memberPublicId?.let {
+            memberRepo.findByPublicIdAndDeletedAtIsNull(it)
+                .orElseThrow { EntityNotFoundException("Member not found: $it") }
+                .id
         }
+        val definitionId = definitionPublicId?.let {
+            definitionRepo.findByPublicIdAndDeletedAtIsNull(it)
+                .orElseThrow { EntityNotFoundException("Definition not found: $it") }
+                .id
+        }
+        return logRepo.findForAdmin(memberId, definitionId, from, to).map { it.toDto() }
     }
+
+    @Transactional(readOnly = true)
+    fun getMyLogs(keycloakSubject: String): List<AttendanceLogDto> {
+        val member = memberRepo.findByKeycloakIdAndDeletedAtIsNull(keycloakSubject)
+            ?: throw EntityNotFoundException("Member not found for subject: $keycloakSubject")
+        return logRepo.findAllByMemberIdAndDeletedAtIsNullOrderByAttendanceDateDesc(member.id!!)
+            .map { it.toDto() }
+    }
+
+    // ─── Stats ────────────────────────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    fun getStats(from: LocalDate, to: LocalDate): List<AttendanceStatsDto> =
+        logRepo.findForStats(from, to).toStatsDto()
 }

@@ -21,6 +21,7 @@ import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
+import org.mockito.kotlin.eq
 import org.springframework.web.server.ResponseStatusException
 import java.lang.reflect.Field
 import java.time.DayOfWeek
@@ -173,7 +174,7 @@ class AttendanceServiceTest {
 
         `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
         `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNull(any())).thenReturn(listOf(def))
-        `when`(logRepo.existsByMemberIdAndDefinitionIdAndAttendanceDateAndDeletedAtIsNull(1L, 1L, any())).thenReturn(false)
+        `when`(logRepo.existsByMemberIdAndDefinitionIdAndAttendanceDateAndDeletedAtIsNull(eq(1L), eq(1L), any())).thenReturn(false)
         `when`(logRepo.save(any())).thenReturn(log)
 
         val result = service.checkIn("kc-001")
@@ -214,7 +215,7 @@ class AttendanceServiceTest {
 
         `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
         `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNull(any())).thenReturn(listOf(def))
-        `when`(logRepo.existsByMemberIdAndDefinitionIdAndAttendanceDateAndDeletedAtIsNull(1L, 1L, any())).thenReturn(true)
+        `when`(logRepo.existsByMemberIdAndDefinitionIdAndAttendanceDateAndDeletedAtIsNull(eq(1L), eq(1L), any())).thenReturn(true)
 
         val ex = assertThrows<ResponseStatusException> { service.checkIn("kc-001") }
         assertEquals(409, ex.statusCode.value())
