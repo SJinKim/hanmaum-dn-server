@@ -1,116 +1,143 @@
 package com.hanmaum.dn.app.features.members.api.v1
 
 import com.hanmaum.dn.app.common.dto.ApiResponse
-import com.hanmaum.dn.app.features.members.api.toDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
-import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
+import com.hanmaum.dn.app.features.members.api.v1.dto.MemberSummaryDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.RegisterMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
-import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.service.MemberService
-import org.slf4j.LoggerFactory
+import jakarta.validation.Valid
+import org.springframework.data.domain.Page
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.server.ResponseStatusException
+import java.util.UUID
 
 @RestController
-@RequestMapping("/members")
+@RequestMapping("/api/v1/members")
 class MemberController(
-    private val memberService: MemberService, // <-- Service statt Repository!
+    private val memberService: MemberService,
 ) {
-    private val logger = LoggerFactory.getLogger(MemberController::class.java)
-
+    /**
+     * GET /api/v1/members
+     * Role: ADMIN — paginated member list with optional search.
+     * Default: page=0 size=20 sorted by lastName ASC.
+     */
     @GetMapping
-    fun getAllMembers(): List<Member> = memberService.getAllMembers()
-
-    @GetMapping("/{id}")
-    fun getMember(
-        @PathVariable id: String,
-    ): MemberDto = memberService.getMember(id).toDto()
-
-    @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    fun createMember(
-        @RequestBody request: CreateMemberRequest,
-    ): Member = memberService.createMember(request)
-
-    @PutMapping("/{id}")
-    fun updateMember(
-        @PathVariable id: String,
-        @RequestBody request: UpdateMemberRequest,
-    ): MemberDto = memberService.updateMember(id, request).toDto()
-
-    @DeleteMapping("/{id}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    fun deleteMember(
-        @PathVariable id: String,
-    ) {
-        memberService.softDeleteMember(id)
+    @PreAuthorize("hasRole('ADMIN')")
+    fun listMembers(
+        @RequestParam(required = false) search: String?,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int,
+    ): ResponseEntity<ApiResponse<Page<MemberSummaryDto>>> {
+        val result = memberService.getMembers(search, page, size)
+        return ResponseEntity.ok(ApiResponse.success(data = result))
     }
 
+    /**
+     * GET /api/v1/members/me
+     * Role: MEMBER (any authenticated user) — own profile only.
+     */
+    @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    fun getMyProfile(
+        @AuthenticationPrincipal jwt: Jwt,
+    ): ResponseEntity<ApiResponse<*>> {
+        val profile = memberService.getMemberProfile(jwt.subject)
+        return ResponseEntity.ok(ApiResponse.success(data = profile))
+    }
+
+    /**
+     * GET /api/v1/members/{publicId}
+     * Role: ADMIN
+     */
+    @GetMapping("/{publicId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    fun getMember(
+        @PathVariable publicId: UUID,
+    ): ResponseEntity<ApiResponse<MemberDto>> {
+        val member = memberService.getMemberByPublicId(publicId)
+        return ResponseEntity.ok(ApiResponse.success(data = member))
+    }
+
+    /**
+     * POST /api/v1/members
+     * Role: ADMIN — admin creates a member record (no Keycloak user, no password).
+     */
+    @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    fun createMember(
+        @Valid @RequestBody request: CreateMemberRequest,
+    ): ResponseEntity<ApiResponse<MemberDto>> {
+        val created = memberService.createMember(request)
+        return ResponseEntity
+            .status(HttpStatus.CREATED)
+            .body(ApiResponse.success(data = created, message = "회원이 등록되었습니다."))
+    }
+
+    /**
+     * PATCH /api/v1/members/{publicId}
+     * Role: ADMIN — partial update; only non-null fields applied.
+     * Status transitions: ACTIVE ↔ INACTIVE. Use DELETE to soft-delete.
+     */
+    @PatchMapping("/{publicId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    fun updateMember(
+        @PathVariable publicId: UUID,
+        @Valid @RequestBody request: UpdateMemberRequest,
+    ): ResponseEntity<ApiResponse<MemberDto>> {
+        val updated = memberService.updateMember(publicId, request)
+        return ResponseEntity.ok(ApiResponse.success(data = updated))
+    }
+
+    /**
+     * DELETE /api/v1/members/{publicId}
+     * Role: ADMIN — soft delete; sets deletedAt + memberStatus=DELETED (terminal).
+     */
+    @DeleteMapping("/{publicId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun deleteMember(
+        @PathVariable publicId: UUID,
+    ) {
+        memberService.softDeleteMember(publicId)
+    }
+
+    /**
+     * POST /api/v1/members/register
+     * Public (no auth required) — self-registration; creates DB record + Keycloak user.
+     * Path is whitelisted in SecurityConfig.
+     */
     @PostMapping("/register")
     fun registerMember(
-        @RequestBody request: RegisterMemberRequest,
+        @Valid @RequestBody request: RegisterMemberRequest,
     ): ResponseEntity<ApiResponse<Unit>> =
         try {
             memberService.registerMember(request)
-
-            // 201 Created + Standard Body
             ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success(message = "등록이 완료되었습니다."))
-        } catch (e: IllegalArgumentException) {
-            // 409 Conflict (z.B. Email existiert schon)
+        } catch (e: ResponseStatusException) {
             ResponseEntity
-                .status(HttpStatus.CONFLICT)
-                .body(ApiResponse.error(e.message ?: "이미 등록된 이메일 주소입니다."))
+                .status(e.statusCode)
+                .body(ApiResponse.error(e.reason ?: e.message ?: "등록 실패"))
         } catch (e: Exception) {
-            e.printStackTrace()
-            // 400 Bad Request (Sonstiger Fehler)
             ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.error("등록이 실패하였습니다."))
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error("서버 오류가 발생했습니다."))
         }
-
-    @GetMapping("/me")
-    fun getMyProfile(
-        @AuthenticationPrincipal token: Jwt,
-    ): ResponseEntity<MemberResponse> {
-        logger.info("DEBUG: /me wurde aufgerufen")
-
-        val claims = token.claims
-        logger.info("DEBUG: Token Claims: $claims")
-
-        val email = token.getClaimAsString("email") ?: ""
-        logger.info("DEBUG: Extrahierte Email: $email")
-
-        if (email.isNullOrBlank()) {
-            logger.error("Fehler: Keine Email im Token gefunden!")
-            return ResponseEntity
-                .status(
-                    HttpStatus.UNAUTHORIZED,
-                ).build()
-        }
-        try {
-            val response = memberService.getMemberProfile(email)
-            logger.info("DEBUG: User gefunden, Status: ${response.status}")
-            return ResponseEntity.ok(response)
-        } catch (e: Exception) {
-            logger.error("FEHLER beim Laden des Profils: ${e.message}")
-            // Wichtig: Wirf die Exception weiter oder gib 404 zurück, damit wir es sehen
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "User DB Error: ${e.message}")
-        }
-    }
 }

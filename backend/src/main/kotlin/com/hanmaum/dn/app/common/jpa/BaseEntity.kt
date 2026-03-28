@@ -33,7 +33,7 @@ abstract class BaseEntity : Serializable {
     @Column(name = "deleted_at")
     var deletedAt: LocalDateTime? = null
 
-    fun isActive(): Boolean = deletedAt == null
+    fun isNotDeleted(): Boolean = deletedAt == null
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

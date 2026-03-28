@@ -9,6 +9,8 @@ Never shortcut without flagging debt explicitly.
 4. Run: git status
     - If dirty: explicitly list changed files and ASK before proceeding
     - Never start on a dirty tree without acknowledgement
-5. If a task is given: read related code BEFORE planning
+5. Confirm current branch — if on main, switch to dev before any feature work:
+   git checkout dev && git pull origin dev
+6. If a task is given: read related code BEFORE planning
 
 Only start work after this orientation.
