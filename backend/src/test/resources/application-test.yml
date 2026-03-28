@@ -1,0 +1,22 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5434/${DB_DN_TEST_NAME}
+    username: ${DB_DN_TEST_USER}
+    password: ${DB_DN_TEST_SECRET}
+
+  # WICHTIG: Erlaubt uns, in Tests die DB mit Flyway komplett zu leeren
+  flyway:
+    enabled: true
+    clean-disabled: false
+
+  # WICHTIG: Fake Keycloak URL!
+  # Damit sucht Spring beim Start-Up nicht nach dem echten Keycloak.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:9999/dummy-keys
+
+# Verhindert, dass Tests den Port 8080 blockieren
+server:
+  port: 0

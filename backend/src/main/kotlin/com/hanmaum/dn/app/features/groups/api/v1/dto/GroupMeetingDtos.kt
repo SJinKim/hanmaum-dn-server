@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.groups.api.v1.dto
 
 import java.time.LocalDateTime
+
 // --- RESPONSE (Anzeige) ---
 // Übersicht für die Liste
 data class GroupMeetingDto(
@@ -9,7 +10,7 @@ data class GroupMeetingDto(
     val meetingTime: LocalDateTime,
     val location: String,
     val description: String,
-    val attendanceCount: Int? = 0 // Wie viele waren da?
+    val attendanceCount: Int? = 0, // Wie viele waren da?
 )
 
 // Detailansicht (Nur für eigene Gruppe oder Pastor!)
@@ -19,14 +20,14 @@ data class MeetingDetailDto(
     val meetingTime: LocalDateTime,
     val location: String,
     // Die Liste der Teilnehmer & Gebete
-    val attendees: List<AttendanceEntryDto>
+    val attendees: List<AttendanceEntryDto>,
 )
 
 data class AttendanceEntryDto(
     val memberName: String,
     val memberId: String, // Public UUID
     val status: String,
-    val prayerRequest: String? // Das Gebetsanliegen
+    val prayerRequest: String?, // Das Gebetsanliegen
 )
 
 // --- REQUEST (Eingabe) ---
@@ -36,17 +37,17 @@ data class CreateMeetingRequest(
     val groupId: Long,
     val meetingTime: LocalDateTime,
     val location: String,
-    val description: String = "순모임"
+    val description: String = "순모임",
 )
 
 // Leader: Reicht den Bericht ein (Anwesenheit & Gebete)
 data class SubmitMeetingReportRequest(
     // Liste aller Mitglieder der Gruppe mit ihrem Status/Gebet
-    val entries: List<ReportEntry>
+    val entries: List<ReportEntry>,
 )
 
 data class ReportEntry(
     val memberId: String, // Public UUID des Mitglieds
     val isPresent: Boolean,
-    val prayerRequest: String?
+    val prayerRequest: String?,
 )

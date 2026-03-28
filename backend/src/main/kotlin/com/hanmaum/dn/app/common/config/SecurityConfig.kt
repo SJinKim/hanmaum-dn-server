@@ -9,13 +9,17 @@ import org.springframework.security.config.Customizer
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
+import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer
 import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator
 import org.springframework.security.oauth2.core.OAuth2Error
 import org.springframework.security.oauth2.core.OAuth2TokenValidator
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult
-import org.springframework.security.oauth2.jwt.*
+import org.springframework.security.oauth2.jwt.Jwt
+import org.springframework.security.oauth2.jwt.JwtDecoder
+import org.springframework.security.oauth2.jwt.JwtTimestampValidator
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.web.cors.CorsConfiguration
@@ -26,7 +30,6 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 @EnableWebSecurity
 @EnableMethodSecurity
 class SecurityConfig {
-
     @Bean
     fun filterChain(http: HttpSecurity): SecurityFilterChain {
         http
@@ -35,11 +38,11 @@ class SecurityConfig {
             .cors(Customizer.withDefaults())
             .authorizeHttpRequests { auth ->
                 auth
-                    .requestMatchers(HttpMethod.POST, "/api/v1/members/register").permitAll()
-                    .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/actuator/health", "/actuator/info").permitAll()
-                    .anyRequest().authenticated()
-            }
-            .oauth2ResourceServer { oauth2 ->
+                    .requestMatchers("/actuator/health", "/actuator/info")
+                    .permitAll()
+                    .anyRequest()
+                    .authenticated()
+            }.oauth2ResourceServer { oauth2 ->
                 oauth2.jwt { jwt ->
                     jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())
                 }
@@ -48,27 +51,37 @@ class SecurityConfig {
         return http.build()
     }
 
+    @Bean
+    fun webSecurityCustomizer(): WebSecurityCustomizer =
+        WebSecurityCustomizer { web ->
+            web
+                .ignoring()
+                .requestMatchers(HttpMethod.POST, "/api/v1/members/register")
+                .requestMatchers(HttpMethod.POST, "/api/v1/members/me")
+                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**")
+        }
+
     /**
      * WICHTIG: Mappt Keycloak-Rollen auf Spring Authorities.
      * Keycloak speichert Rollen in "realm_access" -> "roles".
      * Spring braucht aber "ROLE_ADMIN". Das machen wir hier.
      */
     @Bean
-    fun jwtAuthenticationConverter(): Converter<Jwt, AbstractAuthenticationToken> {
-        return Converter { jwt ->
+    fun jwtAuthenticationConverter(): Converter<Jwt, AbstractAuthenticationToken> =
+        Converter { jwt ->
             // hole den 'realm_access' Teil aus dem Token JSON
             val realmAccess = jwt.claims["realm_access"] as? Map<String, Any>
             val roles = realmAccess?.get("roles") as? List<String> ?: emptyList()
 
             // wandle jede Rolle (z.B. "admin") in "ROLE_ADMIN" um
-            val authorities = roles.map { role ->
-                SimpleGrantedAuthority("ROLE_${role.uppercase()}")
-            }
+            val authorities =
+                roles.map { role ->
+                    SimpleGrantedAuthority("ROLE_${role.uppercase()}")
+                }
 
             // Rückgabe: Ein Token-Objekt, das Spring versteht (User + Rollen)
             JwtAuthenticationToken(jwt, authorities, jwt.getClaimAsString("preferred_username"))
         }
-    }
 
     @Bean
     fun jwtDecoder(): JwtDecoder {
@@ -80,27 +93,29 @@ class SecurityConfig {
 
         // 2. Liste der erlaubten Aussteller (Issuers)
         // Das sind alle Namen, unter denen Keycloak erreichbar ist.
-        val allowedIssuers = listOf(
-            "http://10.0.2.2:8091/realms/hanmaum",                // Android Emulator
-            "http://localhost:8091/realms/hanmaum",               // iOS / Web Localhost
-            "http://$serviceName:8090/realms/hanmaum"      // Docker Intern
-        )
+        val allowedIssuers =
+            listOf(
+                "http://10.0.2.2:8091/realms/hanmaum", // Android Emulator
+                "http://localhost:8091/realms/hanmaum", // iOS / Web Localhost
+                "http://$serviceName:8090/realms/hanmaum", // Docker Intern
+            )
 
         // 3. Eigener Validator: Prüft, ob der Token-Issuer in der Liste ist
-        val issuerValidator = OAuth2TokenValidator<Jwt> { jwt ->
-            val issuerClaim = jwt.getClaimAsString("iss")
-            if (allowedIssuers.contains(issuerClaim)) {
-                OAuth2TokenValidatorResult.success()
-            } else {
-                OAuth2TokenValidatorResult.failure(
-                    OAuth2Error(
-                        "invalid_issuer",
-                        "Dieser Issuer wird nicht akzeptiert: $issuerClaim",
-                        null
+        val issuerValidator =
+            OAuth2TokenValidator<Jwt> { jwt ->
+                val issuerClaim = jwt.getClaimAsString("iss")
+                if (allowedIssuers.contains(issuerClaim)) {
+                    OAuth2TokenValidatorResult.success()
+                } else {
+                    OAuth2TokenValidatorResult.failure(
+                        OAuth2Error(
+                            "invalid_issuer",
+                            "Dieser Issuer wird nicht akzeptiert: $issuerClaim",
+                            null,
+                        ),
                     )
-                )
+                }
             }
-        }
 
         // 4. Standard-Validator (Zeitstempel) + Unser Issuer Validator kombinieren
         val timestampValidator = JwtTimestampValidator()
@@ -110,6 +125,7 @@ class SecurityConfig {
 
         return jwtDecoder
     }
+
     /**
      * CORS Konfiguration:
      * Erlaubt dem Angular Dashboard (localhost:4200), mit uns zu reden.
@@ -126,7 +142,7 @@ class SecurityConfig {
 
         // Welche Infos dürfen mitgeschickt werden? (Authorization Header ist wichtig)
         configuration.allowedHeaders = listOf("*")
-        configuration.allowCredentials = true  // erlaubt Cookies/Auth-Header
+        configuration.allowCredentials = true // erlaubt Cookies/Auth-Header
 
         val source = UrlBasedCorsConfigurationSource()
         source.registerCorsConfiguration("/**", configuration)

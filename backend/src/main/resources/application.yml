@@ -1,49 +1,12 @@
+server:
+  port: 8080
+
 spring:
   application:
     name: church-dn-backend
-  # ==== SECURITY ====
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          jwk-set-uri: http://${KEYCLOAK_SERVER_URL_DOCKER}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/certs
-
-  # === Datenbank Verbindung ===
-  datasource:
-    url: jdbc:postgresql://localhost:5433/${DB_HANMAUM_DN_NAME}
-    username: ${DB_HANMAUM_DN_USER}
-    password: ${DB_HANMAUM_DN_SECRET}
-    driver-class-name: org.postgresql.Driver
-
-  # 2. JPA / Hibernate Einstellungen
-  jpa:
-    database: POSTGRESQL
-    show-sql: true      # Zeigt dir im Log, was Hibernate tut (Gut zum Debuggen)
-    open-in-view: false
-    hibernate:
-      # WICHTIG: 'validate' prüft nur, ob DB und Kotlin zusammenpassen.
-      # Da wir die Tabellen manuell erstellt haben, darf Hibernate NICHTS ändern!
-      ddl-auto: validate
-    properties:
-      hibernate:
-        format_sql: true
-        # Dialekt für Postgres 15+
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-
-  # 3. Flyway (DB Migration Tool)
   flyway:
     enabled: true
     baseline-on-migrate: true
     baseline-version: 1
-
-# Server Port (Standard ist 8080)
-server:
-  port: 8080
-
-# === EIGENE KONFIGURATION FÜR DEN ADMIN CLIENT ===
-app:
-  keycloak:
-    server-url_docker: ${KEYCLOAK_SERVER_URL_DOCKER}
-    realm: ${KEYCLOAK_REALM}
-    admin-client-id: ${KEYCLOAK_BACKEND_CLIENT_ID}
-    admin-client-secret: ${KEYCLOAK_BACKEND_CLIENT_SECRET}
+  profiles:
+    active: dev

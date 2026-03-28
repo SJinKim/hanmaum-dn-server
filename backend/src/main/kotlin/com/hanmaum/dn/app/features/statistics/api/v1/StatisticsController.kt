@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/statistics")
 class StatisticsController(
-    private val statisticsService: StatisticsService
+    private val statisticsService: StatisticsService,
 ) {
     @GetMapping("/dashboard")
     fun getDashboardStatistics(): ResponseEntity<DashboardStatsDto> {

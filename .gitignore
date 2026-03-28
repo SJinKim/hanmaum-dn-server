@@ -83,3 +83,7 @@ baseline.json
 
 assets/demo/
 *.sql
+!backend/src/main/resources/db/migration/*.sql
+
+/infrastructure/architectureLog/*
+/postgres-init/application.old.yml

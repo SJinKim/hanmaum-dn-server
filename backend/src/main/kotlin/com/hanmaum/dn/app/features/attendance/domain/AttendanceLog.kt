@@ -2,28 +2,34 @@ package com.hanmaum.dn.app.features.attendance.domain
 
 import com.hanmaum.dn.app.common.jpa.BaseEntity
 import com.hanmaum.dn.app.features.members.domain.Member
-import jakarta.persistence.*
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.FetchType
+import jakarta.persistence.JoinColumn
+import jakarta.persistence.ManyToOne
+import jakarta.persistence.Table
+import jakarta.persistence.UniqueConstraint
 import java.time.LocalDate
 
-// 2. Der Eintrag: "Max Mustermann war am 12.01.2026 da"
 @Entity
-@Table(name = "attendance_logs")
+@Table(
+    name = "attendance_logs",
+    uniqueConstraints = [
+        UniqueConstraint(
+            name = "uq_attendance_log",
+            columnNames = ["member_id", "definition_id", "attendance_date"],
+        ),
+    ],
+)
 class AttendanceLog(
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    val id: Long? = null,
-
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "definition_id", nullable = false)
+    val definition: AttendanceDefinition,
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "member_id", nullable = false)
     val member: Member,
-
-    @Column(nullable = false)
-    val date: LocalDate,
-
-    @Column(nullable = false)
-    val category: String = "SUNDAY_SERVICE", // Könnte später ein Enum sein
-
-    @Column(nullable = false)
-    val status: String = "PRESENT" // PRESENT, LATE, ONLINE...
-
+    @Column(name = "attendance_date", nullable = false)
+    val attendanceDate: LocalDate,
+    @Column(name = "attended", nullable = false)
+    val attended: Boolean = true,
 ) : BaseEntity()

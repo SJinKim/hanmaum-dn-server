@@ -1,120 +1,130 @@
 package com.hanmaum.dn.app.features.members.api.v1.dto
 
-import com.hanmaum.dn.app.common.domainvalue.Baptism
+import com.hanmaum.dn.app.common.domainvalue.MemberStatus
+import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Size
 import java.time.LocalDate
 
+// ─── Response DTOs ────────────────────────────────────────────────────────────
+
+/**
+ * Full member detail. publicId (UUID string) is the external identifier.
+ * Internal Long `id` is NEVER exposed in any response.
+ */
 data class MemberDto(
-    val id: String, // fachliche ID
-
-    val lastName: String,
-    val firstName: String,
-    val discriminator: String? = null, // Zur Unterscheidung bei gleichen Namen (A, B, C)
-
-    val gender: String? = null,        // "M" oder "F"
-    val baptism: String? = null,       // "INFANT_BAPTIZED", "CONFIRMATION", etc.
-
-    val birthDate: LocalDate? = null,
-    val phoneNumber: String? = null,
-    val email: String? = null,
-
-    // Adresse
-    val street: String? = null,
-    val zipCode: String? = null,
-    val city: String? = null,
-
-    val registrationDate: LocalDate? = null,
-    val memberStatus: String,          // "ACTIVE", "DELETED" etc.
-
-    val role: String? = null,          // z.B. "Teacher", "Student"
-    val groupName: String? = null      // Name der Gruppe (z.B. "Sarang")
-)
-
-data class CreateMemberRequest(
-    // 1. Namen (Getrennt, wie in DB)
+    val publicId: String,
     val lastName: String,
     val firstName: String,
     val discriminator: String? = null,
-
-    // 2. Stammdaten
-    val gender: String? = null, // "M", "F" (Frontend schickt String)
-    val baptism: String? = null,
-
-    val birthDate: LocalDate? = null,
-    val phoneNumber: String? = null,
-    val email: String? = null,
-
-    // 3. Adresse (Jetzt 3 Felder statt addressStreet)
-    val street: String? = null,
-    val zipCode: String? = null,
-    val city: String? = null,
-
-    val registrationDate: LocalDate? = null,
-    val role: String? = null,
-
-    // Optional: Falls du beim Erstellen schon eine Gruppe zuweisen willst
-    val groupId: Long? = null
-)
-
-data class UpdateMemberRequest(
-    val lastName: String,
-    val firstName: String,
-    val discriminator: String? = null,
-
     val gender: String? = null,
     val baptism: String? = null,
-
     val birthDate: LocalDate? = null,
     val phoneNumber: String? = null,
     val email: String? = null,
-
     val street: String? = null,
     val zipCode: String? = null,
     val city: String? = null,
-
     val registrationDate: LocalDate? = null,
-    val memberStatus: String, // z.B. "ACTIVE", "INACTIVE"
+    val memberStatus: String,
+    val churchRole: String? = null,
+    val groupName: String? = null,
+    val profileImageUrl: String? = null,
+)
 
-    val role: String? = null,
+/** Lightweight DTO used in the paginated list endpoint. */
+data class MemberSummaryDto(
+    val publicId: String,
+    val lastName: String,
+    val firstName: String,
+    val email: String? = null,
+    val memberStatus: String,
+    val groupName: String? = null,
+)
+
+/**
+ * Own-profile response — used by GET /me.
+ * publicId only — internal id is never returned.
+ */
+data class MemberResponse(
+    val publicId: String,
+    val firstName: String,
+    val lastName: String,
+    val email: String? = null,
+    val status: MemberStatus,
+    val churchRole: String? = null,
+    val groupName: String? = null,
+    val city: String? = null,
+    val profileImageUrl: String? = null,
+)
+
+// ─── Request DTOs ─────────────────────────────────────────────────────────────
+
+data class CreateMemberRequest(
+    @field:NotBlank(message = "성은 필수입니다.")
+    val lastName: String,
+    @field:NotBlank(message = "이름은 필수입니다.")
+    val firstName: String,
+    val discriminator: String? = null,
+    val gender: String? = null,
+    val baptism: String? = null,
+    val birthDate: LocalDate? = null,
+    @field:Size(max = 50)
+    val phoneNumber: String? = null,
+    @field:Email
+    val email: String? = null,
+    val street: String? = null,
+    val zipCode: String? = null,
+    val city: String? = null,
+    val registrationDate: LocalDate? = null,
+    /** Church position/title (직분), not the app access role. */
+    val churchRole: String? = null,
+    /** Internal group id — used server-side only, never returned. */
     val groupId: Long? = null,
+    val profileImageUrl: String? = null,
+)
+
+/**
+ * PATCH semantics — every field is optional. Only non-null fields are applied.
+ * Status transition rule: ACTIVE ↔ INACTIVE only. DELETED is terminal (use DELETE endpoint).
+ */
+data class UpdateMemberRequest(
+    val lastName: String? = null,
+    val firstName: String? = null,
+    val discriminator: String? = null,
+    val gender: String? = null,
+    val baptism: String? = null,
+    val birthDate: LocalDate? = null,
+    @field:Size(max = 50)
+    val phoneNumber: String? = null,
+    @field:Email
+    val email: String? = null,
+    val street: String? = null,
+    val zipCode: String? = null,
+    val city: String? = null,
+    val registrationDate: LocalDate? = null,
+    val memberStatus: String? = null,
+    val churchRole: String? = null,
+    val groupId: Long? = null,
+    val profileImageUrl: String? = null,
 )
 
 data class RegisterMemberRequest(
-    // PFLICHTFELDER
-    @field:NotBlank(message = "Vorname ist Pflicht")
+    @field:NotBlank(message = "이름은 필수입니다.")
     val firstName: String,
-
-    @field:NotBlank(message = "Nachname ist Pflicht")
+    @field:NotBlank(message = "성은 필수입니다.")
     val lastName: String,
-
     @field:NotBlank
     val password: String,
-
-    @field:NotBlank(message = "Muss eine gültige E-Mail sein")
+    @field:NotBlank
+    @field:Email(message = "유효한 이메일이어야 합니다.")
     val email: String,
-
-    @field:NotBlank(message = "Stadt ist Pflicht")
-    val city: String,
-
-    // OPTIONAL
-    val baptism: String, // Enum String
+    val city: String? = null,
+    val baptism: String? = null,
     val gender: String? = null,
-    val birthDate: LocalDate? = null, // Nutze LocalDate im Backend!
+    val birthDate: LocalDate? = null,
+    @field:Size(max = 50)
     val phoneNumber: String? = null,
     val street: String? = null,
-    val zipCode: String? = null
-)
-
-data class MemberResponse(
-    val id: Long,
-    val firstName: String,
-    val lastName: String,
-    val email: String,
-
-    // READ ONLY Felder für den User
-    val role: String,       // "MEMBER"
-    val groupName: String?, // "Jugendgruppe" statt ID 3
-
-    val city: String
-    // Discriminator lassen wir weg!
+    val zipCode: String? = null,
 )
