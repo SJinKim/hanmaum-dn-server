@@ -1,21 +1,20 @@
 package com.hanmaum.dn.app.common.domainvalue
 
 /**
- * Allowed status transitions: ACTIVE ↔ INACTIVE → DELETED (terminal).
- * DELETED is set by the soft-delete endpoint only — never via PATCH.
+ * Allowed status transitions:
+ *   PENDING  → ACTIVE (admin approval)
+ *   ACTIVE   ↔ INACTIVE
+ *   ACTIVE / INACTIVE → DELETED (terminal, soft-delete endpoint only)
  *
- * Note: PENDING and REJECTED were old values migrated away by V1774557470475.
- * They are kept here temporarily as deprecated aliases so any existing serialised
- * values don't cause a hard failure on startup before the migration runs.
+ * PENDING is the default for newly registered members — admin must approve.
+ * REJECTED is kept as a deprecated alias; no longer assigned.
  */
 enum class MemberStatus {
+    PENDING,
     ACTIVE,
     INACTIVE,
     DELETED,
 
-    @Deprecated("Migrated to ACTIVE by V1774557470475")
-    PENDING,
-
-    @Deprecated("Migrated to INACTIVE by V1774557470475")
+    @Deprecated("No longer used. Historical values only.")
     REJECTED,
 }
