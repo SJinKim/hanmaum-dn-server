@@ -49,6 +49,7 @@ class MemberService(
     @Transactional(readOnly = true)
     fun getMembers(
         search: String?,
+        status: MemberStatus?,
         page: Int,
         size: Int,
     ): Page<MemberSummaryDto> {
@@ -59,7 +60,7 @@ class MemberService(
                 Sort.by("lastName").ascending().and(Sort.by("firstName").ascending()),
             )
         return memberRepository
-            .findActiveMembers(search?.takeIf { it.isNotBlank() }, pageable)
+            .findActiveMembers(search?.takeIf { it.isNotBlank() }, status, pageable)
             .map { it.toSummaryDto() }
     }
 
@@ -186,7 +187,7 @@ class MemberService(
                 street = req.street,
                 zipCode = req.zipCode,
                 registrationDate = LocalDate.now(),
-                memberStatus = MemberStatus.ACTIVE,
+                memberStatus = MemberStatus.PENDING,
             )
 
         val savedMember = memberRepository.save(newMember)

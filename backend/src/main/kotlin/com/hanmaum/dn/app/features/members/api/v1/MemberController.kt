@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.members.api.v1
 
+import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.common.dto.ApiResponse
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
@@ -41,10 +42,11 @@ class MemberController(
     @PreAuthorize("hasRole('ADMIN')")
     fun listMembers(
         @RequestParam(required = false) search: String?,
+        @RequestParam(required = false) status: MemberStatus?,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int,
     ): ResponseEntity<ApiResponse<Page<MemberSummaryDto>>> {
-        val result = memberService.getMembers(search, page, size)
+        val result = memberService.getMembers(search, status, page, size)
         return ResponseEntity.ok(ApiResponse.success(data = result))
     }
 

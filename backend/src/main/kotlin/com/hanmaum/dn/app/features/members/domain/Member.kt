@@ -43,7 +43,7 @@ class Member(
     var registrationDate: LocalDate? = LocalDate.now(),
     @Enumerated(EnumType.STRING)
     @Column(name = "member_status", nullable = false)
-    var memberStatus: MemberStatus = MemberStatus.ACTIVE,
+    var memberStatus: MemberStatus = MemberStatus.PENDING,
     /** Church position / title (직분). Not the app access role (that lives in Keycloak). */
     @Column(name = "role")
     var churchRole: String? = null,

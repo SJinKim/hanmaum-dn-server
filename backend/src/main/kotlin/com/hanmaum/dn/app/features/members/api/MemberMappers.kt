@@ -65,7 +65,8 @@ fun CreateMemberRequest.toEntity(): Member =
 
 /**
  * Applies only non-null fields from [request] onto the entity (PATCH semantics).
- * Status transitions: ACTIVE ↔ INACTIVE allowed; DELETED is terminal — use DELETE endpoint.
+ * Status transitions: PENDING → ACTIVE (approve), ACTIVE ↔ INACTIVE allowed.
+ * DELETED is terminal — use DELETE endpoint.
  *
  * @throws IllegalStateException  if member is already DELETED
  * @throws IllegalStateException  if request tries to set status to DELETED
