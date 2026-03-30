@@ -20,6 +20,10 @@ The dashboard folder does not exist yet — create it with Angular CLI when firs
 - Auth: Keycloak (port 8091) — OAuth2 JWT / PKCE
 - Infra: Docker Compose (`dn-app/infrastructure/docker-compose.yml`)
 
+## Dashboard Design
+- All dashboard UI work must follow `dn-app-dashboard/design-specs/DESIGN.md` — read it before building any component or page
+- Do not deviate from the design specs without explicit user approval
+
 ## Key Architectural Rules
 - All entities extend `BaseEntity` (id, publicId, createdAt, updatedAt, deletedAt)
 - REST APIs use `publicId` (UUID) — never expose internal `id`
