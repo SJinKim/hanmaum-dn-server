@@ -1,5 +1,10 @@
 # === LOKALE ENTWICKLUNG (DEV) ===
 spring:
+  flyway:
+    locations:
+      - classpath:db/migration
+      - classpath:db/seed
+
   datasource:
     # Verbindet sich mit deinem lokalen Docker (Port 5433)
     url: jdbc:postgresql://localhost:5433/${DB_HANMAUM_DN_NAME}

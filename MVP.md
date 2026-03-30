@@ -138,8 +138,8 @@ _Depends on: F1_
 | # | Feature | Backend | Dashboard | App |
 |---|---------|---------|-----------|-----|
 | 1 | Member Management | ✅ | ✅ | 🔲 |
-| 2 | Ministry + Registration | ✅ | 🔲 | 🔲 |
-| 3 | Attendance Tracking | ✅ | 🔲 | 🔲 |
+| 2 | Ministry + Registration | ✅ | ✅ | 🔲 |
+| 3 | Attendance Tracking | ✅ | ✅ | 🔲 |
 
 🔲 not started · 🔄 in progress · ✅ done
 
