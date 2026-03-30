@@ -146,6 +146,18 @@ _Depends on: F1_
 **Rule:** Backend must be ✅ before starting Dashboard or App for that feature.
 **Session target:** Complete at least one full layer per session.
 
+### Seed Data
+Before end-to-end testing the dashboard against a real backend, add database seed/mock data.
+**When:** After F1 + F2 dashboard are both ✅ — seed enough data to exercise all views.
+
+Minimum seed set:
+- 15–20 members (mix of ACTIVE, INACTIVE, PENDING, at least 1 ADMIN)
+- 4–5 ministries (mix of active/inactive, some with registrations)
+- Member registrations across 2 periods (e.g. "2025", "2026")
+- Attendance definitions + a few logs
+
+Add as a Flyway migration: `V{timestamp}__seed_dev_data.sql` (dev profile only — guard with a `spring.profiles.active=dev` check or a separate `application-dev.yml` datasource override so it never runs in prod).
+
 ---
 
 ## Release Gate (v0.1.0-rc.1)
