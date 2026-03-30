@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] — 2026-03-30
+
+### Added
+- Shell: decomposed into `SidebarComponent` + `HeaderComponent` per DESIGN.md spec
+- Shell: Manrope font, design tokens (#2B3A67 primary palette), CSS variables wired to Tailwind
+- Shell: collapsible sidebar (256px ↔ 72px), localStorage-persisted, 3px left accent bar on active nav
+- Home: Liturgical Dashboard — 4 stat cards (total/active members, ministry count, avg attendance), dual-line growth chart, demographics panel, recent activity table
+- Members: restyled list — role/status filter dropdowns, PENDING amber banner, separate Approve/Edit columns, fit-content status badges, `updatedAt` Last Active column
+- Members: restyled detail page — two-column card layout, avatar initials, role + status badges, section headings
+- Members: restyled edit/create page — design token styling, section headings, styled action buttons
+
 ## [Unreleased]
 
 ### Added
