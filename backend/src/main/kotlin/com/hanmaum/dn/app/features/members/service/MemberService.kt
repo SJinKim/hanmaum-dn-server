@@ -15,6 +15,7 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberSummaryDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.RegisterMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMyProfileRequest
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import jakarta.persistence.EntityNotFoundException
@@ -84,6 +85,17 @@ class MemberService(
                 ?: memberRepository.findByEmailAndDeletedAtIsNull(keycloakSubject)
                 ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Member profile not found.")
         return member.toResponse()
+    }
+
+    @Transactional
+    fun updateMyProfile(keycloakSubject: String, request: UpdateMyProfileRequest): MemberResponse {
+        val member =
+            memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSubject)
+                ?: memberRepository.findByEmailAndDeletedAtIsNull(keycloakSubject)
+                ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Member profile not found.")
+        request.phoneNumber?.let { member.phoneNumber = it }
+        request.profileImageUrl?.let { member.profileImageUrl = it }
+        return memberRepository.save(member).toResponse()
     }
 
     // ─── Write ─────────────────────────────────────────────────────────────────
