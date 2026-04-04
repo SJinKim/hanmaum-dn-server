@@ -55,6 +55,7 @@ data class MemberResponse(
     val churchRole: String? = null,
     val groupName: String? = null,
     val city: String? = null,
+    val phoneNumber: String? = null,
     val profileImageUrl: String? = null,
 )
 

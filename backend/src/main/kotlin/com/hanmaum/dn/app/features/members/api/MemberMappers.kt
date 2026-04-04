@@ -146,5 +146,6 @@ fun Member.toResponse(): MemberResponse =
         churchRole = this.churchRole,
         groupName = this.group?.name,
         city = this.city,
+        phoneNumber = this.phoneNumber,
         profileImageUrl = this.profileImageUrl,
     )
