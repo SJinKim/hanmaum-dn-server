@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased] — 2026-03-30
 
 ### Added
+- F1 Mobile App (Session 5): Profile screen (own profile view + inline edit for phone & profileImageUrl), persistent token storage (multiplatform-settings), token refresh in Ktor bearer plugin, bottom nav Profile tab, `MemberResponse`/`MemberStatus` aligned with backend
 - F1 Mobile (Session 5): `phoneNumber` added to `GET /me` response; new `PATCH /me` endpoint for self-profile update (phone + profileImageUrl); SecurityConfig POST /me whitelist removed
 - Shell: decomposed into `SidebarComponent` + `HeaderComponent` per DESIGN.md spec
 - Shell: Manrope font, design tokens (#2B3A67 primary palette), CSS variables wired to Tailwind
