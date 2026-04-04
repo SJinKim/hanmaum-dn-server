@@ -57,7 +57,6 @@ class SecurityConfig {
             web
                 .ignoring()
                 .requestMatchers(HttpMethod.POST, "/api/v1/members/register")
-                .requestMatchers(HttpMethod.POST, "/api/v1/members/me")
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
         }
 
