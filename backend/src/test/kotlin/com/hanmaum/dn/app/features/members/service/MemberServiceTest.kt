@@ -126,10 +126,10 @@ class MemberServiceTest {
     @Test
     fun `getMembers delegates to repository with pageable`() {
         val members = listOf(memberWithId(1L), memberWithId(2L))
-        `when`(memberRepository.findActiveMembers(anyOrNull(), any<Pageable>()))
+        `when`(memberRepository.findActiveMembers(anyOrNull(), anyOrNull(), any<Pageable>()))
             .thenReturn(PageImpl(members))
 
-        val result = memberService.getMembers(null, 0, 20)
+        val result = memberService.getMembers(null, null, 0, 20)
 
         assertEquals(2, result.totalElements)
     }
@@ -328,7 +328,7 @@ class MemberServiceTest {
     }
 
     @Test
-    fun `registerMember sets member status to ACTIVE and no group`() {
+    fun `registerMember sets member status to PENDING and no group`() {
         val req = registerReq()
         `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
         `when`(memberRepository.findSimilarNames(req.firstName, req.lastName)).thenReturn(emptyList())
@@ -337,7 +337,7 @@ class MemberServiceTest {
 
         val result = memberService.registerMember(req)
 
-        assertEquals(MemberStatus.ACTIVE, result.memberStatus)
+        assertEquals(MemberStatus.PENDING, result.memberStatus)
         assertNull(result.group)
     }
 
