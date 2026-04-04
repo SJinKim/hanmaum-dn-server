@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased] — 2026-03-30
 
 ### Added
+- F1 Mobile (Session 5): `phoneNumber` added to `GET /me` response; new `PATCH /me` endpoint for self-profile update (phone + profileImageUrl); SecurityConfig POST /me whitelist removed
 - Shell: decomposed into `SidebarComponent` + `HeaderComponent` per DESIGN.md spec
 - Shell: Manrope font, design tokens (#2B3A67 primary palette), CSS variables wired to Tailwind
 - Shell: collapsible sidebar (256px ↔ 72px), localStorage-persisted, 3px left accent bar on active nav
