@@ -126,10 +126,10 @@ class MemberServiceTest {
     @Test
     fun `getMembers delegates to repository with pageable`() {
         val members = listOf(memberWithId(1L), memberWithId(2L))
-        `when`(memberRepository.findActiveMembers(anyOrNull(), any<Pageable>()))
+        `when`(memberRepository.findActiveMembers(anyOrNull(), anyOrNull(), any<Pageable>()))
             .thenReturn(PageImpl(members))
 
-        val result = memberService.getMembers(null, 0, 20)
+        val result = memberService.getMembers(null, null, 0, 20)
 
         assertEquals(2, result.totalElements)
     }
@@ -328,7 +328,7 @@ class MemberServiceTest {
     }
 
     @Test
-    fun `registerMember sets member status to ACTIVE and no group`() {
+    fun `registerMember sets member status to PENDING and no group`() {
         val req = registerReq()
         `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
         `when`(memberRepository.findSimilarNames(req.firstName, req.lastName)).thenReturn(emptyList())
@@ -337,7 +337,7 @@ class MemberServiceTest {
 
         val result = memberService.registerMember(req)
 
-        assertEquals(MemberStatus.ACTIVE, result.memberStatus)
+        assertEquals(MemberStatus.PENDING, result.memberStatus)
         assertNull(result.group)
     }
 
@@ -346,11 +346,12 @@ class MemberServiceTest {
     @Test
     fun `getMemberProfile throws ResponseStatusException when member not found`() {
         val keycloakSub = UUID.randomUUID().toString()
+        val email = "notfound@example.com"
         `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(null)
-        `when`(memberRepository.findByEmailAndDeletedAtIsNull(keycloakSub)).thenReturn(null)
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull(email)).thenReturn(null)
 
         assertThrows<ResponseStatusException> {
-            memberService.getMemberProfile(keycloakSub)
+            memberService.getMemberProfile(keycloakSub, email)
         }
     }
 
@@ -363,11 +364,27 @@ class MemberServiceTest {
         member.keycloakId = keycloakSub
         `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(member)
 
-        val response = memberService.getMemberProfile(keycloakSub)
+        val response = memberService.getMemberProfile(keycloakSub, "found@example.com")
 
         assertEquals(member.publicId.toString(), response.publicId)
         assertEquals("철수", response.firstName)
         assertEquals("김", response.lastName)
         assertEquals("서울", response.city)
+    }
+
+    @Test
+    fun `getMemberProfile falls back to email lookup for legacy records`() {
+        val keycloakSub = UUID.randomUUID().toString()
+        val email = "legacy@example.com"
+        val member = memberWithId(1L, "영희", "이")
+        member.email = email
+        member.city = "부산"
+        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(null)
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull(email)).thenReturn(member)
+
+        val response = memberService.getMemberProfile(keycloakSub, email)
+
+        assertEquals(member.publicId.toString(), response.publicId)
+        assertEquals("영희", response.firstName)
     }
 }

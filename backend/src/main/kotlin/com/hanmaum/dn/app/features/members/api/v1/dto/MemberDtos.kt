@@ -55,6 +55,7 @@ data class MemberResponse(
     val churchRole: String? = null,
     val groupName: String? = null,
     val city: String? = null,
+    val phoneNumber: String? = null,
     val profileImageUrl: String? = null,
 )
 
@@ -127,4 +128,13 @@ data class RegisterMemberRequest(
     val phoneNumber: String? = null,
     val street: String? = null,
     val zipCode: String? = null,
+)
+
+/**
+ * PATCH /me — member can update only their own phone and profile image.
+ */
+data class UpdateMyProfileRequest(
+    @field:Size(max = 50)
+    val phoneNumber: String? = null,
+    val profileImageUrl: String? = null,
 )

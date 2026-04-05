@@ -5,8 +5,10 @@ import com.hanmaum.dn.app.common.dto.ApiResponse
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberSummaryDto
+import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
 import com.hanmaum.dn.app.features.members.api.v1.dto.RegisterMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMyProfileRequest
 import com.hanmaum.dn.app.features.members.service.MemberService
 import jakarta.validation.Valid
 import org.springframework.data.domain.Page
@@ -59,8 +61,22 @@ class MemberController(
     fun getMyProfile(
         @AuthenticationPrincipal jwt: Jwt,
     ): ResponseEntity<ApiResponse<*>> {
-        val profile = memberService.getMemberProfile(jwt.subject)
+        val profile = memberService.getMemberProfile(jwt.subject, jwt.getClaim("email"))
         return ResponseEntity.ok(ApiResponse.success(data = profile))
+    }
+
+    /**
+     * PATCH /api/v1/members/me
+     * Role: any authenticated member — partial self-update; only phoneNumber and profileImageUrl.
+     */
+    @PatchMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    fun updateMyProfile(
+        @AuthenticationPrincipal jwt: Jwt,
+        @Valid @RequestBody request: UpdateMyProfileRequest,
+    ): ResponseEntity<ApiResponse<MemberResponse>> {
+        val updated = memberService.updateMyProfile(jwt.subject, jwt.getClaim("email"), request)
+        return ResponseEntity.ok(ApiResponse.success(data = updated))
     }
 
     /**
