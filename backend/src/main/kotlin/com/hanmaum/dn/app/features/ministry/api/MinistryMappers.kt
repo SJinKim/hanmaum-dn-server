@@ -86,4 +86,5 @@ fun MinistryRegistration.toDto(): RegistrationDto =
         memberName = "${this.member.lastName}${this.member.firstName}",
         registrationPeriod = this.registrationPeriod,
         note = this.note,
+        status = this.status.name,
     )
