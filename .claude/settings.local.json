@@ -27,7 +27,18 @@
       "Bash(./gradlew :backend:test 2>&1)",
       "Bash(./gradlew :backend:test)",
       "Bash(./gradlew compileKotlin compileTestKotlin)",
-      "Bash(make build-backend:*)"
+      "Bash(make build-backend:*)",
+      "Bash(./gradlew compileKotlin --no-daemon)",
+      "Bash(npx --no -- @modelcontextprotocol/sdk)",
+      "Bash(./gradlew compileKotlin test --no-daemon)",
+      "Bash(./gradlew compileKotlinAndroid --no-daemon)",
+      "Bash(./gradlew compileDebugKotlinAndroid --no-daemon)",
+      "Bash(mkdir -p /Users/seungjinkim/Documents/Private_Projects/HanmaumDnApp/composeApp/src/commonMain/kotlin/com/hanmaum/dn/mobile/features/ministry/data/model)",
+      "Bash(mkdir -p /Users/seungjinkim/Documents/Private_Projects/HanmaumDnApp/composeApp/src/commonMain/kotlin/com/hanmaum/dn/mobile/features/ministry/data/repository)",
+      "Bash(mkdir -p /Users/seungjinkim/Documents/Private_Projects/HanmaumDnApp/composeApp/src/commonMain/kotlin/com/hanmaum/dn/mobile/features/ministry/presentation/list)",
+      "Bash(mkdir -p /Users/seungjinkim/Documents/Private_Projects/HanmaumDnApp/composeApp/src/commonMain/kotlin/com/hanmaum/dn/mobile/features/ministry/presentation/detail)",
+      "Bash(/Users/seungjinkim/Documents/Private_Projects/HanmaumDnApp/composeApp/src/commonMain/kotlin/com/hanmaum/dn/mobile/features/ministry/presentation/list/MinistryListScreen.kt:*)",
+      "Bash(/Users/seungjinkim/Documents/Private_Projects/HanmaumDnApp/composeApp/src/commonMain/kotlin/com/hanmaum/dn/mobile/features/ministry/presentation/detail/MinistryDetailScreen.kt:*)"
     ],
     "deny": []
   },
