@@ -89,4 +89,6 @@ assets/demo/
 /infrastructure/architectureLog/*
 /postgres-init/application.old.yml
 
-docs
+# Superpowers internal docs (plans/specs with sensitive schema snippets)
+docs/superpowers/
+
