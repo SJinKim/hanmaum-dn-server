@@ -88,3 +88,5 @@ assets/demo/
 
 /infrastructure/architectureLog/*
 /postgres-init/application.old.yml
+
+docs
