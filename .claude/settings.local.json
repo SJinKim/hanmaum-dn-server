@@ -26,7 +26,8 @@
       "Bash(xargs cat:*)",
       "Bash(./gradlew :backend:test 2>&1)",
       "Bash(./gradlew :backend:test)",
-      "Bash(./gradlew compileKotlin compileTestKotlin)"
+      "Bash(./gradlew compileKotlin compileTestKotlin)",
+      "Bash(make build-backend:*)"
     ],
     "deny": []
   },
