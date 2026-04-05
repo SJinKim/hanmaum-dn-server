@@ -1,6 +1,9 @@
 server:
   port: 8080
 
+api:
+  prefix: /api/v1
+
 spring:
   application:
     name: church-dn-backend

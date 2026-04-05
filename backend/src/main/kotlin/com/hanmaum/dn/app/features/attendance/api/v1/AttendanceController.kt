@@ -28,7 +28,7 @@ import java.time.LocalDate
 import java.util.UUID
 
 @RestController
-@RequestMapping("/api/v1/attendance")
+@RequestMapping("/attendance")
 class AttendanceController(
     private val attendanceService: AttendanceService,
 ) {

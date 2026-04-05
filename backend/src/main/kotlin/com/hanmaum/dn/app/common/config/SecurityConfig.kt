@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.common.config
 
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.convert.converter.Converter
@@ -29,7 +30,9 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
-class SecurityConfig {
+class SecurityConfig(
+    @Value("\${api.prefix}") private val apiPrefix: String,
+) {
     @Bean
     fun filterChain(http: HttpSecurity): SecurityFilterChain {
         http
@@ -56,7 +59,7 @@ class SecurityConfig {
         WebSecurityCustomizer { web ->
             web
                 .ignoring()
-                .requestMatchers(HttpMethod.POST, "/api/v1/members/register")
+                .requestMatchers(HttpMethod.POST, "$apiPrefix/members/register")
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
         }
 

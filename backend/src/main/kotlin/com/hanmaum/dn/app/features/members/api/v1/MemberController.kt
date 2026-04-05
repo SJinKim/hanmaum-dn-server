@@ -31,7 +31,7 @@ import org.springframework.web.server.ResponseStatusException
 import java.util.UUID
 
 @RestController
-@RequestMapping("/api/v1/members")
+@RequestMapping("/members")
 class MemberController(
     private val memberService: MemberService,
 ) {

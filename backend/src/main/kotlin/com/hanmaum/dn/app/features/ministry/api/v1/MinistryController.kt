@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
 @RestController
-@RequestMapping("/api/v1/ministries")
+@RequestMapping("/ministries")
 class MinistryController(
     private val ministryService: MinistryService,
 ) {
