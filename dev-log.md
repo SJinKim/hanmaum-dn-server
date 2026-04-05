@@ -1,5 +1,52 @@
 # dev-log — hanmaum D+N
 
+## 2026-04-05 (Session 2 — Feature Planning)
+
+### What was done this session
+
+Completed F2 App layer (Tasks 10–15):
+- Compiled and committed all 6 KMP presentation files (MinistryList + MinistryDetail screens)
+- Fixed LazyColumn missing `key` and stale snapshot in `register()` (code review catch)
+- Wired Routes.kt, AppModule.kt, App.kt, QuickMenuSection.kt, HomeScreen.kt (Task 14)
+- Updated CHANGELOG.md + MVP.md, pushed both repos
+
+### Feature specs written (no implementation yet)
+
+All 4 spec files are in `docs/superpowers/specs/`. Each is approved and ready for a `writing-plans` session.
+
+| Spec file | Feature | Roadmap |
+|-----------|---------|---------|
+| `2026-04-05-bulletin-design.md` | 주보 — weekly PDF bulletin | new (after v0.1.0) |
+| `2026-04-05-quicklinks-sidebar-design.md` | 설교영상 YouTube config + sidebar drawer | new (after v0.1.0) |
+| `2026-04-05-push-notifications-design.md` | Push notifications (FCM) | v0.2.0 |
+| `2026-04-05-dashboard-analytics-admin-design.md` | Dashboard analytics + all admin control pages | v0.1.0 remaining + v0.5.0 |
+
+### Key design decisions captured
+
+- **주보:** PDF upload → MinIO (dev) / Cloudflare R2 (prod). Inline WebView in app. Current week only.
+- **설교영상:** Configurable via `ChurchConfig` DB table (key-value). App deep-links to YouTube on tap.
+- **Sidebar:** Hamburger `ModalNavigationDrawer`. Static items (Profile, Settings, Logout) hardcoded. Dynamic items from backend, managed by admin.
+- **Notifications:** FCM. `NotificationEventType` enum with admin toggle table. Initial triggers: NEW_BULLETIN + NEW_ANNOUNCEMENT.
+- **Dashboard:** F3 Attendance pages + ministry approval workflow UI are v0.1.0 remaining. Analytics (charts, stats) is v0.5.0.
+- **File storage:** `FileStorageService` abstraction (MinIO/R2) is shared infrastructure — also solves member photos + ministry images.
+
+### Next sessions (suggested order)
+
+1. **F3 Attendance App** — complete the last 🔲 item in MVP v0.1.0
+2. **Dashboard — F3 Attendance + Ministry approval UI** — close out v0.1.0 dashboard
+3. **주보 feature** — Backend (FileStorageService + MinIO + Bulletin entity) → Dashboard → App
+4. **Quick-links + Sidebar** — ChurchConfig + SidebarItems Backend → Dashboard → App
+5. **Push Notifications** — Firebase setup + FCM backend + App token flow
+6. **Dashboard Analytics** — v0.5.0 stats endpoints + charts
+
+### Open prerequisites before push notifications
+
+- Firebase project must be created manually (console.firebase.google.com)
+- `google-services.json` (Android) and `GoogleService-Info.plist` (iOS) must be downloaded
+- Firebase Admin SDK service account JSON must be stored as an environment secret
+
+---
+
 ## 2026-04-05
 
 ### Feature
