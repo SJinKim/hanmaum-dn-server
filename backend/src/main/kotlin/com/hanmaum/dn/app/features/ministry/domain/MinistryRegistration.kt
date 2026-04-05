@@ -4,6 +4,8 @@ import com.hanmaum.dn.app.common.jpa.BaseEntity
 import com.hanmaum.dn.app.features.members.domain.Member
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
 import jakarta.persistence.FetchType
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
@@ -31,4 +33,7 @@ class MinistryRegistration(
     var registrationPeriod: String,
     @Column(columnDefinition = "TEXT", length = 500)
     var note: String? = null,
+    @Enumerated(EnumType.STRING)
+    @Column(name = "registration_status", nullable = false, length = 20)
+    var status: RegistrationStatus = RegistrationStatus.PENDING,
 ) : BaseEntity()

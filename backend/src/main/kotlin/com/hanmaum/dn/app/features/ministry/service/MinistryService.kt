@@ -12,7 +12,10 @@ import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistrySummaryDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.RegistrationDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateMinistryRequest
+import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateRegistrationStatusRequest
 import com.hanmaum.dn.app.features.ministry.domain.MinistryRegistration
+import com.hanmaum.dn.app.features.ministry.domain.RegistrationStatus
+import java.time.LocalDate
 import com.hanmaum.dn.app.features.ministry.repository.MinistryRegistrationRepository
 import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
 import jakarta.persistence.EntityNotFoundException
@@ -114,13 +117,6 @@ class MinistryService(
 
     // ─── Registration ──────────────────────────────────────────────────────────
 
-    /**
-     * Register the calling member (identified by [keycloakSubject]) for a ministry.
-     *
-     * @throws EntityNotFoundException  if ministry not found
-     * @throws EntityNotFoundException  if calling member not found
-     * @throws ResponseStatusException  409 on duplicate (same member + ministry + period)
-     */
     @Transactional
     fun registerSelf(
         ministryPublicId: UUID,
@@ -133,22 +129,30 @@ class MinistryService(
                 .orElseThrow { EntityNotFoundException("Ministry not found: $ministryPublicId") }
 
         if (!ministry.isMinistryActive) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "비활성 부서에는 등록할 수 없습니다.")
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "비활성 부서에는 신청할 수 없습니다.")
         }
 
         val member =
             memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSubject)
                 ?: throw EntityNotFoundException("Member not found for subject: $keycloakSubject")
 
-        val duplicate =
-            ministryRegistrationRepository
-                .existsByMinistryIdAndMemberIdAndRegistrationPeriodAndDeletedAtIsNull(
-                    ministry.id!!,
-                    member.id!!,
-                    req.period,
-                )
-        if (duplicate) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "이미 해당 기간에 등록되어 있습니다.")
+        val existing =
+            ministryRegistrationRepository.findByMinistryIdAndMemberIdAndPeriod(
+                ministry.id!!,
+                member.id!!,
+                req.period,
+            )
+
+        if (existing.isPresent) {
+            val existingReg = existing.get()
+            when (existingReg.status) {
+                RegistrationStatus.REJECTED -> {
+                    // Soft-delete the rejected record so re-apply can proceed
+                    existingReg.deletedAt = LocalDateTime.now()
+                    ministryRegistrationRepository.flush()
+                }
+                else -> throw ResponseStatusException(HttpStatus.CONFLICT, "이미 해당 기간에 신청되어 있습니다.")
+            }
         }
 
         val registration =
@@ -180,6 +184,74 @@ class MinistryService(
         return ministryRegistrationRepository
             .findByMinistryId(ministry.id!!, period)
             .map { it.toDto() }
+    }
+
+    /**
+     * Return the calling member's own registration for a ministry in [period].
+     * Returns null if no non-deleted record exists.
+     *
+     * @throws EntityNotFoundException if ministry or member not found
+     */
+    @Transactional(readOnly = true)
+    fun getMyRegistration(
+        ministryPublicId: UUID,
+        keycloakSubject: String,
+        period: String,
+    ): RegistrationDto? {
+        val ministry =
+            ministryRepository
+                .findByPublicIdAndDeletedAtIsNull(ministryPublicId)
+                .orElseThrow { EntityNotFoundException("Ministry not found: $ministryPublicId") }
+
+        val member =
+            memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSubject)
+                ?: throw EntityNotFoundException("Member not found for subject: $keycloakSubject")
+
+        return ministryRegistrationRepository
+            .findByMinistryIdAndMemberIdAndPeriod(ministry.id!!, member.id!!, period)
+            .map { it.toDto() }
+            .orElse(null)
+    }
+
+    /**
+     * Admin: approve or reject a registration. Only PENDING → APPROVED/REJECTED allowed.
+     *
+     * @throws EntityNotFoundException  if ministry or registration not found
+     * @throws ResponseStatusException  400 if status value is invalid
+     * @throws ResponseStatusException  409 if registration is not in PENDING state
+     */
+    @Transactional
+    fun approveOrRejectRegistration(
+        ministryPublicId: UUID,
+        regPublicId: UUID,
+        req: UpdateRegistrationStatusRequest,
+    ): RegistrationDto {
+        ministryRepository
+            .findByPublicIdAndDeletedAtIsNull(ministryPublicId)
+            .orElseThrow { EntityNotFoundException("Ministry not found: $ministryPublicId") }
+
+        val registration =
+            ministryRegistrationRepository
+                .findByPublicIdAndDeletedAtIsNull(regPublicId)
+                .orElseThrow { EntityNotFoundException("Registration not found: $regPublicId") }
+
+        if (registration.status != RegistrationStatus.PENDING) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "PENDING 상태인 신청만 처리할 수 있습니다.")
+        }
+
+        val newStatus =
+            try {
+                RegistrationStatus.valueOf(req.status)
+            } catch (e: IllegalArgumentException) {
+                throw ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 상태값: ${req.status}")
+            }
+
+        if (newStatus == RegistrationStatus.PENDING) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "PENDING으로 변경할 수 없습니다.")
+        }
+
+        registration.status = newStatus
+        return registration.toDto()
     }
 
     /**

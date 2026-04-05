@@ -1,5 +1,65 @@
 # dev-log — hanmaum D+N
 
+## 2026-04-05
+
+### Feature
+F2: Ministry + Registration — Backend approval workflow + KMP App layer
+
+### What's done (committed)
+
+**Backend — branch: `feat/f2-ministry-approval` in `dn-app`**
+- `V20260405000000__add_registration_status.sql` — adds `registration_status VARCHAR(20) NOT NULL DEFAULT 'PENDING'` to `ministry_registrations`
+- `RegistrationStatus.kt` — enum: PENDING, APPROVED, REJECTED
+- `MinistryRegistration.kt` — added `status: RegistrationStatus` field with `@Enumerated(EnumType.STRING)`
+- `MinistryDtos.kt` — `RegistrationDto` now includes `status: String`; added `UpdateRegistrationStatusRequest`
+- `MinistryMappers.kt` — `toDto()` maps `status = this.status.name`
+- `MinistryRegistrationRepository.kt` — added `findByMinistryIdAndMemberIdAndPeriod()` JPQL query
+- `MinistryService.kt` — updated `registerSelf` (re-apply on REJECTED), added `getMyRegistration()`, `approveOrRejectRegistration()`
+- `MinistryController.kt` — added `GET /{id}/registrations/me` (MEMBER) and `PATCH /{id}/registrations/{regId}` (ADMIN)
+- `MinistryServiceTest.kt` — 8 new tests; all passing
+
+**KMP App — branch: `feat/f2-ministry-app` in `HanmaumDnApp`**
+- Domain models committed: `Ministry.kt` (Ministry, MinistryDetail, MyRegistration, RegistrationStatus enum)
+- Domain repository committed: `MinistryRepository.kt` interface
+- Data layer committed: `MinistrySummaryResponse`, `MinistryDetailResponse`, `RegistrationResponse`, `CreateRegistrationRequest`, `MinistryRepositoryImpl`
+
+### What's on disk but NOT yet committed (HanmaumDnApp)
+
+These files are written and ready — next session just needs compile-check + commit:
+- `presentation/list/MinistryListUiState.kt`
+- `presentation/list/MinistryListViewModel.kt`
+- `presentation/list/MinistryListScreen.kt`
+- `presentation/detail/MinistryDetailUiState.kt`
+- `presentation/detail/MinistryDetailViewModel.kt`
+- `presentation/detail/MinistryDetailScreen.kt`
+
+### Remaining tasks for next session
+
+**Task 10** — compile-check + commit the presentation files above:
+```bash
+cd HanmaumDnApp
+./gradlew compileKotlinAndroid --no-daemon
+git add composeApp/src/commonMain/kotlin/com/hanmaum/dn/mobile/features/ministry/presentation/
+git commit -m "feat(ministry-app): add MinistryList and MinistryDetail screens with ViewModels"
+```
+
+**Task 14** — Wire navigation, DI, QuickMenu (`Routes.kt`, `AppModule.kt`, `App.kt`, `QuickMenuSection.kt`, `HomeScreen.kt`):
+- Add `MinistryListRoute` and `MinistryDetailRoute` to `Routes.kt`
+- Register `MinistryRepository`, `MinistryListViewModel`, `MinistryDetailViewModel` in `AppModule.kt`
+- Add ministry composable routes in `App.kt`
+- Add `onMinistryClick` parameter to `QuickMenuSection` and `HomeScreen`
+- Full compile check after wiring
+
+**Task 15** — CHANGELOG + MVP.md:
+- Add F2 App entries to `CHANGELOG.md`
+- Mark F2 App ✅ in `MVP.md`
+- Commit both repos
+- Push `feat/f2-ministry-approval` → PR to `dev` in `dn-app`
+- Push `feat/f2-ministry-app` → PR to `main` in `HanmaumDnApp`
+
+### Plan file
+`dn-app/docs/superpowers/plans/2026-04-05-f2-ministry-app.md`
+
 ## 2026-03-27
 
 ### Feature

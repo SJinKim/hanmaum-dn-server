@@ -41,6 +41,12 @@ data class RegistrationDto(
     val memberName: String,
     val registrationPeriod: String,
     val note: String?,
+    val status: String,
+)
+
+/** PATCH body for admin approve/reject. Only "APPROVED" or "REJECTED" are accepted. */
+data class UpdateRegistrationStatusRequest(
+    val status: String,
 )
 
 // ─── Request DTOs ─────────────────────────────────────────────────────────────

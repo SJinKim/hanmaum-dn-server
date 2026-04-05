@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased] — 2026-03-30
 
 ### Added
+- F2 App: Ministry list screen (active ministries with name, leader, short description)
+- F2 App: Ministry detail screen (long description + registration button)
+- F2 App: Registration bottom sheet with self-introduction note
+- F2 App: Registration status display — 신청하기 / 신청되었습니다 / 멤버입니다 ✓
+- F2 Backend: `RegistrationStatus` enum (PENDING/APPROVED/REJECTED) on `ministry_registrations`
+- F2 Backend: `GET /ministries/{id}/registrations/me` — member own registration for current year
+- F2 Backend: `PATCH /ministries/{id}/registrations/{regId}` — admin approve/reject
+- F2 Backend: Re-apply logic — REJECTED record replaced with new PENDING on re-POST
 - F1 Mobile App (Session 5): Profile screen (own profile view + inline edit for phone & profileImageUrl), persistent token storage (multiplatform-settings), token refresh in Ktor bearer plugin, bottom nav Profile tab, `MemberResponse`/`MemberStatus` aligned with backend
 - F1 Mobile (Session 5): `phoneNumber` added to `GET /me` response; new `PATCH /me` endpoint for self-profile update (phone + profileImageUrl); SecurityConfig POST /me whitelist removed
 - Shell: decomposed into `SidebarComponent` + `HeaderComponent` per DESIGN.md spec

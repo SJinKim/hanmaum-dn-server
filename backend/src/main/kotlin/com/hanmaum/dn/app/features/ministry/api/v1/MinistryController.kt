@@ -7,7 +7,9 @@ import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistrySummaryDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.RegistrationDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateMinistryRequest
+import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateRegistrationStatusRequest
 import com.hanmaum.dn.app.features.ministry.service.MinistryService
+import java.time.LocalDate
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -129,6 +131,38 @@ class MinistryController(
     ): ResponseEntity<ApiResponse<List<RegistrationDto>>> {
         val registrations = ministryService.getRegistrations(publicId, period)
         return ResponseEntity.ok(ApiResponse.success(data = registrations))
+    }
+
+    /**
+     * GET /api/v1/ministries/{publicId}/registrations/me
+     * Role: MEMBER — own registration for the current calendar year; 404 if none.
+     */
+    @GetMapping("/{publicId}/registrations/me")
+    @PreAuthorize("isAuthenticated()")
+    fun getMyRegistration(
+        @PathVariable publicId: UUID,
+        @AuthenticationPrincipal jwt: Jwt,
+    ): ResponseEntity<ApiResponse<RegistrationDto>> {
+        val period = LocalDate.now().year.toString()
+        val registration = ministryService.getMyRegistration(publicId, jwt.subject, period)
+            ?: return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.success(data = null, message = "신청 내역이 없습니다."))
+        return ResponseEntity.ok(ApiResponse.success(data = registration))
+    }
+
+    /**
+     * PATCH /api/v1/ministries/{publicId}/registrations/{regPublicId}
+     * Role: ADMIN — approve or reject a pending registration.
+     */
+    @PatchMapping("/{publicId}/registrations/{regPublicId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    fun approveOrRejectRegistration(
+        @PathVariable publicId: UUID,
+        @PathVariable regPublicId: UUID,
+        @RequestBody request: UpdateRegistrationStatusRequest,
+    ): ResponseEntity<ApiResponse<RegistrationDto>> {
+        val updated = ministryService.approveOrRejectRegistration(publicId, regPublicId, request)
+        return ResponseEntity.ok(ApiResponse.success(data = updated, message = "신청 상태가 변경되었습니다."))
     }
 
     /**
