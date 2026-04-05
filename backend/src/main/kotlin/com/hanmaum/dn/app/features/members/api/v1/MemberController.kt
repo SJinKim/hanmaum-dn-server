@@ -61,7 +61,7 @@ class MemberController(
     fun getMyProfile(
         @AuthenticationPrincipal jwt: Jwt,
     ): ResponseEntity<ApiResponse<*>> {
-        val profile = memberService.getMemberProfile(jwt.subject)
+        val profile = memberService.getMemberProfile(jwt.subject, jwt.getClaim("email"))
         return ResponseEntity.ok(ApiResponse.success(data = profile))
     }
 
@@ -75,7 +75,7 @@ class MemberController(
         @AuthenticationPrincipal jwt: Jwt,
         @Valid @RequestBody request: UpdateMyProfileRequest,
     ): ResponseEntity<ApiResponse<MemberResponse>> {
-        val updated = memberService.updateMyProfile(jwt.subject, request)
+        val updated = memberService.updateMyProfile(jwt.subject, jwt.getClaim("email"), request)
         return ResponseEntity.ok(ApiResponse.success(data = updated))
     }
 

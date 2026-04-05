@@ -13,7 +13,20 @@
       "Bash(git commit:*)",
       "Bash(git:*)",
       "Bash(rm -f */.git/index.lock)",
-      "Bash(rm -f .git/index.lock)"
+      "Bash(rm -f .git/index.lock)",
+      "Bash(./gradlew :backend:compileKotlin)",
+      "Bash(/Users/seungjinkim/Documents/Private_Projects/dn-app/gradlew -p /Users/seungjinkim/Documents/Private_Projects/dn-app :backend:compileKotlin)",
+      "Bash(/Users/seungjinkim/Documents/Private_Projects/dn-app/backend/gradlew -p /Users/seungjinkim/Documents/Private_Projects/dn-app/backend compileKotlin)",
+      "Bash(/Users/seungjinkim/Documents/Private_Projects/dn-app/gradlew :backend:compileKotlin)",
+      "Bash(/Users/seungjinkim/Documents/Private_Projects/dn-app/backend/gradlew compileKotlin -p /Users/seungjinkim/Documents/Private_Projects/dn-app/backend 2>&1)",
+      "Bash(./gradlew compileKotlin)",
+      "Bash(grep -r \"POST.*members/me\\\\|members/me.*POST\" /Users/seungjinkim/Documents/Private_Projects/dn-app --include=*.kt --include=*.properties --include=*.yml --include=*.yaml --include=*.md)",
+      "Bash(./gradlew :composeApp:assembleDebug)",
+      "Bash(find /Users/seungjinkim/Documents/Private_Projects/HanmaumDnApp/composeApp/src/commonTest -name *.kt)",
+      "Bash(xargs cat:*)",
+      "Bash(./gradlew :backend:test 2>&1)",
+      "Bash(./gradlew :backend:test)",
+      "Bash(./gradlew compileKotlin compileTestKotlin)"
     ],
     "deny": []
   },
