@@ -38,7 +38,8 @@
       "Bash(mkdir -p /Users/seungjinkim/Documents/Private_Projects/HanmaumDnApp/composeApp/src/commonMain/kotlin/com/hanmaum/dn/mobile/features/ministry/presentation/list)",
       "Bash(mkdir -p /Users/seungjinkim/Documents/Private_Projects/HanmaumDnApp/composeApp/src/commonMain/kotlin/com/hanmaum/dn/mobile/features/ministry/presentation/detail)",
       "Bash(/Users/seungjinkim/Documents/Private_Projects/HanmaumDnApp/composeApp/src/commonMain/kotlin/com/hanmaum/dn/mobile/features/ministry/presentation/list/MinistryListScreen.kt:*)",
-      "Bash(/Users/seungjinkim/Documents/Private_Projects/HanmaumDnApp/composeApp/src/commonMain/kotlin/com/hanmaum/dn/mobile/features/ministry/presentation/detail/MinistryDetailScreen.kt:*)"
+      "Bash(/Users/seungjinkim/Documents/Private_Projects/HanmaumDnApp/composeApp/src/commonMain/kotlin/com/hanmaum/dn/mobile/features/ministry/presentation/detail/MinistryDetailScreen.kt:*)",
+      "Bash(find /Users/seungjinkim/Documents/Private_Projects/dn-app/backend -type d -name *.kt)"
     ],
     "deny": []
   },
