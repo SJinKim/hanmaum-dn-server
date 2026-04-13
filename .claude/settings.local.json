@@ -38,7 +38,11 @@
       "Bash(mkdir -p /Users/seungjinkim/Documents/Private_Projects/HanmaumDnApp/composeApp/src/commonMain/kotlin/com/hanmaum/dn/mobile/features/ministry/presentation/list)",
       "Bash(mkdir -p /Users/seungjinkim/Documents/Private_Projects/HanmaumDnApp/composeApp/src/commonMain/kotlin/com/hanmaum/dn/mobile/features/ministry/presentation/detail)",
       "Bash(/Users/seungjinkim/Documents/Private_Projects/HanmaumDnApp/composeApp/src/commonMain/kotlin/com/hanmaum/dn/mobile/features/ministry/presentation/list/MinistryListScreen.kt:*)",
-      "Bash(/Users/seungjinkim/Documents/Private_Projects/HanmaumDnApp/composeApp/src/commonMain/kotlin/com/hanmaum/dn/mobile/features/ministry/presentation/detail/MinistryDetailScreen.kt:*)"
+      "Bash(/Users/seungjinkim/Documents/Private_Projects/HanmaumDnApp/composeApp/src/commonMain/kotlin/com/hanmaum/dn/mobile/features/ministry/presentation/detail/MinistryDetailScreen.kt:*)",
+      "Read(//Users/seungjinkim/Documents/Private_Projects/HanmaumDnApp/**)",
+      "Bash(./gradlew :composeApp:compileKotlinAndroid --no-daemon)",
+      "Bash(./gradlew :composeApp:compileDebugKotlinAndroid --no-daemon)",
+      "Bash(find /Users/seungjinkim/Documents/Private_Projects/dn-app/backend -name *.kt -maxdepth 6)"
     ],
     "deny": []
   },
