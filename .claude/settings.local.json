@@ -42,7 +42,11 @@
       "Read(//Users/seungjinkim/Documents/Private_Projects/HanmaumDnApp/**)",
       "Bash(./gradlew :composeApp:compileKotlinAndroid --no-daemon)",
       "Bash(./gradlew :composeApp:compileDebugKotlinAndroid --no-daemon)",
-      "Bash(find /Users/seungjinkim/Documents/Private_Projects/dn-app/backend -name *.kt -maxdepth 6)"
+      "Bash(find /Users/seungjinkim/Documents/Private_Projects/dn-app/backend -name *.kt -maxdepth 6)",
+      "Bash(xxd composeApp/src/commonMain/kotlin/com/hanmaum/dn/mobile/core/navigation/Routes.kt)",
+      "Bash(./gradlew :composeApp:allTests)",
+      "Bash(./gradlew :composeApp:testDebugUnitTest)",
+      "Bash(gh pr:*)"
     ],
     "deny": []
   },
