@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased] — 2026-03-30
 
 ### Added
+- F3 Attendance App: Morning Service check-in card on home screen — shows today's active service definition, "출석하기" button enabled during check-in window, handles duplicate check-in (409) and outside-window (400) gracefully
 - F2 App: Ministry list screen (active ministries with name, leader, short description)
 - F2 App: Ministry detail screen (long description + registration button)
 - F2 App: Registration bottom sheet with self-introduction note
