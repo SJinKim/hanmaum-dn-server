@@ -1,0 +1,10 @@
+# All changes require review from the listed owners.
+# Until the team stabilizes, everyone owns everything.
+# Replace <dev1> etc. with actual GitHub usernames before pushing.
+
+*       @dev1 @dev2 @dev3
+
+# Areas with extra scrutiny
+.github/                @dev1
+src/main/resources/db/  @dev1 @dev2
+.claude/                @dev1

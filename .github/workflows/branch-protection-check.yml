@@ -1,0 +1,26 @@
+name: Branch protection check
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  verify-merge-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Verify push came from a merged PR
+        run: |
+          msg=$(git log -1 --pretty=%s)
+          if echo "$msg" | grep -qE '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z-]+\))?: '; then
+            echo "Commit message follows Conventional Commits. OK."
+            exit 0
+          fi
+          echo "Commit on main does not follow Conventional Commits:"
+          echo "  $msg"
+          echo "Direct pushes to main are not allowed — use a PR."
+          exit 1
