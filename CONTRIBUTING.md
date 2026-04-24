@@ -1,85 +1,94 @@
-# Contributing to hanmaum-dn-server
+# Contributing — hanmaum D+N (backend)
 
-## First-time setup
+This repo is part of a three-repo project. Read `CLAUDE.md` before touching code, and respect the conventions below. They apply equally to human edits and Claude-assisted edits.
 
-```bash
-git clone git@github.com:HANMAUM_ORG/hanmaum-dn-server.git
-cd hanmaum-dn-server
-npm install          # installs git hooks via lefthook
-./gradlew build      # verify the build
-docker compose up -d # starts Postgres + Keycloak
-./gradlew bootRun    # starts the server on :8080
-```
+## Team size
+
+Up to 3 developers. Every change goes through PR review — no direct pushes to `dev` or `main`.
 
 ## Branching
 
-- Feature: `feat/HDN-<id>-<slug>`
-- Bugfix: `fix/HDN-<id>-<slug>`
-- Chore: `chore/HDN-<id>-<slug>`
+- `main` — production. Protected. Only release PRs land here.
+- `dev` — integration branch. All feature work merges here first.
+- `feature/<short-name>` — always branched from `dev`, PR back to `dev`.
+- `hotfix/<short-name>` — only branch allowed to fork from `main`.
 
-Never push directly to `main`.
+Before starting work:
 
-## Commits
-
-Conventional Commits, enforced by commitlint. Scope is required.
-
-```
-feat(auth): add first-login member provisioning
-
-Creates a `members` row on first JWT arrival when no existing
-record matches the `sub` claim. Falls back to email matching.
-
-Refs: #42
+```bash
+git checkout dev && git pull origin dev
+git checkout -b feature/<short-name>
 ```
 
-Use `/commit` from Claude Code to generate messages automatically.
+Never start work on `main`. Never commit directly to `dev`.
 
 ## Pull requests
 
-1. Open a PR with `/pr` or the template.
-2. One approving review required.
-3. All CI checks must pass.
-4. Squash-merge into `main` — linear history only.
+- One feature per PR. If it's too big to review, split it.
+- Title uses the commit convention: `type(scope): summary`.
+- Description: *why* the change is needed, what was done, how it was tested.
+- Link the MVP.md row or issue.
+- Run `/pr-review` before opening the PR — paste the PASS/FAIL output in the description.
+- Require at least one approval before merge. The author does not merge their own PR.
+- Rebase on `dev` before merging — no merge commits.
 
-## Scrum / sprint workflow
+## Commit convention
 
-- **Sprints** = GitHub Milestones in the ops repo.
-- **Board** = a single GitHub Project v2 spanning all four repos.
-- **Columns**: Backlog → Sprint Backlog → In Progress → In Review → Done.
-- Pick up an issue by moving it to *In Progress* and assigning yourself.
-- `/sprint-status` shows the current snapshot.
+`<type>(<scope>): <summary max 72 chars>`
 
-## MVP-first
+Types: `feat | fix | refactor | test | chore | docs | perf | revert`
 
-Every piece of work is measured against MVP scope. Before implementing:
+Imperative mood, no trailing period. Body explains *why*, not *what*.
 
-1. Ask: is this required to ship MVP?
-2. If yes, do the minimal version that satisfies the acceptance criteria.
-3. If no, create a `post-mvp` issue and leave it in backlog.
-4. `/plan` invokes the `mvp-focus` skill which enforces this.
+## Claude Code conventions
 
-## Working with Claude Code
+This project uses Claude Code. To keep all three developers' Claude behavior consistent:
 
-- Run `claude` in the repo root. `CLAUDE.md` auto-loads.
-- Use `/plan` before any multi-file change.
-- Use `/commit` after staging.
-- Use `/pr` to open the pull request.
-- Use `/review` for a self-review before PR.
-- Use `/clear` between unrelated tasks to save context.
+### Public (committed) vs. private (gitignored)
 
-Custom slash commands live in `.claude/commands/`. Skills live in
-`.claude/skills/` and load only when their description matches the task.
+| File | Committed? |
+|---|---|
+| `.claude/settings.json` | ✅ team defaults |
+| `.claude/settings.local.json` | 🚫 per-machine |
+| `.claude/commands/*.md` | ✅ shared workflows |
+| `.claude/agents/*.md` | ✅ shared subagents |
+| `.claude/skills/*.md` | ✅ shared skills |
+| `CLAUDE.md` | ✅ project AI instructions |
+| `CLAUDE.local.md` | 🚫 personal notes |
+| `dev-log.md` / `dev-log-*.md` | 🚫 personal journaling |
 
-## Installing lefthook globally (alternative)
+### Editing `CLAUDE.md` or `.claude/commands/`
 
-If you prefer not to run `npm install`, install lefthook globally once and
-run `lefthook install` in the repo:
+These files change how everyone's Claude behaves. **PR review is required** — no solo edits that land directly on `dev`. Treat them like code.
 
-```bash
-brew install lefthook       # macOS
-scoop install lefthook      # Windows
-# or see https://lefthook.dev for Linux
-lefthook install
-```
+### Personal vs. team commands
 
-You still need Node for commitlint — either way, `node` must be on your PATH.
+If a slash command is only useful to you, put it in `~/.claude/commands/` (user-scope), not the repo's `.claude/commands/`. Keep the repo's command palette clean and team-relevant.
+
+### Memory discipline
+
+Cowork / Claude's per-user memory (`~/.claude/…`) is personal. Do not paste its contents into repo docs — it goes stale and confuses teammates. Facts the team needs to know belong in `CLAUDE.md` or an MVP/spec doc.
+
+## Design specs
+
+- Dashboard design: `../dn-app-dashboard/design-specs/DESIGN.md` (source of truth).
+- Mobile design: `../HanmaumDnApp/designs/dn_app/DESIGN.md` (source of truth).
+- Backend has no design spec — follow the architecture rules in `CLAUDE.md`.
+
+## `docs/superpowers/`
+
+These are per-feature plans and specs. They are currently gitignored (see `.gitignore`). If we decide to version them, remove the `docs/` entry from `.gitignore` and move the review policy here.
+
+## Session rules
+
+- Run `/onboard` as the very first action in every Claude Code session.
+- One feature per session — pick one, complete its layers, do not spread across features.
+- If context/tokens run low: stop cleanly, commit what is done, wait for the next session. **Do not purchase extra tokens.**
+
+## Communication
+
+In PR descriptions, commit bodies, and design docs:
+
+✅ Done / ⚠️ Found / 🔧 Fixed / 📋 Next / 🚫 Blocked
+
+Be direct. File:line references. No filler.

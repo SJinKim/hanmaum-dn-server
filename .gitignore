@@ -91,3 +91,9 @@ assets/demo/
 
 # Local docs (plans, specs)
 docs/
+
+# --- Claude Code (per-machine, never commit) ---
+.claude/settings.local.json
+CLAUDE.local.md
+dev-log.md
+dev-log-*.md
