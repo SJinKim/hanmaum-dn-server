@@ -1,0 +1,40 @@
+# Build output
+build/
+.gradle/
+out/
+target/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Dependencies / lockfiles
+node_modules/
+gradle/wrapper/gradle-wrapper.jar
+
+# Logs
+*.log
+logs/
+
+# Environment / secrets
+.env
+.env.*
+*.pem
+*.key
+secrets/
+
+# Docker data volumes
+docker/data/
+postgres-data/
+
+# Test artifacts
+coverage/
+test-results/
+build/reports/
+
+# Archived docs
+docs/archive/
+
+# Generated code
+src/main/generated/

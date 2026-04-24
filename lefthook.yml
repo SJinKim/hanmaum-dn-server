@@ -1,0 +1,51 @@
+# Shared git hooks. Install with: npm install
+# This runs automatically when devs run `npm install` thanks to the
+# prepare script in package.json.
+
+pre-commit:
+  parallel: true
+  commands:
+    ktlint:
+      tags: format
+      glob: "*.{kt,kts}"
+      run: ./gradlew ktlintCheck --daemon -q
+      fail_text: "Kotlin lint failed. Run './gradlew ktlintFormat' to auto-fix."
+
+    secret-scan:
+      tags: security
+      run: |
+        if git diff --cached | grep -iE '(password|secret|api[_-]?key|token)\s*[:=]\s*["\x27][^"\x27]{8,}' > /dev/null; then
+          echo "Possible secret in staged changes. Review, or use 'git commit --no-verify' if false positive."
+          exit 1
+        fi
+
+    large-files:
+      tags: hygiene
+      run: |
+        for f in {staged_files}; do
+          [ -f "$f" ] || continue
+          size=$(wc -c < "$f")
+          if [ "$size" -gt 1048576 ]; then
+            echo "$f is larger than 1MB. Consider Git LFS or exclude it."
+            exit 1
+          fi
+        done
+
+commit-msg:
+  commands:
+    commitlint:
+      run: npx --no -- commitlint --edit {1}
+
+pre-push:
+  commands:
+    compile:
+      run: ./gradlew compileKotlin compileTestKotlin --daemon -q
+      fail_text: "Kotlin compile failed. Fix before pushing."
+
+    branch-guard:
+      run: |
+        branch=$(git rev-parse --abbrev-ref HEAD)
+        if [ "$branch" = "main" ]; then
+          echo "Direct push to main blocked. Use a feature branch."
+          exit 1
+        fi
