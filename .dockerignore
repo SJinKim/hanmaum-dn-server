@@ -1,0 +1,42 @@
+# Git
+.git
+.gitignore
+
+# IDE / editors
+.idea
+.vscode
+*.iml
+
+# Gradle build artifacts
+build
+.gradle
+out
+
+# Node / tooling (only needed on host for hooks, not in image)
+node_modules
+package.json
+package-lock.json
+commitlint.config.mjs
+lefthook.yml
+
+# Claude / project meta
+.claude
+CLAUDE.md
+CHANGELOG.md
+CONTRIBUTING.md
+HELP.md
+LICENSE
+README.md
+
+# Infrastructure (handled outside the image)
+infrastructure
+docs
+
+# Env & secrets — NEVER bake into image
+.env
+.env.*
+!.env.example
+
+# OS junk
+.DS_Store
+Thumbs.db

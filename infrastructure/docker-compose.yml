@@ -12,7 +12,7 @@ services:
       - "5433:5432"
     volumes:
       - hanmaumApp_postgres_data:/var/lib/postgresql/data
-      - ./postgres-init:/docker-entrypoint-initdb.d
+      - ./infrastructure/postgres-init:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
       interval: 5s
@@ -62,16 +62,16 @@ services:
     env_file:
       - .env
     volumes:
-      - ./docker/keycloak/data:/opt/keycloak/data
+      - ./infrastructure/docker/keycloak/data:/opt/keycloak/data
         # Hier muss deine realm-export.json liegen, damit --import-realm sie findet
-      - ./docker/keycloak/export:/opt/keycloak/data/import
+      - ./infrastructure/docker/keycloak/export:/opt/keycloak/data/import
 
   # -----------------------------------------------------------------
   # BACKEND APP (Später für den Server)
   # -----------------------------------------------------------------
   backend:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
     container_name: hanmaumApp-backend
     restart: unless-stopped

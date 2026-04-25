@@ -1,14 +1,27 @@
-# Commit & Push Convention
+---
+description: Create a Conventional Commit from staged changes
+argument-hint: [optional: extra context]
+allowed-tools: Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git add:*), Bash(git commit:*), Bash(git branch:*)
+---
 
-## Format
-<type>(<scope>): <summary max 72 chars>
+Create a single Conventional Commit from currently staged changes.
 
-Types: feat | fix | refactor | test | chore | docs | perf | revert
-- Imperative mood ("add" not "added"), no period
-- Body: explain WHY, not WHAT
-- Reference issues: closes #42
+1. Run `git status` and `git diff --cached`. Summarize what's staged.
+2. If nothing is staged, stop and ask what to stage — never `git add .` blindly.
+3. Detect the branch (`git branch --show-current`). Extract the ticket ID
+   matching `HDN-<number>`.
+4. Generate the message:
 
-## Pre-Commit Checklist
-1. ./gradlew test && ./gradlew ktlintCheck
-2. ng test --watch=false --browsers=ChromeHeadless
-3. Update CHANGELOG.md
+   <type>(<scope>): <imperative subject, ≤72 chars>
+
+   <body explaining *what* and *why*, not *how*; wrap at 80 chars>
+
+   Refs: #<issue-number>
+
+5. Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert.
+   Scopes: auth, member, api, db, config, ci.
+6. One logical change per commit. If the staged diff spans multiple concerns,
+   stop and split first.
+7. Never `--force`. Never push to `main`. Never amend an already-pushed commit.
+
+Extra context from user: $ARGUMENTS
