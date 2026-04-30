@@ -54,6 +54,35 @@ Pre-MVP. See `.claude/skills/mvp-focus/` for scope rules.
 - `api-contracts` — reading/updating the shared OpenAPI spec
 - `mvp-focus` — MVP scope rules (retired when v1.0.0 ships)
 
+## Workflow Orchestration
+
+### Plan Mode
+- Rule 1 already requires planning for 3+ file changes — also enter plan mode for architectural decisions and verification steps.
+- If something goes sideways: STOP immediately, re-plan. Don't push through a broken approach.
+
+### Subagent Strategy
+- Offload research, exploration, and parallel analysis to subagents.
+- Keep main context window clean — one task per subagent.
+
+### Self-Improvement Loop
+- After ANY user correction: append the pattern to `tasks/lessons.md`.
+- Write a rule that prevents the same mistake from recurring.
+- Review `tasks/lessons.md` at session start.
+
+### Verification Gate
+- Never mark a task complete without proving it works.
+- Ask: "Would a staff engineer approve this PR?"
+- Run tests, check logs, demonstrate correctness before marking Done.
+
+### Bug Fixing
+- When given a bug report: just fix it — no hand-holding requests.
+- Point at logs, errors, failing tests and resolve autonomously.
+
+### Core Principles
+- Simplicity First: minimal code impact per change.
+- No Laziness: find root causes, no temporary fixes.
+- Minimal Impact: only touch what's necessary.
+
 ## Token-efficient workflow (Pro plan)
 - `/clear` between unrelated tasks.
 - `/compact` at ~50% context.

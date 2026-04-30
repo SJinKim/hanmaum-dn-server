@@ -9,9 +9,6 @@
 .gradle/
 build/
 out/
-gradle/
-!gradle/wrapper/gradle-wrapper.jar
-!gradle/wrapper/gradle-wrapper.properties
 
 # --- Docker Müll ---
 # Wir wollen keine lokalen DB-Daten im Git haben!
@@ -21,6 +18,7 @@ postgres-data/
 *.class
 *.log
 *.jar
+!gradle/wrapper/gradle-wrapper.jar
 *.war
 
 .env
@@ -29,14 +27,12 @@ postgres-data/
 /dist/
 /bazel-out
 /integration/bazel/bazel-*
-*.log
 node_modules/
 modules/ssr-benchmarks/node_modules/
 
 # Include when developing application packages.
 pubspec.lock
 .c9
-.idea/
 .devcontainer/*
 !.devcontainer/README.md
 !.devcontainer/recommended-devcontainer.json

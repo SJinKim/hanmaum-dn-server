@@ -1,1 +1,1 @@
-rootProject.name = "church-dn-backend"
+rootProject.name = "hanmaum-dn-server"
