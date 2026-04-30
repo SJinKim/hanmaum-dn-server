@@ -79,8 +79,8 @@ baseline.json
 
 assets/demo/
 *.sql
-!backend/src/main/resources/db/migration/*.sql
-!backend/src/main/resources/db/seed/*.sql
+!src/main/resources/db/migration/*.sql
+!src/main/resources/db/seed/*.sql
 !infrastructure/postgres-init/*.sql
 
 /infrastructure/architectureLog/*
