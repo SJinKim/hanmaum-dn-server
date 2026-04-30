@@ -3,7 +3,7 @@ server:
 
 spring:
   application:
-    name: church-dn-backend
+    name: hanmaum-dn-server
   flyway:
     enabled: true
     baseline-on-migrate: true
