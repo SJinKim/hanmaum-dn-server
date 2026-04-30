@@ -81,6 +81,7 @@ assets/demo/
 *.sql
 !backend/src/main/resources/db/migration/*.sql
 !backend/src/main/resources/db/seed/*.sql
+!infrastructure/postgres-init/*.sql
 
 /infrastructure/architectureLog/*
 /postgres-init/application.old.yml
