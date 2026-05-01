@@ -22,7 +22,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
-import java.time.LocalDateTime
+import java.time.Instant
 import java.util.UUID
 
 @Service
@@ -147,7 +147,7 @@ class MinistryService(
             when (existingReg.status) {
                 RegistrationStatus.REJECTED -> {
                     // Soft-delete the rejected record so re-apply can proceed
-                    existingReg.deletedAt = LocalDateTime.now()
+                    existingReg.deletedAt = Instant.now()
                     ministryRegistrationRepository.flush()
                 }
 
@@ -285,7 +285,7 @@ class MinistryService(
         }
 
         // Soft delete
-        registration.deletedAt = LocalDateTime.now()
+        registration.deletedAt = Instant.now()
     }
 
     // ─── Private helpers ───────────────────────────────────────────────────────

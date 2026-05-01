@@ -25,7 +25,8 @@ import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
-import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import java.util.Optional
 import java.util.UUID
 
@@ -70,7 +71,7 @@ class GroupMeetingServiceTest {
         val m =
             GroupMeeting(
                 group = group,
-                meetingTime = LocalDateTime.of(2026, 3, 22, 14, 0),
+                meetingTime = OffsetDateTime.of(2026, 3, 22, 14, 0, 0, 0, ZoneOffset.UTC),
                 location = "교회",
             )
         m.id = id
@@ -85,7 +86,7 @@ class GroupMeetingServiceTest {
 
         assertThrows<EntityNotFoundException> {
             groupMeetingService.createMeeting(
-                CreateMeetingRequest(groupId = 1L, meetingTime = LocalDateTime.now(), location = "교회"),
+                CreateMeetingRequest(groupId = 1L, meetingTime = OffsetDateTime.now(), location = "교회"),
             )
         }
     }
@@ -99,7 +100,11 @@ class GroupMeetingServiceTest {
 
         val id =
             groupMeetingService.createMeeting(
-                CreateMeetingRequest(groupId = 1L, meetingTime = LocalDateTime.of(2026, 4, 6, 14, 0), location = "교회"),
+                CreateMeetingRequest(
+                    groupId = 1L,
+                    meetingTime = OffsetDateTime.of(2026, 4, 6, 14, 0, 0, 0, ZoneOffset.UTC),
+                    location = "교회",
+                ),
             )
 
         assertEquals(42L, id)

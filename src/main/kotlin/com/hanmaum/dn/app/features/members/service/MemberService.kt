@@ -30,8 +30,8 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
+import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalDateTime
 import java.util.UUID
 
 @Service
@@ -157,7 +157,7 @@ class MemberService(
                 .findByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow { EntityNotFoundException("Member not found or already deleted: $publicId") }
         member.memberStatus = MemberStatus.DELETED
-        member.deletedAt = LocalDateTime.now()
+        member.deletedAt = Instant.now()
         memberRepository.save(member)
     }
 

@@ -17,8 +17,10 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.util.UUID
 
 @Service
@@ -78,7 +80,7 @@ class AttendanceService(
             definitionRepo
                 .findByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow { EntityNotFoundException("AttendanceDefinition not found: $publicId") }
-        definition.deletedAt = LocalDateTime.now()
+        definition.deletedAt = Instant.now()
     }
 
     // ─── Check-in ─────────────────────────────────────────────────────────────
@@ -89,7 +91,7 @@ class AttendanceService(
             memberRepo.findByKeycloakIdAndDeletedAtIsNull(keycloakSubject)
                 ?: throw EntityNotFoundException("Member not found for subject: $keycloakSubject")
 
-        val now = LocalDateTime.now()
+        val now = LocalDateTime.now(ZoneId.of("Europe/Berlin"))
         val today = now.toLocalDate()
         val currentTime = now.toLocalTime()
         val currentDay = now.dayOfWeek

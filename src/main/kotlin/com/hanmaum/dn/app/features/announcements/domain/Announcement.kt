@@ -7,7 +7,7 @@ import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
 import jakarta.persistence.Table
-import java.time.LocalDateTime
+import java.time.OffsetDateTime
 
 @Entity
 @Table(name = "announcements")
@@ -20,9 +20,9 @@ class Announcement(
     @Column(columnDefinition = "TEXT", nullable = false)
     var body: String,
     @Column(name = "start_at", nullable = false)
-    var startAt: LocalDateTime,
+    var startAt: OffsetDateTime,
     @Column(name = "end_at")
-    var endAt: LocalDateTime? = null,
+    var endAt: OffsetDateTime? = null,
     @Column(name = "is_pinned")
     var isPinned: Boolean = false,
 ) : BaseEntity()

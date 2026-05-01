@@ -3,7 +3,7 @@ package com.hanmaum.dn.app.features.announcements.repository
 import com.hanmaum.dn.app.features.announcements.domain.Announcement
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
-import java.time.LocalDateTime
+import java.time.OffsetDateTime
 
 interface AnnouncementRepository : JpaRepository<Announcement, Long> {
     // Hol alle, die schon gestartet sind (startAt <= now)
@@ -12,5 +12,5 @@ interface AnnouncementRepository : JpaRepository<Announcement, Long> {
     @Query(
         "SELECT a FROM Announcement a WHERE a.deletedAt IS NULL AND a.startAt <= :now AND (a.endAt IS NULL OR a.endAt >= :now) ORDER BY a.isPinned DESC, a.startAt DESC",
     )
-    fun findActiveAnnouncements(now: LocalDateTime): List<Announcement>
+    fun findActiveAnnouncements(now: OffsetDateTime): List<Announcement>
 }

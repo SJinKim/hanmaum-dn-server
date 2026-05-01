@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.announcements.api.v1.dto
 
-import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
 
 // Was die App empfängt
 data class AnnouncementDto(
@@ -17,8 +18,8 @@ data class AnnouncementDto(
 data class CreateAnnouncementRequest(
     val title: String,
     val body: String,
-    val startAt: LocalDateTime = LocalDateTime.now(),
-    val endAt: LocalDateTime? = null,
+    val startAt: OffsetDateTime = OffsetDateTime.now(ZoneId.of("Europe/Berlin")),
+    val endAt: OffsetDateTime? = null,
     val isPinned: Boolean = false,
     val category: String,
 )
