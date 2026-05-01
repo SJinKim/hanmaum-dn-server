@@ -6,7 +6,7 @@ export default {
       'perf', 'test', 'build', 'ci', 'chore', 'revert'
     ]],
     'scope-enum': [2, 'always', [
-      'auth', 'member', 'api', 'db', 'config', 'ci', 'deps', 'release'
+      'auth', 'member', 'api', 'db', 'config', 'ci', 'deps', 'release', 'cleanup'
     ]],
     'scope-empty': [2, 'never'],
     'subject-case': [2, 'always', 'lower-case'],
