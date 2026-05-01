@@ -3,10 +3,13 @@ package com.hanmaum.dn.app.features.attendance.repository
 import com.hanmaum.dn.app.features.attendance.domain.AttendanceDefinition
 import com.hanmaum.dn.app.features.attendance.domain.AttendanceLog
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
+import org.springframework.transaction.annotation.Transactional
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalDate
 import java.util.Optional
 import java.util.UUID
@@ -76,4 +79,17 @@ interface AttendanceLogRepository : JpaRepository<AttendanceLog, Long> {
         @Param("from") from: LocalDate,
         @Param("to") to: LocalDate,
     ): List<AttendanceLog>
+
+    @Modifying(clearAutomatically = true)
+    @Transactional
+    @Query(
+        """
+        DELETE FROM AttendanceLog l
+        WHERE l.deleteEntryAt <= :now
+          AND l.deletedAt IS NOT NULL
+        """,
+    )
+    fun hardDeleteExpired(
+        @Param("now") now: Instant,
+    ): Int
 }

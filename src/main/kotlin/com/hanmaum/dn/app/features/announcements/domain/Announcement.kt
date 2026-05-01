@@ -7,6 +7,7 @@ import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
 import jakarta.persistence.Table
+import java.time.Instant
 import java.time.OffsetDateTime
 
 @Entity
@@ -25,4 +26,7 @@ class Announcement(
     var endAt: OffsetDateTime? = null,
     @Column(name = "is_pinned")
     var isPinned: Boolean = false,
-) : BaseEntity()
+) : BaseEntity() {
+    @Column(name = "delete_entry_at")
+    var deleteEntryAt: Instant? = null
+}

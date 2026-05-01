@@ -11,6 +11,7 @@ import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
 import jakarta.persistence.UniqueConstraint
+import java.time.Instant
 
 @Entity
 @Table(
@@ -36,4 +37,7 @@ class MinistryRegistration(
     @Enumerated(EnumType.STRING)
     @Column(name = "registration_status", nullable = false, length = 20)
     var status: RegistrationStatus = RegistrationStatus.PENDING,
-) : BaseEntity()
+) : BaseEntity() {
+    @Column(name = "delete_entry_at")
+    var deleteEntryAt: Instant? = null
+}
