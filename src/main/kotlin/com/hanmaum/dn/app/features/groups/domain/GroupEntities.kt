@@ -8,7 +8,7 @@ import jakarta.persistence.FetchType
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
-import java.time.LocalDateTime
+import java.time.OffsetDateTime
 
 @Entity
 @Table(name = "group_meetings")
@@ -17,7 +17,7 @@ class GroupMeeting(
     @JoinColumn(name = "group_id", nullable = false)
     val group: ChurchGroup,
     @Column(name = "meeting_time", nullable = false)
-    var meetingTime: LocalDateTime,
+    var meetingTime: OffsetDateTime,
     var location: String, // z.B. "Raum 101" oder "Café"
     var description: String = "순모임", // Default Wert
 ) : BaseEntity()

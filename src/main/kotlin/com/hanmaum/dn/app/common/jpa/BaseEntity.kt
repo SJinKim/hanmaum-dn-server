@@ -9,7 +9,7 @@ import org.hibernate.Hibernate
 import org.hibernate.annotations.CreationTimestamp
 import org.hibernate.annotations.UpdateTimestamp
 import java.io.Serializable
-import java.time.LocalDateTime
+import java.time.Instant
 import java.util.UUID
 
 @MappedSuperclass
@@ -24,14 +24,14 @@ abstract class BaseEntity : Serializable {
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
-    var createdAt: LocalDateTime? = LocalDateTime.now()
+    var createdAt: Instant? = Instant.now()
 
     @UpdateTimestamp
     @Column(name = "updated_at")
-    var updatedAt: LocalDateTime? = null
+    var updatedAt: Instant? = null
 
     @Column(name = "deleted_at")
-    var deletedAt: LocalDateTime? = null
+    var deletedAt: Instant? = null
 
     fun isNotDeleted(): Boolean = deletedAt == null
 

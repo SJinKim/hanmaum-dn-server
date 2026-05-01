@@ -22,7 +22,8 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
-import java.time.LocalDateTime
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 @Service
@@ -147,7 +148,9 @@ class MinistryService(
             when (existingReg.status) {
                 RegistrationStatus.REJECTED -> {
                     // Soft-delete the rejected record so re-apply can proceed
-                    existingReg.deletedAt = LocalDateTime.now()
+                    val now = Instant.now()
+                    existingReg.deletedAt = now
+                    existingReg.deleteEntryAt = now.plus(30, ChronoUnit.DAYS)
                     ministryRegistrationRepository.flush()
                 }
 
@@ -284,8 +287,10 @@ class MinistryService(
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "본인의 등록만 취소할 수 있습니다.")
         }
 
-        // Soft delete
-        registration.deletedAt = LocalDateTime.now()
+        // Soft delete — deleteEntryAt schedules hard-delete after 30 days via cron job
+        val now = Instant.now()
+        registration.deletedAt = now
+        registration.deleteEntryAt = now.plus(30, ChronoUnit.DAYS)
     }
 
     // ─── Private helpers ───────────────────────────────────────────────────────

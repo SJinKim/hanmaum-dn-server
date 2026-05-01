@@ -9,6 +9,7 @@ import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
 import jakarta.persistence.UniqueConstraint
+import java.time.Instant
 import java.time.LocalDate
 
 @Entity
@@ -32,4 +33,7 @@ class AttendanceLog(
     val attendanceDate: LocalDate,
     @Column(name = "attended", nullable = false)
     val attended: Boolean = true,
-) : BaseEntity()
+) : BaseEntity() {
+    @Column(name = "delete_entry_at")
+    var deleteEntryAt: Instant? = null
+}

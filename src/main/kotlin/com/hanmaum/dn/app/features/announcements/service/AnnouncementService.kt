@@ -5,14 +5,18 @@ import com.hanmaum.dn.app.features.announcements.api.v1.dto.CreateAnnouncementRe
 import com.hanmaum.dn.app.features.announcements.domain.Announcement
 import com.hanmaum.dn.app.features.announcements.repository.AnnouncementRepository
 import org.springframework.stereotype.Service
-import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
 
 @Service
 class AnnouncementService(
     private val announcementRepository: AnnouncementRepository,
 ) {
     // für die App (nur aktive)
-    fun getActiveAnnouncements(): List<Announcement> = announcementRepository.findActiveAnnouncements(LocalDateTime.now())
+    fun getActiveAnnouncements(): List<Announcement> =
+        announcementRepository.findActiveAnnouncements(
+            OffsetDateTime.now(ZoneId.of("Europe/Berlin")),
+        )
 
     // for Admin Dashboard (create)
     fun createAnnouncement(req: CreateAnnouncementRequest): Announcement = announcementRepository.save(req.toEntity())

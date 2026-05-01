@@ -2,9 +2,12 @@ package com.hanmaum.dn.app.features.ministry.repository
 
 import com.hanmaum.dn.app.features.ministry.domain.MinistryRegistration
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
+import org.springframework.transaction.annotation.Transactional
+import java.time.Instant
 import java.util.Optional
 import java.util.UUID
 
@@ -58,4 +61,17 @@ interface MinistryRegistrationRepository : JpaRepository<MinistryRegistration, L
         @Param("memberId") memberId: Long,
         @Param("period") period: String,
     ): Optional<MinistryRegistration>
+
+    @Modifying(clearAutomatically = true)
+    @Transactional
+    @Query(
+        """
+        DELETE FROM MinistryRegistration r
+        WHERE r.deleteEntryAt <= :now
+          AND r.deletedAt IS NOT NULL
+        """,
+    )
+    fun hardDeleteExpired(
+        @Param("now") now: Instant,
+    ): Int
 }

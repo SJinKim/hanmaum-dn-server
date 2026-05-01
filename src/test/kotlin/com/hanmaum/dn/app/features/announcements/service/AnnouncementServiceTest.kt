@@ -14,7 +14,8 @@ import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
-import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
 
 @ExtendWith(MockitoExtension::class)
 class AnnouncementServiceTest {
@@ -34,21 +35,21 @@ class AnnouncementServiceTest {
                     category = AnnouncementCategory.NOTICE,
                     title = "공지사항",
                     body = "내용",
-                    startAt = LocalDateTime.now().minusDays(1),
+                    startAt = OffsetDateTime.now().minusDays(1),
                 ),
             )
-        `when`(announcementRepository.findActiveAnnouncements(any<LocalDateTime>()))
+        `when`(announcementRepository.findActiveAnnouncements(any<OffsetDateTime>()))
             .thenReturn(announcements)
 
         val result = announcementService.getActiveAnnouncements()
 
         assertEquals(announcements, result)
-        verify(announcementRepository).findActiveAnnouncements(any<LocalDateTime>())
+        verify(announcementRepository).findActiveAnnouncements(any<OffsetDateTime>())
     }
 
     @Test
     fun `getActiveAnnouncements returns empty list when no active announcements`() {
-        `when`(announcementRepository.findActiveAnnouncements(any<LocalDateTime>()))
+        `when`(announcementRepository.findActiveAnnouncements(any<OffsetDateTime>()))
             .thenReturn(emptyList())
 
         val result = announcementService.getActiveAnnouncements()
@@ -58,18 +59,18 @@ class AnnouncementServiceTest {
 
     @Test
     fun `getActiveAnnouncements passes a timestamp close to now`() {
-        val before = LocalDateTime.now()
-        `when`(announcementRepository.findActiveAnnouncements(any<LocalDateTime>()))
+        val before = OffsetDateTime.now(ZoneOffset.UTC)
+        `when`(announcementRepository.findActiveAnnouncements(any<OffsetDateTime>()))
             .thenReturn(emptyList())
 
         announcementService.getActiveAnnouncements()
 
-        val after = LocalDateTime.now()
-        val captor = argumentCaptor<LocalDateTime>()
+        val after = OffsetDateTime.now(ZoneOffset.UTC)
+        val captor = argumentCaptor<OffsetDateTime>()
         verify(announcementRepository).findActiveAnnouncements(captor.capture())
-        val captured = captor.firstValue
-        assert(!captured.isBefore(before)) { "timestamp should be >= before" }
-        assert(!captured.isAfter(after)) { "timestamp should be <= after" }
+        val captured = captor.firstValue.toInstant()
+        assert(!captured.isBefore(before.toInstant())) { "timestamp should be >= before" }
+        assert(!captured.isAfter(after.toInstant())) { "timestamp should be <= after" }
     }
 
     // --- createAnnouncement ---
@@ -80,7 +81,7 @@ class AnnouncementServiceTest {
             CreateAnnouncementRequest(
                 title = "새 공지",
                 body = "공지 내용",
-                startAt = LocalDateTime.now(),
+                startAt = OffsetDateTime.now(),
                 endAt = null,
                 isPinned = false,
                 category = AnnouncementCategory.NOTICE.name,
@@ -102,8 +103,8 @@ class AnnouncementServiceTest {
 
     @Test
     fun `createAnnouncement maps request fields onto entity correctly`() {
-        val startAt = LocalDateTime.of(2026, 3, 24, 10, 0)
-        val endAt = LocalDateTime.of(2026, 4, 1, 0, 0)
+        val startAt = OffsetDateTime.of(2026, 3, 24, 10, 0, 0, 0, ZoneOffset.UTC)
+        val endAt = OffsetDateTime.of(2026, 4, 1, 0, 0, 0, 0, ZoneOffset.UTC)
         val req =
             CreateAnnouncementRequest(
                 title = "행사 안내",
@@ -131,7 +132,7 @@ class AnnouncementServiceTest {
             CreateAnnouncementRequest(
                 title = "잘못된 카테고리",
                 body = "내용",
-                startAt = LocalDateTime.now(),
+                startAt = OffsetDateTime.now(),
                 category = "INVALID_CATEGORY",
             )
 
