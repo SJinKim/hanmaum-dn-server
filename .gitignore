@@ -9,9 +9,6 @@
 .gradle/
 build/
 out/
-gradle/
-!gradle/wrapper/gradle-wrapper.jar
-!gradle/wrapper/gradle-wrapper.properties
 
 # --- Docker Müll ---
 # Wir wollen keine lokalen DB-Daten im Git haben!
@@ -21,6 +18,7 @@ postgres-data/
 *.class
 *.log
 *.jar
+!gradle/wrapper/gradle-wrapper.jar
 *.war
 
 .env
@@ -29,14 +27,12 @@ postgres-data/
 /dist/
 /bazel-out
 /integration/bazel/bazel-*
-*.log
 node_modules/
 modules/ssr-benchmarks/node_modules/
 
 # Include when developing application packages.
 pubspec.lock
 .c9
-.idea/
 .devcontainer/*
 !.devcontainer/README.md
 !.devcontainer/recommended-devcontainer.json
@@ -83,12 +79,18 @@ baseline.json
 
 assets/demo/
 *.sql
-!backend/src/main/resources/db/migration/*.sql
-!backend/src/main/resources/db/seed/*.sql
+!src/main/resources/db/migration/*.sql
+!src/main/resources/db/seed/*.sql
+!infrastructure/postgres-init/*.sql
 
 /infrastructure/architectureLog/*
 /postgres-init/application.old.yml
 
-# Superpowers internal docs (plans/specs with sensitive schema snippets)
-docs/superpowers/
+# Local docs (plans, specs)
+docs/
 
+# --- Claude Code (per-machine, never commit) ---
+.claude/settings.local.json
+CLAUDE.local.md
+dev-log.md
+dev-log-*.md

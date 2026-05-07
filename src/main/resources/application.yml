@@ -1,0 +1,23 @@
+server:
+  port: 8080
+
+api:
+  prefix: /api/v1
+
+spring:
+  application:
+    name: hanmaum-dn-server
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 1
+  profiles:
+    active: dev
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+app:
+  cleanup:
+    cron: "0 0 2 * * *"
+    retention-days: 30

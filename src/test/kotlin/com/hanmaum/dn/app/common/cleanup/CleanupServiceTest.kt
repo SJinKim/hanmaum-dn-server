@@ -1,0 +1,72 @@
+package com.hanmaum.dn.app.common.cleanup
+
+import com.hanmaum.dn.app.features.announcements.repository.AnnouncementRepository
+import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
+import com.hanmaum.dn.app.features.ministry.repository.MinistryRegistrationRepository
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.mockito.InjectMocks
+import org.mockito.Mock
+import org.mockito.Mockito.doThrow
+import org.mockito.Mockito.verify
+import org.mockito.Mockito.`when`
+import org.mockito.junit.jupiter.MockitoExtension
+import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
+import java.time.Instant
+
+@ExtendWith(MockitoExtension::class)
+class CleanupServiceTest {
+    @Mock private lateinit var ministryRegistrationRepository: MinistryRegistrationRepository
+
+    @Mock private lateinit var announcementRepository: AnnouncementRepository
+
+    @Mock private lateinit var attendanceLogRepository: AttendanceLogRepository
+
+    @InjectMocks
+    private lateinit var cleanupService: CleanupService
+
+    @Test
+    fun `purge passes a cutoff timestamp close to now`() {
+        val before = Instant.now()
+        `when`(ministryRegistrationRepository.hardDeleteExpired(any())).thenReturn(0)
+        `when`(announcementRepository.hardDeleteExpired(any())).thenReturn(0)
+        `when`(attendanceLogRepository.hardDeleteExpired(any())).thenReturn(0)
+
+        cleanupService.purgeExpiredSoftDeletedEntries()
+
+        val after = Instant.now()
+        val captor = argumentCaptor<Instant>()
+        verify(ministryRegistrationRepository).hardDeleteExpired(captor.capture())
+        val captured = captor.firstValue
+        assertTrue(!captured.isBefore(before)) { "cutoff should be >= before" }
+        assertTrue(!captured.isAfter(after)) { "cutoff should be <= after" }
+    }
+
+    @Test
+    fun `purge calls all three repositories`() {
+        `when`(ministryRegistrationRepository.hardDeleteExpired(any())).thenReturn(2)
+        `when`(announcementRepository.hardDeleteExpired(any())).thenReturn(1)
+        `when`(attendanceLogRepository.hardDeleteExpired(any())).thenReturn(0)
+
+        cleanupService.purgeExpiredSoftDeletedEntries()
+
+        verify(ministryRegistrationRepository).hardDeleteExpired(any())
+        verify(announcementRepository).hardDeleteExpired(any())
+        verify(attendanceLogRepository).hardDeleteExpired(any())
+    }
+
+    @Test
+    fun `purge continues with remaining tables when one fails`() {
+        doThrow(RuntimeException("DB error")).`when`(ministryRegistrationRepository).hardDeleteExpired(any())
+        `when`(announcementRepository.hardDeleteExpired(any())).thenReturn(0)
+        `when`(attendanceLogRepository.hardDeleteExpired(any())).thenReturn(0)
+
+        // Must not throw — failure on one table must not abort the others
+        cleanupService.purgeExpiredSoftDeletedEntries()
+
+        verify(announcementRepository).hardDeleteExpired(any())
+        verify(attendanceLogRepository).hardDeleteExpired(any())
+    }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "hanmaum-dn-server-tooling",
+  "private": true,
+  "description": "Dev tooling only (git hooks, commit linting). The server itself is built with Gradle.",
+  "scripts": {
+    "prepare": "lefthook install"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.0.0",
+    "@commitlint/config-conventional": "^19.0.0",
+    "lefthook": "^1.7.0"
+  }
+}
