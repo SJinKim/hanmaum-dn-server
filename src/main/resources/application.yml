@@ -13,9 +13,6 @@ spring:
     baseline-version: 1
   profiles:
     active: dev
-  jackson:
-    serialization:
-      write-dates-as-timestamps: false
 
 app:
   cleanup:
