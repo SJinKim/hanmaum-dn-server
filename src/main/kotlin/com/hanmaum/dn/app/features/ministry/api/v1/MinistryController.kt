@@ -29,7 +29,7 @@ import java.time.LocalDate
 import java.util.UUID
 
 @RestController
-@RequestMapping("/api/v1/ministries")
+@RequestMapping("/ministries")
 class MinistryController(
     private val ministryService: MinistryService,
 ) {

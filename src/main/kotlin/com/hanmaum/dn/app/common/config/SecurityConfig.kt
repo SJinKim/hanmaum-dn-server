@@ -31,6 +31,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 @EnableWebSecurity
 @EnableMethodSecurity
 class SecurityConfig(
+    @Value("\${api.prefix:/api/v1}") private val apiPrefix: String,
     @Value(
         "\${spring.security.oauth2.resourceserver.jwt.jwk-set-uri:http://hanmaumApp-keycloak:8090/realms/hanmaum/protocol/openid-connect/certs}",
     )
@@ -46,7 +47,7 @@ class SecurityConfig(
                 auth
                     .requestMatchers("/actuator/health", "/actuator/info")
                     .permitAll()
-                    .requestMatchers(HttpMethod.GET, "/api/v1/announcements")
+                    .requestMatchers(HttpMethod.GET, "$apiPrefix/announcements")
                     .permitAll()
                     .anyRequest()
                     .authenticated()
@@ -64,7 +65,7 @@ class SecurityConfig(
         WebSecurityCustomizer { web ->
             web
                 .ignoring()
-                .requestMatchers(HttpMethod.POST, "/api/v1/members/register")
+                .requestMatchers(HttpMethod.POST, "$apiPrefix/members/register")
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
         }
 
