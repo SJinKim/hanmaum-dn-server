@@ -61,7 +61,7 @@ class MemberService(
                 Sort.by("lastName").ascending().and(Sort.by("firstName").ascending()),
             )
         return memberRepository
-            .findActiveMembers(search?.takeIf { it.isNotBlank() }, status, pageable)
+            .findActiveMembers(search?.takeIf { it.isNotBlank() }.orEmpty(), status, pageable)
             .map { it.toSummaryDto() }
     }
 
