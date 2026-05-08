@@ -11,5 +11,5 @@ data class RoomResponse(
     val floorId: String,
     val name: String,
     val description: String,
-    val points: List<List<Float>>,
+    val points: List<List<Double>>,
 )

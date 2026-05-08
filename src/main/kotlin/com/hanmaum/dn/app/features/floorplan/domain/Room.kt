@@ -22,5 +22,5 @@ class Room(
     var description: String = "",
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb", nullable = false)
-    var points: List<List<Float>> = emptyList(),
+    var points: List<List<Double>> = emptyList(),
 ) : BaseEntity()
