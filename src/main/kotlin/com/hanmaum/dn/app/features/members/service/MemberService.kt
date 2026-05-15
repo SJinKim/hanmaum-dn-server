@@ -51,6 +51,7 @@ class MemberService(
     fun getMembers(
         search: String?,
         status: MemberStatus?,
+        baptism: Baptism?,
         page: Int,
         size: Int,
     ): Page<MemberSummaryDto> {
@@ -61,7 +62,7 @@ class MemberService(
                 Sort.by("lastName").ascending().and(Sort.by("firstName").ascending()),
             )
         return memberRepository
-            .findActiveMembers(search?.takeIf { it.isNotBlank() }.orEmpty(), status, pageable)
+            .findActiveMembers(search?.takeIf { it.isNotBlank() }.orEmpty(), status, baptism, pageable)
             .map { it.toSummaryDto() }
     }
 

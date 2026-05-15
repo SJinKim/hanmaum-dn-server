@@ -126,10 +126,10 @@ class MemberServiceTest {
     @Test
     fun `getMembers delegates to repository with pageable`() {
         val members = listOf(memberWithId(1L), memberWithId(2L))
-        `when`(memberRepository.findActiveMembers(anyOrNull(), anyOrNull(), any<Pageable>()))
+        `when`(memberRepository.findActiveMembers(anyOrNull(), anyOrNull(), anyOrNull(), any<Pageable>()))
             .thenReturn(PageImpl(members))
 
-        val result = memberService.getMembers(null, null, 0, 20)
+        val result = memberService.getMembers(null, null, null, 0, 20)
 
         assertEquals(2, result.totalElements)
     }

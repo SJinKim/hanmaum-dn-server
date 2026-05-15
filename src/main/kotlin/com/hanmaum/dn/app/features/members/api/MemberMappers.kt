@@ -133,7 +133,9 @@ fun Member.toSummaryDto(): MemberSummaryDto =
         firstName = this.firstName,
         email = this.email,
         memberStatus = this.memberStatus.name,
+        baptism = this.baptism?.name,
         groupName = this.group?.name,
+        updatedAt = this.updatedAt,
     )
 
 fun Member.toResponse(): MemberResponse =

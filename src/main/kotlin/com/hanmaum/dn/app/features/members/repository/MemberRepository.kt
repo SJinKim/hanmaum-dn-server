@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.members.repository
 
+import com.hanmaum.dn.app.common.domainvalue.Baptism
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.statistics.api.v1.dto.ChartDataDto
@@ -31,6 +32,7 @@ interface MemberRepository : JpaRepository<Member, Long> {
         SELECT m FROM Member m
         WHERE m.deletedAt IS NULL
           AND (:status IS NULL OR m.memberStatus = :status)
+          AND (:baptism IS NULL OR m.baptism = :baptism)
           AND (
             :search IS NULL
             OR LOWER(m.lastName)  LIKE LOWER(CONCAT('%', :search, '%'))
@@ -43,6 +45,7 @@ interface MemberRepository : JpaRepository<Member, Long> {
     fun findActiveMembers(
         @Param("search") search: String?,
         @Param("status") status: MemberStatus?,
+        @Param("baptism") baptism: Baptism?,
         pageable: Pageable,
     ): Page<Member>
 

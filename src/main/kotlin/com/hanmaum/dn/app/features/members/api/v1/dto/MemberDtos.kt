@@ -4,6 +4,7 @@ import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
+import java.time.Instant
 import java.time.LocalDate
 
 // ─── Response DTOs ────────────────────────────────────────────────────────────
@@ -39,7 +40,9 @@ data class MemberSummaryDto(
     val firstName: String,
     val email: String? = null,
     val memberStatus: String,
+    val baptism: String? = null,
     val groupName: String? = null,
+    val updatedAt: Instant? = null,
 )
 
 /**
