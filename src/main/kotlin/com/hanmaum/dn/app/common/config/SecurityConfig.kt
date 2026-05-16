@@ -49,6 +49,8 @@ class SecurityConfig(
                     .permitAll()
                     .requestMatchers(HttpMethod.GET, "$apiPrefix/announcements")
                     .permitAll()
+                    .requestMatchers(HttpMethod.GET, "$apiPrefix/albums")
+                    .permitAll()
                     .anyRequest()
                     .authenticated()
             }.oauth2ResourceServer { oauth2 ->
