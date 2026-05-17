@@ -5,6 +5,7 @@ plugins {
     id("org.springframework.boot") version "4.0.1"
     id("io.spring.dependency-management") version "1.1.7"
     id("org.jlleitschuh.gradle.ktlint") version "14.0.1"
+    id("org.springdoc.openapi-gradle-plugin") version "1.9.0"
 }
 
 group = "com.hanmaum.dn"
@@ -97,4 +98,19 @@ tasks.withType<Test> {
     useJUnitPlatform {
         excludeTags("integration")
     }
+}
+
+openApi {
+    apiDocsUrl.set("http://localhost:8080/v3/api-docs.yaml")
+    outputDir.set(layout.buildDirectory.dir("openapi"))
+    outputFileName.set("openapi.yaml")
+    waitTimeInSeconds.set(40)
+}
+
+// Run after generateOpenApiDocs to push the spec into the ops repo.
+// Requires Docker services (Postgres + Keycloak) to be up.
+tasks.register<Copy>("syncOpenApiToOps") {
+    dependsOn("generateOpenApiDocs")
+    from(layout.buildDirectory.file("openapi/openapi.yaml"))
+    into("../hanmaum-dn-ops/api")
 }
