@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 @Service
 class CleanupService(
@@ -25,7 +26,8 @@ class CleanupService(
             ministryRegistrationRepository.hardDeleteExpired(now)
         }
         purge("Announcement") {
-            announcementRepository.hardDeleteExpired(now)
+            // Announcements use delete_entry_at = admin click time; purge 30 days after.
+            announcementRepository.hardDeleteExpired(now.minus(30, ChronoUnit.DAYS))
         }
         purge("AttendanceLog") {
             attendanceLogRepository.hardDeleteExpired(now)
