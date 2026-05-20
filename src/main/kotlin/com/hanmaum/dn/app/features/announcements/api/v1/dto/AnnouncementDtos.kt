@@ -23,3 +23,13 @@ data class CreateAnnouncementRequest(
     val isPinned: Boolean = false,
     val category: String,
 )
+
+// Full admin replacement (PUT). endAt = null clears the field.
+data class UpdateAnnouncementRequest(
+    val title: String,
+    val body: String,
+    val startAt: OffsetDateTime,
+    val endAt: OffsetDateTime? = null,
+    val isPinned: Boolean = false,
+    val category: String,
+)

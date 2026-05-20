@@ -5,9 +5,9 @@ import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.MappedSuperclass
+import jakarta.persistence.PreUpdate
 import org.hibernate.Hibernate
 import org.hibernate.annotations.CreationTimestamp
-import org.hibernate.annotations.UpdateTimestamp
 import java.io.Serializable
 import java.time.Instant
 import java.util.UUID
@@ -26,7 +26,6 @@ abstract class BaseEntity : Serializable {
     @Column(name = "created_at", nullable = false, updatable = false)
     var createdAt: Instant? = Instant.now()
 
-    @UpdateTimestamp
     @Column(name = "updated_at")
     var updatedAt: Instant? = null
 
@@ -34,6 +33,11 @@ abstract class BaseEntity : Serializable {
     var deletedAt: Instant? = null
 
     fun isNotDeleted(): Boolean = deletedAt == null
+
+    @PreUpdate
+    fun touchUpdatedAt() {
+        updatedAt = Instant.now()
+    }
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
