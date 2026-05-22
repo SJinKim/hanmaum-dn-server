@@ -1,0 +1,148 @@
+name: Deploy — Staging
+
+# Triggers: automatic on push to dev, or manual dispatch from any ref.
+#
+# Required GitHub secrets (Environment: staging):
+#   SERVER_HOST      — IP or hostname of the staging server
+#   SERVER_USER      — SSH user (e.g. deploy, ubuntu)
+#   SERVER_SSH_KEY   — Ed25519 private key (no passphrase)
+#   GHCR_TOKEN       — PAT with read:packages scope (for docker pull on server)
+#
+# One-time server setup:
+#   mkdir -p /opt/hanmaum-dn-server
+#   git clone https://github.com/SJinKim/hanmaum-dn-server.git /opt/hanmaum-dn-server
+#   cp /opt/hanmaum-dn-server/.env.example /opt/hanmaum-dn-server/.env  # fill in real values
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/sjinkim/hanmaum-dn-server
+
+jobs:
+  # ── Tests ───────────────────────────────────────────────────────────────────
+  # dev branch has no separate CI workflow, so we gate here.
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: hanmaum
+          POSTGRES_PASSWORD: hanmaum
+          POSTGRES_DB: hanmaum_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Lint
+        run: ./gradlew ktlintCheck --no-daemon
+
+      - name: Test
+        run: ./gradlew test --no-daemon
+        env:
+          SPRING_PROFILES_ACTIVE: test
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/hanmaum_test
+          SPRING_DATASOURCE_USERNAME: hanmaum
+          SPRING_DATASOURCE_PASSWORD: hanmaum
+
+  # ── Build & push image ───────────────────────────────────────────────────────
+  build:
+    name: Build image
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      sha_short: ${{ steps.vars.outputs.sha_short }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute short SHA
+        id: vars
+        run: echo "sha_short=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:staging
+            ${{ env.IMAGE }}:sha-${{ steps.vars.outputs.sha_short }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Deploy ───────────────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to staging
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          BACKEND_IMAGE: ${{ env.IMAGE }}:sha-${{ needs.build.outputs.sha_short }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          envs: GHCR_TOKEN,BACKEND_IMAGE
+          script: |
+            set -euo pipefail
+
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u sjinkim --password-stdin
+
+            cd /opt/hanmaum-dn-server
+            git pull --ff-only origin dev
+
+            export BACKEND_IMAGE
+            docker compose --project-name hanmaum-staging -f docker-compose.prod.yml pull backend
+            docker compose --project-name hanmaum-staging -f docker-compose.prod.yml up -d --no-build --remove-orphans
+
+            # Remove images older than 7 days to keep disk clean
+            docker image prune -f --filter "until=168h"
+
+            echo "Deployed $BACKEND_IMAGE to staging"

@@ -1,0 +1,13 @@
+{
+    email {$ACME_EMAIL}
+}
+
+# Backend REST API
+{$API_DOMAIN} {
+    reverse_proxy backend:8080
+}
+
+# Keycloak (auth / token issuance / admin console)
+{$AUTH_DOMAIN} {
+    reverse_proxy hanmaumApp-keycloak:8090
+}
