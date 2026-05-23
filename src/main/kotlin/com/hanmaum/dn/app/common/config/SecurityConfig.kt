@@ -36,6 +36,10 @@ class SecurityConfig(
         "\${spring.security.oauth2.resourceserver.jwt.jwk-set-uri:http://hanmaumApp-keycloak:8090/realms/hanmaum/protocol/openid-connect/certs}",
     )
     private val jwkSetUri: String,
+    // Public Keycloak URL used to validate the `iss` claim in production tokens.
+    // Default covers local dev. Set APP_SECURITY_KEYCLOAK_PUBLIC_ISSUER in .env for each environment.
+    @Value("\${app.security.keycloak-public-issuer:http://localhost:8091/realms/hanmaum}")
+    private val keycloakPublicIssuer: String,
 ) {
     @Bean
     fun filterChain(http: HttpSecurity): SecurityFilterChain {
@@ -106,7 +110,8 @@ class SecurityConfig(
             listOf(
                 "http://10.0.2.2:8091/realms/hanmaum", // Android Emulator
                 "http://localhost:8091/realms/hanmaum", // iOS / Web Localhost
-                "http://hanmaumApp-keycloak:8090/realms/hanmaum", // Docker Intern
+                "http://hanmaumApp-keycloak:8090/realms/hanmaum", // Docker internal
+                keycloakPublicIssuer, // public Keycloak URL — set via APP_SECURITY_KEYCLOAK_PUBLIC_ISSUER
             )
 
         // 3. Eigener Validator: Prüft, ob der Token-Issuer in der Liste ist

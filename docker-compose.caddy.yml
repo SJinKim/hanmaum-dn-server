@@ -1,0 +1,42 @@
+# Standalone Caddy reverse proxy — shared by prod and staging stacks.
+#
+# Must be started before prod/staging. Deploy scripts handle ordering.
+#
+# Required env vars (merge .env + .env.staging when starting this stack):
+#   ACME_EMAIL          — Let's Encrypt contact address
+#   API_DOMAIN          — e.g. api.graceops.de
+#   AUTH_DOMAIN         — e.g. auth.graceops.de  (single KC, serves prod + staging realms)
+#   STAGING_API_DOMAIN  — e.g. api.staging.graceops.de
+#
+# Usage:
+#   docker compose --env-file .env --env-file .env.staging \
+#     --project-name hanmaum-caddy -f docker-compose.caddy.yml up -d
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: hanmaum-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+      API_DOMAIN: ${API_DOMAIN}
+      AUTH_DOMAIN: ${AUTH_DOMAIN}
+      STAGING_API_DOMAIN: ${STAGING_API_DOMAIN}
+    volumes:
+      - ./infrastructure/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - caddy-proxy
+
+networks:
+  caddy-proxy:
+    external: true
+
+volumes:
+  caddy_data:
+  caddy_config:
