@@ -1,19 +1,22 @@
-# Production Docker Compose for Hetzner CX33
-# Only Caddy exposes ports (80/443). All other services are on the internal network.
+# Production stack — Hetzner server.
+# Caddy is managed separately via docker-compose.caddy.yml.
+# Only hanmaumApp-backend and hanmaumApp-keycloak join caddy-proxy so Caddy can
+# reach them. The database stays on the internal network only.
 #
-# Required env vars (add to .env on the server):
-#   ACME_EMAIL=you@example.com        # Let's Encrypt contact
-#   API_DOMAIN=api.yourdomain.com     # Backend API public hostname
-#   AUTH_DOMAIN=auth.yourdomain.com   # Keycloak public hostname
+# Required env vars (.env on the server):
+#   DB_HANMAUM_DN_NAME, DB_HANMAUM_DN_USER, DB_HANMAUM_DN_SECRET
+#   DB_HANMAUM_DN_URL              — e.g. jdbc:postgresql://hanmaumApp-db:5432
+#   KEYCLOAK_ADMIN_USER, KEYCLOAK_ADMIN_PASSWORD, KEYCLOAK_REALM
+#   BACKEND_IMAGE                  — set by CI: ghcr.io/sjinkim/hanmaum-dn-server:sha-<short>
+#   API_DOMAIN, AUTH_DOMAIN        — public hostnames (used by Caddy, sourced from .env)
 #
 # Usage:
-#   make prod-up          start all services
-#   make prod-build       rebuild backend image
-#   make prod-down        stop all services
+#   make prod-up    →  docker compose --project-name hanmaum-prod -f docker-compose.prod.yml up -d
+#   make prod-down  →  docker compose --project-name hanmaum-prod -f docker-compose.prod.yml down
 
 services:
   hanmaumApp-db:
-    image: postgres:15-alpine
+    image: postgres:16-alpine
     container_name: hanmaumApp-db
     restart: always
     environment:
@@ -28,14 +31,17 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512m
     networks:
-      - internal
+      - prod-internal
 
   hanmaumApp-keycloak:
     image: quay.io/keycloak/keycloak:26.3.0
     container_name: hanmaumApp-keycloak
     restart: unless-stopped
-    # 'start' (not start-dev) enables production hardening
     command: start --import-realm --health-enabled=true
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER}
@@ -46,24 +52,31 @@ services:
       KC_DB_PASSWORD: ${DB_HANMAUM_DN_SECRET}
       KC_DB_URL_PROPERTIES: "?currentSchema=public"
       KC_HTTP_PORT: "8090"
-      # Required when TLS is terminated at the proxy (Caddy), not at Keycloak
       KC_HTTP_ENABLED: "true"
       KC_HOSTNAME: https://${AUTH_DOMAIN}
-      # Tell Keycloak to trust X-Forwarded-* headers from Caddy
       KC_PROXY_HEADERS: xforwarded
       KC_CACHE: "local"
       KC_HEALTH_ENABLED: "true"
     volumes:
       - ./infrastructure/docker/keycloak/export:/opt/keycloak/data/import
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/health/ready || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
     depends_on:
       hanmaumApp-db:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1g
     networks:
-      - internal
+      - prod-internal
+      - caddy-proxy
 
   backend:
-    # Image built and pushed by CI — never build on the server.
-    # CI sets BACKEND_IMAGE=ghcr.io/sjinkim/hanmaum-dn-server:sha-<short>
     image: ${BACKEND_IMAGE:-ghcr.io/sjinkim/hanmaum-dn-server:latest}
     container_name: hanmaumApp-backend
     restart: unless-stopped
@@ -72,46 +85,34 @@ services:
       SPRING_DATASOURCE_USERNAME: ${DB_HANMAUM_DN_USER}
       SPRING_DATASOURCE_PASSWORD: ${DB_HANMAUM_DN_SECRET}
       SPRING_FLYWAY_ENABLED: "true"
-      # Internal Docker DNS — backend talks to Keycloak over the internal network
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://hanmaumApp-keycloak:8090/realms/${KEYCLOAK_REALM}/protocol/openid-connect/certs
       KEYCLOAK_AUTH_SERVER_URL: http://hanmaumApp-keycloak:8090
     env_file:
       - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     depends_on:
       hanmaumApp-db:
         condition: service_healthy
       hanmaumApp-keycloak:
         condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 768m
     networks:
-      - internal
-
-  caddy:
-    image: caddy:2-alpine
-    container_name: hanmaumApp-caddy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"   # HTTP/3 (QUIC)
-    environment:
-      ACME_EMAIL: ${ACME_EMAIL}
-      API_DOMAIN: ${API_DOMAIN}
-      AUTH_DOMAIN: ${AUTH_DOMAIN}
-    volumes:
-      - ./infrastructure/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data       # TLS certs — must be a named volume, not tmpfs
-      - caddy_config:/config
-    depends_on:
-      - backend
-      - hanmaumApp-keycloak
-    networks:
-      - internal
+      - prod-internal
+      - caddy-proxy
 
 networks:
-  internal:
+  prod-internal:
     driver: bridge
+  caddy-proxy:
+    external: true
 
 volumes:
   postgres_data:
-  caddy_data:
-  caddy_config:

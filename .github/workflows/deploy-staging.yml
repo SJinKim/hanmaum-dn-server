@@ -3,15 +3,15 @@ name: Deploy — Staging
 # Triggers: automatic on push to dev, or manual dispatch from any ref.
 #
 # Required GitHub secrets (Environment: staging):
-#   SERVER_HOST      — IP or hostname of the staging server
-#   SERVER_USER      — SSH user (e.g. deploy, ubuntu)
-#   SERVER_SSH_KEY   — Ed25519 private key (no passphrase)
+#   SERVER_HOST      — same Hetzner server as production
+#   SERVER_USER      — SSH user (e.g. root, ubuntu)
+#   SSH_PRIVATE_KEY  — Ed25519 private key (no passphrase)
 #   GHCR_TOKEN       — PAT with read:packages scope (for docker pull on server)
 #
-# One-time server setup:
+# One-time server setup (no git clone needed — CI pushes all files):
 #   mkdir -p /opt/hanmaum-dn-server
-#   git clone https://github.com/SJinKim/hanmaum-dn-server.git /opt/hanmaum-dn-server
-#   cp /opt/hanmaum-dn-server/.env.example /opt/hanmaum-dn-server/.env  # fill in real values
+#   docker network create caddy-proxy
+#   # Create /opt/hanmaum-dn-server/.env.staging with real values
 
 on:
   push:
@@ -24,6 +24,7 @@ concurrency:
 
 env:
   IMAGE: ghcr.io/sjinkim/hanmaum-dn-server
+  DEPLOY_DIR: /opt/hanmaum-dn-server
 
 jobs:
   # ── Tests ───────────────────────────────────────────────────────────────────
@@ -116,33 +117,82 @@ jobs:
     name: Deploy to staging
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     environment: staging
 
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Push infrastructure files to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "docker-compose.staging.yml,docker-compose.caddy.yml,infrastructure"
+          target: ${{ env.DEPLOY_DIR }}
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         env:
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-          BACKEND_IMAGE: ${{ env.IMAGE }}:sha-${{ needs.build.outputs.sha_short }}
+          BACKEND_IMAGE_STAGING: ${{ env.IMAGE }}:sha-${{ needs.build.outputs.sha_short }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          envs: GHCR_TOKEN,BACKEND_IMAGE
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: GHCR_TOKEN,BACKEND_IMAGE_STAGING
           script: |
             set -euo pipefail
 
             echo "$GHCR_TOKEN" | docker login ghcr.io -u sjinkim --password-stdin
 
+            # Ensure the shared proxy network exists (idempotent)
+            docker network create caddy-proxy 2>/dev/null || true
+
             cd /opt/hanmaum-dn-server
-            git pull --ff-only origin dev
 
-            export BACKEND_IMAGE
-            docker compose --project-name hanmaum-staging -f docker-compose.prod.yml pull backend
-            docker compose --project-name hanmaum-staging -f docker-compose.prod.yml up -d --no-build --remove-orphans
+            # Deploy staging stack
+            export BACKEND_IMAGE_STAGING
+            docker compose \
+              --project-name hanmaum-staging \
+              --env-file .env.staging \
+              -f docker-compose.staging.yml \
+              pull backend-staging
+            docker compose \
+              --project-name hanmaum-staging \
+              --env-file .env.staging \
+              -f docker-compose.staging.yml \
+              up -d --no-build --remove-orphans
 
-            # Remove images older than 7 days to keep disk clean
+            # Remove images older than 7 days
             docker image prune -f --filter "until=168h"
 
-            echo "Deployed $BACKEND_IMAGE to staging"
+            # Internal health check — validates Spring Boot started correctly
+            echo "Waiting for staging backend to become healthy..."
+            for i in $(seq 1 12); do
+              STATUS=$(docker inspect --format='{{.State.Health.Status}}' hanmaumApp-backend-staging 2>/dev/null || echo "missing")
+              if [ "$STATUS" = "healthy" ]; then
+                echo "Staging backend is healthy"
+                break
+              fi
+              echo "  attempt $i/12: $STATUS"
+              sleep 10
+            done
+            docker inspect --format='{{.State.Health.Status}}' hanmaumApp-backend-staging | grep -q 'healthy' \
+              || { echo "Staging backend health check failed"; exit 1; }
+
+            # External smoke test — validates Caddy routing + TLS end-to-end
+            set -a && source .env.staging && set +a
+            for i in $(seq 1 6); do
+              if curl -fsS "https://${STAGING_API_DOMAIN}/actuator/health" > /dev/null 2>&1; then
+                echo "External smoke test passed: https://${STAGING_API_DOMAIN}/actuator/health"
+                break
+              fi
+              echo "  waiting for external routing... ($i/6)"
+              sleep 10
+            done
+            curl -fsS "https://${STAGING_API_DOMAIN}/actuator/health" \
+              || { echo "External smoke test failed"; exit 1; }
+
+            echo "Deployed $BACKEND_IMAGE_STAGING to staging"

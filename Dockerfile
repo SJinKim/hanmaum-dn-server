@@ -29,16 +29,20 @@ RUN ./gradlew bootJar -x test --no-daemon
 # -----------------------------------------------------------------------------
 # STAGE 2: Run (Führt die App aus)
 # -----------------------------------------------------------------------------
-# Hier reicht uns das JRE (Java Runtime), das ist viel kleiner
 FROM eclipse-temurin:21-jre-alpine
 
+RUN apk add --no-cache curl \
+    && adduser -D -u 1001 appuser \
+    && mkdir -p /app /tmp/app \
+    && chown -R appuser:appuser /app /tmp/app
+
+ENV JAVA_TOOL_OPTIONS="-Djava.io.tmpdir=/tmp/app"
+
+USER appuser
 WORKDIR /app
 
-# Wir holen uns nur die fertige JAR aus der "builder"-Stage
-COPY --from=builder /app/build/libs/*.jar app.jar
+COPY --from=builder --chown=appuser:appuser /app/build/libs/*.jar app.jar
 
-# Port 8080 ist Standard bei Spring Boot
 EXPOSE 8080
 
-# Der Startbefehl
 ENTRYPOINT ["java", "-jar", "app.jar"]

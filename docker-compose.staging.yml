@@ -1,0 +1,84 @@
+# Staging (System Test) stack — shares the Hetzner server with prod.
+# Caddy is managed separately via docker-compose.caddy.yml.
+# Keycloak is shared with prod (auth.graceops.de) — staging uses its own realm.
+# Container names use -staging suffix to avoid conflicts with the prod stack.
+# Tighter resource limits so staging cannot starve prod.
+#
+# Required env vars (.env.staging on the server):
+#   DB_HANMAUM_DN_NAME, DB_HANMAUM_DN_USER, DB_HANMAUM_DN_SECRET
+#   DB_HANMAUM_DN_URL              — e.g. jdbc:postgresql://hanmaumApp-db-staging:5432
+#   KEYCLOAK_REALM                 — staging realm name, e.g. hanmaum-st
+#   BACKEND_IMAGE_STAGING          — set by CI: ghcr.io/sjinkim/hanmaum-dn-server:sha-<short>
+#   STAGING_API_DOMAIN             — public staging API hostname, e.g. api.staging.graceops.de
+#   APP_SECURITY_KEYCLOAK_PUBLIC_ISSUER — https://auth.graceops.de/realms/<staging-realm>
+#
+# Usage:
+#   docker compose --project-name hanmaum-staging \
+#     --env-file .env.staging \
+#     -f docker-compose.staging.yml up -d
+
+services:
+  hanmaumApp-db-staging:
+    image: postgres:16-alpine
+    container_name: hanmaumApp-db-staging
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_HANMAUM_DN_NAME}
+      POSTGRES_USER: ${DB_HANMAUM_DN_USER}
+      POSTGRES_PASSWORD: ${DB_HANMAUM_DN_SECRET}
+    volumes:
+      - postgres_data_staging:/var/lib/postgresql/data
+      - ./infrastructure/postgres-init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    networks:
+      - staging-internal
+
+  backend-staging:
+    image: ${BACKEND_IMAGE_STAGING:-ghcr.io/sjinkim/hanmaum-dn-server:staging}
+    container_name: hanmaumApp-backend-staging
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: ${DB_HANMAUM_DN_URL}/${DB_HANMAUM_DN_NAME}
+      SPRING_DATASOURCE_USERNAME: ${DB_HANMAUM_DN_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_HANMAUM_DN_SECRET}
+      SPRING_FLYWAY_ENABLED: "true"
+      # Keycloak is shared with prod — staging uses its own realm on the same instance.
+      # hanmaumApp-keycloak is reachable via the caddy-proxy network.
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://hanmaumApp-keycloak:8090/realms/${KEYCLOAK_REALM}/protocol/openid-connect/certs
+      KEYCLOAK_AUTH_SERVER_URL: http://hanmaumApp-keycloak:8090
+    env_file:
+      - path: .env.staging
+        required: false
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      hanmaumApp-db-staging:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    networks:
+      - staging-internal
+      - caddy-proxy
+
+networks:
+  staging-internal:
+    driver: bridge
+  caddy-proxy:
+    external: true
+
+volumes:
+  postgres_data_staging:

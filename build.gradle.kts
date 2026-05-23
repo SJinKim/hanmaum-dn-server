@@ -36,6 +36,8 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("tools.jackson.module:jackson-module-kotlin")
 
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+
     // Auth & Utils
     implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
     // Liest .env Dateien und macht sie als Spring Properties verfügbar
