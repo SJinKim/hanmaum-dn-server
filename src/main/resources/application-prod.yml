@@ -16,6 +16,8 @@ logging:
     root: INFO
 
 app:
+  cors:
+    allowed-origins: "https://dn-admin-dashboard.graceops.de,https://dn-admin-dashboard.st.graceops.de"
   keycloak:
     server-url_docker: ${KEYCLOAK_AUTH_SERVER_URL:http://hanmaumApp-keycloak:8090}
     realm: ${KEYCLOAK_REALM}
