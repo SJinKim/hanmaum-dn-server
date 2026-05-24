@@ -40,6 +40,8 @@ class SecurityConfig(
     // Default covers local dev. Set APP_SECURITY_KEYCLOAK_PUBLIC_ISSUER in .env for each environment.
     @Value("\${app.security.keycloak-public-issuer:http://localhost:8091/realms/hanmaum}")
     private val keycloakPublicIssuer: String,
+    @Value("\${app.cors.allowed-origins:http://localhost:4200,http://localhost}")
+    private val allowedOrigins: List<String>,
 ) {
     @Bean
     fun filterChain(http: HttpSecurity): SecurityFilterChain {
@@ -148,8 +150,8 @@ class SecurityConfig(
     fun corsConfigurationSource(): CorsConfigurationSource {
         val configuration = CorsConfiguration()
 
-        // Wer darf anfragen? (Angular + Mobile Localhost)
-        configuration.allowedOrigins = listOf("http://localhost:4200", "http://localhost")
+        // Wer darf anfragen? Configured via app.cors.allowed-origins per profile
+        configuration.allowedOrigins = allowedOrigins
 
         // Was dürfen sie tun? (Alles)
         configuration.allowedMethods = listOf("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
