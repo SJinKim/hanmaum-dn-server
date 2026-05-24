@@ -1,11 +1,5 @@
 # === PRODUKTION (LIVE SERVER) ===
 spring:
-  datasource:
-    # Die echten Server-Daten werden beim Start als ENV-Variablen übergeben
-    url: ${PROD_DB_URL}
-    username: ${PROD_DB_USER}
-    password: ${PROD_DB_PASSWORD}
-
   jpa:
     show-sql: false # SQL ausblenden (spart extrem viel Server-Leistung!)
     hibernate:
@@ -15,9 +9,15 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          # Echte, öffentliche HTTPS-URL deines Keycloaks
-          jwk-set-uri: https://auth.deinedomain.com/realms/hanmaum/protocol/openid-connect/certs
+          jwk-set-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI}
 
 logging:
   level:
-    root: INFO # Keine Debug-Logs in Produktion
+    root: INFO
+
+app:
+  keycloak:
+    server-url_docker: ${KEYCLOAK_AUTH_SERVER_URL:http://hanmaumApp-keycloak:8090}
+    realm: ${KEYCLOAK_REALM}
+    admin-client-id: ${KEYCLOAK_BACKEND_CLIENT_ID}
+    admin-client-secret: ${KEYCLOAK_BACKEND_CLIENT_SECRET}

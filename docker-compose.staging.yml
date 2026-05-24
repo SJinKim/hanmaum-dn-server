@@ -8,6 +8,8 @@
 #   DB_HANMAUM_DN_NAME, DB_HANMAUM_DN_USER, DB_HANMAUM_DN_SECRET
 #   DB_HANMAUM_DN_URL              — e.g. jdbc:postgresql://hanmaumApp-db-staging:5432
 #   KEYCLOAK_REALM                 — staging realm name, e.g. hanmaum-st
+#   KEYCLOAK_BACKEND_CLIENT_ID     — backend service account client ID
+#   KEYCLOAK_BACKEND_CLIENT_SECRET — backend service account client secret
 #   BACKEND_IMAGE_STAGING          — set by CI: ghcr.io/sjinkim/hanmaum-dn-server:sha-<short>
 #   STAGING_API_DOMAIN             — public staging API hostname, e.g. api.staging.graceops.de
 #   APP_SECURITY_KEYCLOAK_PUBLIC_ISSUER — https://auth.graceops.de/realms/<staging-realm>
@@ -46,6 +48,7 @@ services:
     container_name: hanmaumApp-backend-staging
     restart: unless-stopped
     environment:
+      SPRING_PROFILES_ACTIVE: "prod"
       SPRING_DATASOURCE_URL: ${DB_HANMAUM_DN_URL}/${DB_HANMAUM_DN_NAME}
       SPRING_DATASOURCE_USERNAME: ${DB_HANMAUM_DN_USER}
       SPRING_DATASOURCE_PASSWORD: ${DB_HANMAUM_DN_SECRET}
