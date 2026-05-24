@@ -81,6 +81,7 @@ services:
     container_name: hanmaumApp-backend
     restart: unless-stopped
     environment:
+      SPRING_PROFILES_ACTIVE: "prod"
       SPRING_DATASOURCE_URL: ${DB_HANMAUM_DN_URL}/${DB_HANMAUM_DN_NAME}
       SPRING_DATASOURCE_USERNAME: ${DB_HANMAUM_DN_USER}
       SPRING_DATASOURCE_PASSWORD: ${DB_HANMAUM_DN_SECRET}
