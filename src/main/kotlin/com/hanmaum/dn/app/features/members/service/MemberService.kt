@@ -15,6 +15,7 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberSummaryDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MinistryHistoryDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.RegisterMemberRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberMinistriesRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberTrainingsRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.SummaryTrainingDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
@@ -23,6 +24,7 @@ import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
 import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
+import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
 import com.hanmaum.dn.app.features.training.api.toDto
 import com.hanmaum.dn.app.features.training.domain.TrainingStatus
 import com.hanmaum.dn.app.features.training.domain.UserTraining
@@ -51,6 +53,7 @@ class MemberService(
     private val userTrainingRepository: UserTrainingRepository,
     private val trainingRepository: TrainingRepository,
     private val ministryAssignmentRepository: MinistryAssignmentRepository,
+    private val ministryRepository: MinistryRepository,
     private val keycloak: Keycloak,
     @Value("\${app.keycloak.realm}") private val realm: String,
 ) {
@@ -173,6 +176,45 @@ class MemberService(
         userTrainingRepository.saveAll(rows)
 
         val trainings = rows.map { it.toDto() }
+        val ministries = ministryAssignmentRepository.findByMemberId(memberId).map { it.toHistoryDto() }
+        return member.toDto(trainings, ministries)
+    }
+
+    /**
+     * Replaces a member's entire ministry assignment set (PUT semantics). Existing
+     * rows are deleted and re-created from the request. Returns refreshed member detail.
+     */
+    @Transactional
+    fun replaceMemberMinistries(
+        publicId: UUID,
+        request: ReplaceMemberMinistriesRequest,
+    ): MemberDto {
+        val member =
+            memberRepository
+                .findByPublicIdAndDeletedAtIsNull(publicId)
+                .orElseThrow { EntityNotFoundException("Member not found: $publicId") }
+        val memberId = member.id!!
+
+        ministryAssignmentRepository.deleteByMemberId(memberId)
+        ministryAssignmentRepository.flush()
+
+        val rows =
+            request.ministries.map { item ->
+                val ministry =
+                    ministryRepository
+                        .findByPublicIdAndDeletedAtIsNull(UUID.fromString(item.ministryPublicId))
+                        .orElseThrow { EntityNotFoundException("Ministry not found: ${item.ministryPublicId}") }
+                MinistryAssignment(
+                    ministry = ministry,
+                    member = member,
+                    startDate = item.startDate,
+                    endDate = item.endDate,
+                    note = item.note,
+                )
+            }
+        ministryAssignmentRepository.saveAll(rows)
+
+        val trainings = userTrainingRepository.findByMemberId(memberId).map { it.toDto() }
         val ministries = ministryAssignmentRepository.findByMemberId(memberId).map { it.toHistoryDto() }
         return member.toDto(trainings, ministries)
     }

@@ -4,12 +4,16 @@ import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.MemberMinistryItem
 import com.hanmaum.dn.app.features.members.api.v1.dto.RegisterMemberRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberMinistriesRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.ministry.domain.Ministry
 import com.hanmaum.dn.app.features.ministry.repository.MemberMinistryView
 import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
+import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
 import com.hanmaum.dn.app.features.training.repository.TrainingRepository
 import com.hanmaum.dn.app.features.training.repository.UserTrainingRepository
 import jakarta.persistence.EntityNotFoundException
@@ -36,6 +40,7 @@ import org.mockito.kotlin.anyOrNull
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
 import org.springframework.web.server.ResponseStatusException
+import java.time.LocalDate
 import java.util.Optional
 import java.util.UUID
 
@@ -50,6 +55,8 @@ class MemberServiceTest {
     @Mock private lateinit var trainingRepository: TrainingRepository
 
     @Mock private lateinit var ministryAssignmentRepository: MinistryAssignmentRepository
+
+    @Mock private lateinit var ministryRepository: MinistryRepository
 
     @Mock private lateinit var keycloak: Keycloak
 
@@ -70,6 +77,7 @@ class MemberServiceTest {
                 userTrainingRepository,
                 trainingRepository,
                 ministryAssignmentRepository,
+                ministryRepository,
                 keycloak,
                 "test-realm",
             )
@@ -138,6 +146,46 @@ class MemberServiceTest {
 
         assertEquals(member.publicId.toString(), result.publicId)
         assertEquals(member.firstName, result.firstName)
+    }
+
+    // --- replaceMemberMinistries ---
+
+    @Test
+    fun `replaceMemberMinistries deletes existing then inserts from request`() {
+        val member = memberWithId(42L)
+        val ministry =
+            Ministry(
+                name = "찬양팀",
+                shortDescription = "찬양 사역팀",
+            ).also { it.id = 1L }
+
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
+        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId))
+            .thenReturn(Optional.of(ministry))
+        `when`(userTrainingRepository.findByMemberId(42L)).thenReturn(emptyList())
+        `when`(ministryAssignmentRepository.findByMemberId(42L)).thenReturn(emptyList())
+        `when`(ministryAssignmentRepository.saveAll(any<List<com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment>>()))
+            .thenAnswer { it.arguments[0] }
+
+        val request =
+            ReplaceMemberMinistriesRequest(
+                listOf(
+                    MemberMinistryItem(
+                        ministryPublicId = ministry.publicId.toString(),
+                        startDate = LocalDate.of(2024, 3, 1),
+                        endDate = null,
+                        note = "악기",
+                    ),
+                ),
+            )
+
+        val result = memberService.replaceMemberMinistries(member.publicId, request)
+
+        verify(ministryAssignmentRepository).deleteByMemberId(42L)
+        verify(ministryAssignmentRepository).flush()
+        verify(ministryAssignmentRepository).saveAll(any<List<com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment>>())
+        assertEquals(member.publicId.toString(), result.publicId)
     }
 
     // --- getMembers ---
