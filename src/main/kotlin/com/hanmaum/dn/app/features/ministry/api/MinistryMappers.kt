@@ -5,10 +5,8 @@ import com.hanmaum.dn.app.features.ministry.api.v1.dto.CreateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.LeaderDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistrySummaryDto
-import com.hanmaum.dn.app.features.ministry.api.v1.dto.RegistrationDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.domain.Ministry
-import com.hanmaum.dn.app.features.ministry.domain.MinistryRegistration
 
 // ─── Entity creation ──────────────────────────────────────────────────────────
 
@@ -76,15 +74,4 @@ fun Member.toLeaderDto(): LeaderDto =
     LeaderDto(
         publicId = this.publicId.toString(),
         fullName = "${this.lastName}${this.firstName}",
-    )
-
-fun MinistryRegistration.toDto(): RegistrationDto =
-    RegistrationDto(
-        publicId = this.publicId.toString(),
-        ministryPublicId = this.ministry.publicId.toString(),
-        memberPublicId = this.member.publicId.toString(),
-        memberName = "${this.member.lastName}${this.member.firstName}",
-        registrationPeriod = this.registrationPeriod,
-        note = this.note,
-        status = this.status.name,
     )

@@ -7,29 +7,20 @@ import com.hanmaum.dn.app.features.ministry.api.toDto
 import com.hanmaum.dn.app.features.ministry.api.toEntity
 import com.hanmaum.dn.app.features.ministry.api.toSummaryDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.CreateMinistryRequest
-import com.hanmaum.dn.app.features.ministry.api.v1.dto.CreateRegistrationRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistrySummaryDto
-import com.hanmaum.dn.app.features.ministry.api.v1.dto.RegistrationDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateMinistryRequest
-import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateRegistrationStatusRequest
-import com.hanmaum.dn.app.features.ministry.domain.MinistryRegistration
-import com.hanmaum.dn.app.features.ministry.domain.RegistrationStatus
-import com.hanmaum.dn.app.features.ministry.repository.MinistryRegistrationRepository
 import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
 import jakarta.persistence.EntityNotFoundException
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
-import java.time.Instant
-import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 @Service
 class MinistryService(
     private val ministryRepository: MinistryRepository,
-    private val ministryRegistrationRepository: MinistryRegistrationRepository,
     private val memberRepository: MemberRepository,
 ) {
     // ─── Ministry CRUD ─────────────────────────────────────────────────────────
@@ -113,184 +104,6 @@ class MinistryService(
                 .findByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow { EntityNotFoundException("Ministry not found: $publicId") }
         ministry.isMinistryActive = false
-    }
-
-    // ─── Registration ──────────────────────────────────────────────────────────
-
-    @Transactional
-    fun registerSelf(
-        ministryPublicId: UUID,
-        keycloakSubject: String,
-        req: CreateRegistrationRequest,
-    ): RegistrationDto {
-        val ministry =
-            ministryRepository
-                .findByPublicIdAndDeletedAtIsNull(ministryPublicId)
-                .orElseThrow { EntityNotFoundException("Ministry not found: $ministryPublicId") }
-
-        if (!ministry.isMinistryActive) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "비활성 부서에는 신청할 수 없습니다.")
-        }
-
-        val member =
-            memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSubject)
-                ?: throw EntityNotFoundException("Member not found for subject: $keycloakSubject")
-
-        val existing =
-            ministryRegistrationRepository.findByMinistryIdAndMemberIdAndPeriod(
-                ministry.id!!,
-                member.id!!,
-                req.period,
-            )
-
-        if (existing.isPresent) {
-            val existingReg = existing.get()
-            when (existingReg.status) {
-                RegistrationStatus.REJECTED -> {
-                    // Soft-delete the rejected record so re-apply can proceed
-                    val now = Instant.now()
-                    existingReg.deletedAt = now
-                    existingReg.deleteEntryAt = now.plus(30, ChronoUnit.DAYS)
-                    ministryRegistrationRepository.flush()
-                }
-
-                else -> throw ResponseStatusException(HttpStatus.CONFLICT, "이미 해당 기간에 신청되어 있습니다.")
-            }
-        }
-
-        val registration =
-            ministryRegistrationRepository.save(
-                MinistryRegistration(
-                    ministry = ministry,
-                    member = member,
-                    registrationPeriod = req.period,
-                    note = req.note,
-                ),
-            )
-        return registration.toDto()
-    }
-
-    /**
-     * List registrations for a ministry. ADMIN only.
-     *
-     * @throws EntityNotFoundException if ministry not found
-     */
-    @Transactional(readOnly = true)
-    fun getRegistrations(
-        ministryPublicId: UUID,
-        period: String?,
-    ): List<RegistrationDto> {
-        val ministry =
-            ministryRepository
-                .findByPublicIdAndDeletedAtIsNull(ministryPublicId)
-                .orElseThrow { EntityNotFoundException("Ministry not found: $ministryPublicId") }
-        return ministryRegistrationRepository
-            .findByMinistryId(ministry.id!!, period)
-            .map { it.toDto() }
-    }
-
-    /**
-     * Return the calling member's own registration for a ministry in [period].
-     * Returns null if no non-deleted record exists.
-     *
-     * @throws EntityNotFoundException if ministry or member not found
-     */
-    @Transactional(readOnly = true)
-    fun getMyRegistration(
-        ministryPublicId: UUID,
-        keycloakSubject: String,
-        period: String,
-    ): RegistrationDto? {
-        val ministry =
-            ministryRepository
-                .findByPublicIdAndDeletedAtIsNull(ministryPublicId)
-                .orElseThrow { EntityNotFoundException("Ministry not found: $ministryPublicId") }
-
-        val member =
-            memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSubject)
-                ?: throw EntityNotFoundException("Member not found for subject: $keycloakSubject")
-
-        return ministryRegistrationRepository
-            .findByMinistryIdAndMemberIdAndPeriod(ministry.id!!, member.id!!, period)
-            .map { it.toDto() }
-            .orElse(null)
-    }
-
-    /**
-     * Admin: approve or reject a registration. Only PENDING → APPROVED/REJECTED allowed.
-     *
-     * @throws EntityNotFoundException  if ministry or registration not found
-     * @throws ResponseStatusException  400 if status value is invalid
-     * @throws ResponseStatusException  409 if registration is not in PENDING state
-     */
-    @Transactional
-    fun approveOrRejectRegistration(
-        ministryPublicId: UUID,
-        regPublicId: UUID,
-        req: UpdateRegistrationStatusRequest,
-    ): RegistrationDto {
-        ministryRepository
-            .findByPublicIdAndDeletedAtIsNull(ministryPublicId)
-            .orElseThrow { EntityNotFoundException("Ministry not found: $ministryPublicId") }
-
-        val registration =
-            ministryRegistrationRepository
-                .findByPublicIdAndDeletedAtIsNull(regPublicId)
-                .orElseThrow { EntityNotFoundException("Registration not found: $regPublicId") }
-
-        if (registration.status != RegistrationStatus.PENDING) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "PENDING 상태인 신청만 처리할 수 있습니다.")
-        }
-
-        val newStatus =
-            try {
-                RegistrationStatus.valueOf(req.status)
-            } catch (e: IllegalArgumentException) {
-                throw ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 상태값: ${req.status}")
-            }
-
-        if (newStatus == RegistrationStatus.PENDING) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "PENDING으로 변경할 수 없습니다.")
-        }
-
-        registration.status = newStatus
-        return registration.toDto()
-    }
-
-    /**
-     * Withdraw a registration. Member can only withdraw their own.
-     *
-     * @throws EntityNotFoundException  if ministry or registration not found
-     * @throws ResponseStatusException  403 if registration belongs to a different member
-     */
-    @Transactional
-    fun withdrawRegistration(
-        ministryPublicId: UUID,
-        regPublicId: UUID,
-        keycloakSubject: String,
-    ) {
-        // Verify ministry exists
-        ministryRepository
-            .findByPublicIdAndDeletedAtIsNull(ministryPublicId)
-            .orElseThrow { EntityNotFoundException("Ministry not found: $ministryPublicId") }
-
-        val registration =
-            ministryRegistrationRepository
-                .findByPublicIdAndDeletedAtIsNull(regPublicId)
-                .orElseThrow { EntityNotFoundException("Registration not found: $regPublicId") }
-
-        val callingMember =
-            memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSubject)
-                ?: throw EntityNotFoundException("Member not found for subject: $keycloakSubject")
-
-        if (registration.member.id != callingMember.id) {
-            throw ResponseStatusException(HttpStatus.FORBIDDEN, "본인의 등록만 취소할 수 있습니다.")
-        }
-
-        // Soft delete — deleteEntryAt schedules hard-delete after 30 days via cron job
-        val now = Instant.now()
-        registration.deletedAt = now
-        registration.deleteEntryAt = now.plus(30, ChronoUnit.DAYS)
     }
 
     // ─── Private helpers ───────────────────────────────────────────────────────
