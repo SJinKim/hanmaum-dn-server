@@ -195,6 +195,8 @@ class MemberService(
                 .orElseThrow { EntityNotFoundException("Member not found: $publicId") }
         val memberId = member.id!!
 
+        // Flush the delete before re-inserting so Hibernate doesn't reorder the new
+        // inserts ahead of the delete (mirrors replaceMemberTrainings).
         ministryAssignmentRepository.deleteByMemberId(memberId)
         ministryAssignmentRepository.flush()
 
@@ -214,6 +216,7 @@ class MemberService(
             }
         ministryAssignmentRepository.saveAll(rows)
 
+        // Re-read both lists from the DB so the returned detail reflects persisted state.
         val trainings = userTrainingRepository.findByMemberId(memberId).map { it.toDto() }
         val ministries = ministryAssignmentRepository.findByMemberId(memberId).map { it.toHistoryDto() }
         return member.toDto(trainings, ministries)

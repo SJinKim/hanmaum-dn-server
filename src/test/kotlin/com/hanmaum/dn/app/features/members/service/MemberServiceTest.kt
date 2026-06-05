@@ -11,6 +11,7 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.ministry.domain.Ministry
+import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
 import com.hanmaum.dn.app.features.ministry.repository.MemberMinistryView
 import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
 import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
@@ -165,7 +166,7 @@ class MemberServiceTest {
             .thenReturn(Optional.of(ministry))
         `when`(userTrainingRepository.findByMemberId(42L)).thenReturn(emptyList())
         `when`(ministryAssignmentRepository.findByMemberId(42L)).thenReturn(emptyList())
-        `when`(ministryAssignmentRepository.saveAll(any<List<com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment>>()))
+        `when`(ministryAssignmentRepository.saveAll(any<List<MinistryAssignment>>()))
             .thenAnswer { it.arguments[0] }
 
         val request =
@@ -184,7 +185,7 @@ class MemberServiceTest {
 
         verify(ministryAssignmentRepository).deleteByMemberId(42L)
         verify(ministryAssignmentRepository).flush()
-        verify(ministryAssignmentRepository).saveAll(any<List<com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment>>())
+        verify(ministryAssignmentRepository).saveAll(any<List<MinistryAssignment>>())
         assertEquals(member.publicId.toString(), result.publicId)
     }
 
