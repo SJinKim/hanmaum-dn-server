@@ -8,6 +8,9 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.RegisterMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.ministry.repository.MinistryRegistrationRepository
+import com.hanmaum.dn.app.features.training.repository.TrainingRepository
+import com.hanmaum.dn.app.features.training.repository.UserTrainingRepository
 import jakarta.persistence.EntityNotFoundException
 import jakarta.ws.rs.core.Response
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -41,6 +44,12 @@ class MemberServiceTest {
 
     @Mock private lateinit var churchGroupRepository: ChurchGroupRepository
 
+    @Mock private lateinit var userTrainingRepository: UserTrainingRepository
+
+    @Mock private lateinit var trainingRepository: TrainingRepository
+
+    @Mock private lateinit var ministryRegistrationRepository: MinistryRegistrationRepository
+
     @Mock private lateinit var keycloak: Keycloak
 
     @Mock private lateinit var realmResource: RealmResource
@@ -53,7 +62,16 @@ class MemberServiceTest {
 
     @BeforeEach
     fun setUp() {
-        memberService = MemberService(memberRepository, churchGroupRepository, keycloak, "test-realm")
+        memberService =
+            MemberService(
+                memberRepository,
+                churchGroupRepository,
+                userTrainingRepository,
+                trainingRepository,
+                ministryRegistrationRepository,
+                keycloak,
+                "test-realm",
+            )
     }
 
     private fun memberWithId(

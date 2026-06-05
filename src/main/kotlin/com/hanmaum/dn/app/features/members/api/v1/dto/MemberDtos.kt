@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.members.api.v1.dto
 
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
+import jakarta.validation.Valid
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
@@ -31,6 +32,10 @@ data class MemberDto(
     val churchRole: String? = null,
     val groupName: String? = null,
     val profileImageUrl: String? = null,
+    /** Full training history, ordered by training sort order. */
+    val trainings: List<UserTrainingDto> = emptyList(),
+    /** Full ministry history, most recent registration period first. */
+    val ministries: List<MinistryHistoryDto> = emptyList(),
 )
 
 /** Lightweight DTO used in the paginated list endpoint. */
@@ -43,6 +48,34 @@ data class MemberSummaryDto(
     val baptism: String? = null,
     val groupName: String? = null,
     val updatedAt: Instant? = null,
+    /** Name of the member's latest completed training (highest sort order), or null. */
+    val latestTraining: String? = null,
+    /** All of the member's trainings, ordered by progression — rendered as chips in the grid. */
+    val trainings: List<SummaryTrainingDto> = emptyList(),
+    /** Name of the member's active ministry (latest APPROVED registration), or null. */
+    val activeMinistry: String? = null,
+)
+
+/** A member's training as shown on the grid chip: catalog name + status (IN_PROGRESS | COMPLETED). */
+data class SummaryTrainingDto(
+    val name: String,
+    val status: String,
+)
+
+/** A single training entry in a member's history. */
+data class UserTrainingDto(
+    val trainingPublicId: String,
+    val name: String,
+    val status: String,
+    val completedAt: LocalDate? = null,
+)
+
+/** A single ministry registration in a member's history. */
+data class MinistryHistoryDto(
+    val ministryPublicId: String,
+    val name: String,
+    val registrationPeriod: String,
+    val status: String,
 )
 
 /**
@@ -140,4 +173,21 @@ data class UpdateMyProfileRequest(
     @field:Size(max = 50)
     val phoneNumber: String? = null,
     val profileImageUrl: String? = null,
+)
+
+/**
+ * PUT /members/{publicId}/trainings — replaces the member's entire training set.
+ * Each item references a training by its publicId; status is IN_PROGRESS | COMPLETED.
+ */
+data class ReplaceMemberTrainingsRequest(
+    @field:Valid
+    val trainings: List<MemberTrainingItem> = emptyList(),
+)
+
+data class MemberTrainingItem(
+    @field:NotBlank(message = "trainingPublicId는 필수입니다.")
+    val trainingPublicId: String,
+    @field:NotBlank(message = "status는 필수입니다.")
+    val status: String,
+    val completedAt: LocalDate? = null,
 )
