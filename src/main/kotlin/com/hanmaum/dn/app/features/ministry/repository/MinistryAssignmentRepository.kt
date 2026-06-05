@@ -1,6 +1,6 @@
 package com.hanmaum.dn.app.features.ministry.repository
 
-import com.hanmaum.dn.app.features.ministry.domain.MinistryRegistration
+import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
@@ -10,48 +10,53 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 
 @Repository
-interface MinistryRegistrationRepository : JpaRepository<MinistryRegistration, Long> {
+interface MinistryAssignmentRepository : JpaRepository<MinistryAssignment, Long> {
     /** A member's full ministry history across all ministries (for the detail view). */
     @Query(
         """
-        SELECT r FROM MinistryRegistration r
-        JOIN FETCH r.ministry
-        WHERE r.member.id = :memberId
-          AND r.deletedAt IS NULL
-        ORDER BY r.registrationPeriod DESC, r.createdAt DESC
+        SELECT a FROM MinistryAssignment a
+        JOIN FETCH a.ministry
+        WHERE a.member.id = :memberId
+          AND a.deletedAt IS NULL
+        ORDER BY a.startDate DESC, a.createdAt DESC
         """,
     )
     fun findByMemberId(
         @Param("memberId") memberId: Long,
-    ): List<MinistryRegistration>
+    ): List<MinistryAssignment>
 
     /**
-     * All APPROVED registrations for the given members, projected flat.
-     * The service reduces these to the most recent registrationPeriod per member
-     * to derive the "active ministry" shown in the grid.
+     * All active assignments (endDate IS NULL) for the given members, projected flat.
      */
     @Query(
         """
         SELECT new com.hanmaum.dn.app.features.ministry.repository.MemberMinistryView(
-            r.member.id, r.ministry.name, r.registrationPeriod
+            a.member.id, a.ministry.name
         )
-        FROM MinistryRegistration r
-        WHERE r.member.id IN :memberIds
-          AND r.deletedAt IS NULL
-          AND r.status = com.hanmaum.dn.app.features.ministry.domain.RegistrationStatus.APPROVED
+        FROM MinistryAssignment a
+        WHERE a.member.id IN :memberIds
+          AND a.deletedAt IS NULL
+          AND a.endDate IS NULL
         """,
     )
-    fun findApprovedByMemberIds(
+    fun findActiveByMemberIds(
         @Param("memberIds") memberIds: Collection<Long>,
     ): List<MemberMinistryView>
+
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM MinistryAssignment a WHERE a.member.id = :memberId")
+    fun deleteByMemberId(
+        @Param("memberId") memberId: Long,
+    )
 
     @Modifying(clearAutomatically = true)
     @Transactional
     @Query(
         """
-        DELETE FROM MinistryRegistration r
-        WHERE r.deleteEntryAt <= :now
-          AND r.deletedAt IS NOT NULL
+        DELETE FROM MinistryAssignment a
+        WHERE a.deleteEntryAt <= :now
+          AND a.deletedAt IS NOT NULL
         """,
     )
     fun hardDeleteExpired(

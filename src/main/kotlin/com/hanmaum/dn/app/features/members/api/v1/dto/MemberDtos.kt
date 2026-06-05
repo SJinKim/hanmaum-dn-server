@@ -52,8 +52,8 @@ data class MemberSummaryDto(
     val latestTraining: String? = null,
     /** All of the member's trainings, ordered by progression — rendered as chips in the grid. */
     val trainings: List<SummaryTrainingDto> = emptyList(),
-    /** Name of the member's active ministry (latest APPROVED registration), or null. */
-    val activeMinistry: String? = null,
+    /** Names of the member's currently-active ministry assignments (end_date IS NULL), sorted. */
+    val activeMinistries: List<String> = emptyList(),
 )
 
 /** A member's training as shown on the grid chip: catalog name + status (IN_PROGRESS | COMPLETED). */
@@ -70,12 +70,13 @@ data class UserTrainingDto(
     val completedAt: LocalDate? = null,
 )
 
-/** A single ministry registration in a member's history. */
+/** A single ministry assignment in a member's history. */
 data class MinistryHistoryDto(
     val ministryPublicId: String,
     val name: String,
-    val registrationPeriod: String,
-    val status: String,
+    val startDate: LocalDate,
+    val endDate: LocalDate? = null,
+    val note: String? = null,
 )
 
 /**
@@ -190,4 +191,23 @@ data class MemberTrainingItem(
     @field:NotBlank(message = "status는 필수입니다.")
     val status: String,
     val completedAt: LocalDate? = null,
+)
+
+/**
+ * PUT /members/{publicId}/ministries — replaces the member's entire assignment set.
+ * Each item references a ministry by its publicId, with a start month/year and an
+ * optional end (null = ongoing/active).
+ */
+data class ReplaceMemberMinistriesRequest(
+    @field:Valid
+    val ministries: List<MemberMinistryItem> = emptyList(),
+)
+
+data class MemberMinistryItem(
+    @field:NotBlank(message = "ministryPublicId는 필수입니다.")
+    val ministryPublicId: String,
+    val startDate: LocalDate,
+    val endDate: LocalDate? = null,
+    @field:Size(max = 500, message = "비고는 최대 500자입니다.")
+    val note: String? = null,
 )

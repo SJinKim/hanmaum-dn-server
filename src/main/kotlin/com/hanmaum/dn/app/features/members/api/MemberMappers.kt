@@ -138,13 +138,13 @@ fun Member.toDto(
     )
 
 /**
- * Lightweight list DTO. [latestTraining] / [trainings] / [activeMinistry] are derived per page
+ * Lightweight list DTO. [latestTraining] / [trainings] / [activeMinistries] are derived per page
  * by the service (batched, no N+1) and passed in here.
  */
 fun Member.toSummaryDto(
     latestTraining: String? = null,
     trainings: List<SummaryTrainingDto> = emptyList(),
-    activeMinistry: String? = null,
+    activeMinistries: List<String> = emptyList(),
 ): MemberSummaryDto =
     MemberSummaryDto(
         publicId = this.publicId.toString(),
@@ -157,7 +157,7 @@ fun Member.toSummaryDto(
         updatedAt = this.updatedAt,
         latestTraining = latestTraining,
         trainings = trainings,
-        activeMinistry = activeMinistry,
+        activeMinistries = activeMinistries,
     )
 
 fun Member.toResponse(): MemberResponse =

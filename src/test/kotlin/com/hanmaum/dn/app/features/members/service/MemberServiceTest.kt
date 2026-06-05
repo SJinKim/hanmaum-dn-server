@@ -8,7 +8,8 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.RegisterMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
-import com.hanmaum.dn.app.features.ministry.repository.MinistryRegistrationRepository
+import com.hanmaum.dn.app.features.ministry.repository.MemberMinistryView
+import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
 import com.hanmaum.dn.app.features.training.repository.TrainingRepository
 import com.hanmaum.dn.app.features.training.repository.UserTrainingRepository
 import jakarta.persistence.EntityNotFoundException
@@ -48,7 +49,7 @@ class MemberServiceTest {
 
     @Mock private lateinit var trainingRepository: TrainingRepository
 
-    @Mock private lateinit var ministryRegistrationRepository: MinistryRegistrationRepository
+    @Mock private lateinit var ministryAssignmentRepository: MinistryAssignmentRepository
 
     @Mock private lateinit var keycloak: Keycloak
 
@@ -68,7 +69,7 @@ class MemberServiceTest {
                 churchGroupRepository,
                 userTrainingRepository,
                 trainingRepository,
-                ministryRegistrationRepository,
+                ministryAssignmentRepository,
                 keycloak,
                 "test-realm",
             )
@@ -150,6 +151,20 @@ class MemberServiceTest {
         val result = memberService.getMembers(null, null, null, 0, 20)
 
         assertEquals(2, result.totalElements)
+    }
+
+    @Test
+    fun `getMembers maps multiple active ministries sorted for a member`() {
+        val member = memberWithId(1L)
+        `when`(memberRepository.findActiveMembers(anyOrNull(), anyOrNull(), anyOrNull(), any<Pageable>()))
+            .thenReturn(PageImpl(listOf(member)))
+        `when`(ministryAssignmentRepository.findActiveByMemberIds(listOf(1L)))
+            .thenReturn(listOf(MemberMinistryView(1L, "미디어팀"), MemberMinistryView(1L, "찬양팀")))
+
+        val result = memberService.getMembers(null, null, null, 0, 20)
+
+        val summary = result.content.single()
+        assertEquals(listOf("미디어팀", "찬양팀"), summary.activeMinistries)
     }
 
     // --- createMember ---

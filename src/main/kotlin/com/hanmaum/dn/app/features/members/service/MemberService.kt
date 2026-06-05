@@ -21,8 +21,8 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMyProfileRequest
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
-import com.hanmaum.dn.app.features.ministry.domain.MinistryRegistration
-import com.hanmaum.dn.app.features.ministry.repository.MinistryRegistrationRepository
+import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
+import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
 import com.hanmaum.dn.app.features.training.api.toDto
 import com.hanmaum.dn.app.features.training.domain.TrainingStatus
 import com.hanmaum.dn.app.features.training.domain.UserTraining
@@ -50,7 +50,7 @@ class MemberService(
     private val churchGroupRepository: ChurchGroupRepository,
     private val userTrainingRepository: UserTrainingRepository,
     private val trainingRepository: TrainingRepository,
-    private val ministryRegistrationRepository: MinistryRegistrationRepository,
+    private val ministryAssignmentRepository: MinistryAssignmentRepository,
     private val keycloak: Keycloak,
     @Value("\${app.keycloak.realm}") private val realm: String,
 ) {
@@ -81,7 +81,7 @@ class MemberService(
         // Enrich the page in batch queries (no N+1):
         //  - all trainings (with status) per member = grid chips, ordered by progression
         //  - latest completed training               = highest sort_order among COMPLETED chips
-        //  - active ministry                         = most recent registration_period among APPROVED rows
+        //  - active ministries                       = ministry names where end_date IS NULL
         val memberIds = members.content.mapNotNull { it.id }
         val trainingsByMember: Map<Long, List<SummaryTrainingDto>> =
             if (memberIds.isEmpty()) {
@@ -101,21 +101,21 @@ class MemberService(
                 .mapNotNull { (memberId, rows) ->
                     rows.lastOrNull { it.status == TrainingStatus.COMPLETED.name }?.let { memberId to it.name }
                 }.toMap()
-        val activeMinistryByMember: Map<Long, String> =
+        val activeMinistriesByMember: Map<Long, List<String>> =
             if (memberIds.isEmpty()) {
                 emptyMap()
             } else {
-                ministryRegistrationRepository
-                    .findApprovedByMemberIds(memberIds)
+                ministryAssignmentRepository
+                    .findActiveByMemberIds(memberIds)
                     .groupBy { it.memberId }
-                    .mapValues { (_, rows) -> rows.maxBy { it.registrationPeriod }.ministryName }
+                    .mapValues { (_, rows) -> rows.map { it.ministryName }.sorted() }
             }
 
         return members.map {
             it.toSummaryDto(
                 latestTraining = it.id?.let(latestTrainingByMember::get),
                 trainings = it.id?.let(trainingsByMember::get).orEmpty(),
-                activeMinistry = it.id?.let(activeMinistryByMember::get),
+                activeMinistries = it.id?.let(activeMinistriesByMember::get).orEmpty(),
             )
         }
     }
@@ -128,7 +128,7 @@ class MemberService(
                 .orElseThrow { EntityNotFoundException("Member not found: $publicId") }
         val memberId = member.id!!
         val trainings = userTrainingRepository.findByMemberId(memberId).map { it.toDto() }
-        val ministries = ministryRegistrationRepository.findByMemberId(memberId).map { it.toHistoryDto() }
+        val ministries = ministryAssignmentRepository.findByMemberId(memberId).map { it.toHistoryDto() }
         return member.toDto(trainings, ministries)
     }
 
@@ -173,16 +173,17 @@ class MemberService(
         userTrainingRepository.saveAll(rows)
 
         val trainings = rows.map { it.toDto() }
-        val ministries = ministryRegistrationRepository.findByMemberId(memberId).map { it.toHistoryDto() }
+        val ministries = ministryAssignmentRepository.findByMemberId(memberId).map { it.toHistoryDto() }
         return member.toDto(trainings, ministries)
     }
 
-    private fun MinistryRegistration.toHistoryDto(): MinistryHistoryDto =
+    private fun MinistryAssignment.toHistoryDto(): MinistryHistoryDto =
         MinistryHistoryDto(
             ministryPublicId = this.ministry.publicId.toString(),
             name = this.ministry.name,
-            registrationPeriod = this.registrationPeriod,
-            status = this.status.name,
+            startDate = this.startDate,
+            endDate = this.endDate,
+            note = this.note,
         )
 
     /**
