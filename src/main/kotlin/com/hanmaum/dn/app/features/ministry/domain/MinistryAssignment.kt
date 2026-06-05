@@ -30,7 +30,9 @@ class MinistryAssignment(
     var startDate: LocalDate,
     @Column(name = "end_date")
     var endDate: LocalDate? = null,
-    @Column(columnDefinition = "TEXT", length = 500)
+    // Length is enforced at the API layer (MemberMinistryItem @Size max 500);
+    // columnDefinition wins over `length` in DDL, so we omit the redundant attribute.
+    @Column(columnDefinition = "TEXT")
     var note: String? = null,
 ) : BaseEntity() {
     @Column(name = "delete_entry_at")

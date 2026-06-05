@@ -159,7 +159,8 @@ class MemberServiceTest {
         `when`(memberRepository.findActiveMembers(anyOrNull(), anyOrNull(), anyOrNull(), any<Pageable>()))
             .thenReturn(PageImpl(listOf(member)))
         `when`(ministryAssignmentRepository.findActiveByMemberIds(listOf(1L)))
-            .thenReturn(listOf(MemberMinistryView(1L, "미디어팀"), MemberMinistryView(1L, "찬양팀")))
+            // Returned out of order on purpose so the assertion proves .sorted() runs.
+            .thenReturn(listOf(MemberMinistryView(1L, "찬양팀"), MemberMinistryView(1L, "미디어팀")))
 
         val result = memberService.getMembers(null, null, null, 0, 20)
 

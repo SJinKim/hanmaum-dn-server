@@ -43,7 +43,7 @@ interface MinistryAssignmentRepository : JpaRepository<MinistryAssignment, Long>
         @Param("memberIds") memberIds: Collection<Long>,
     ): List<MemberMinistryView>
 
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Transactional
     @Query("DELETE FROM MinistryAssignment a WHERE a.member.id = :memberId")
     fun deleteByMemberId(
