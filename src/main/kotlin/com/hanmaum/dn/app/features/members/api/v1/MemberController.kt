@@ -28,7 +28,6 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
-import org.springframework.web.server.ResponseStatusException
 import java.util.UUID
 
 @RestController
@@ -145,19 +144,8 @@ class MemberController(
     @PostMapping("/register")
     fun registerMember(
         @Valid @RequestBody request: RegisterMemberRequest,
-    ): ResponseEntity<ApiResponse<Unit>> =
-        try {
-            memberService.registerMember(request)
-            ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(ApiResponse.success(message = "등록이 완료되었습니다."))
-        } catch (e: ResponseStatusException) {
-            ResponseEntity
-                .status(e.statusCode)
-                .body(ApiResponse.error(e.reason ?: e.message ?: "등록 실패"))
-        } catch (e: Exception) {
-            ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error("서버 오류가 발생했습니다."))
-        }
+    ): ResponseEntity<ApiResponse<Unit>> {
+        memberService.registerMember(request)
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(message = "등록이 완료되었습니다."))
+    }
 }
