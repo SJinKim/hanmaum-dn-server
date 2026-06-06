@@ -131,6 +131,7 @@ fun Member.toDto(
         registrationDate = this.registrationDate,
         memberStatus = this.memberStatus.name,
         churchRole = this.churchRole,
+        groupPublicId = this.group?.publicId?.toString(),
         groupName = this.group?.name,
         profileImageUrl = this.profileImageUrl,
         trainings = trainings,

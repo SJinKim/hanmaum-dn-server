@@ -5,9 +5,17 @@ import com.hanmaum.dn.app.features.groups.domain.GroupMeeting
 import com.hanmaum.dn.app.features.groups.domain.MeetingAttendance
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.stereotype.Repository
+import java.util.Optional
+import java.util.UUID
 
 @Repository
-interface ChurchGroupRepository : JpaRepository<ChurchGroup, Long>
+interface ChurchGroupRepository : JpaRepository<ChurchGroup, Long> {
+    /** All non-deleted groups, ordered for display (division, then name). */
+    fun findAllByDeletedAtIsNullOrderByDivisionAscNameAsc(): List<ChurchGroup>
+
+    /** Lookup by external UUID, excluding soft-deleted rows. */
+    fun findByPublicIdAndDeletedAtIsNull(publicId: UUID): Optional<ChurchGroup>
+}
 
 @Repository
 interface GroupMeetingRepository : JpaRepository<GroupMeeting, Long> {

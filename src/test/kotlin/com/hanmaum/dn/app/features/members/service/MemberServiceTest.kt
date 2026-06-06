@@ -30,7 +30,6 @@ import org.keycloak.admin.client.Keycloak
 import org.keycloak.admin.client.resource.RealmResource
 import org.keycloak.admin.client.resource.UsersResource
 import org.keycloak.representations.idm.UserRepresentation
-import org.mockito.ArgumentMatchers.anyLong
 import org.mockito.Mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
@@ -220,21 +219,21 @@ class MemberServiceTest {
     // --- createMember ---
 
     @Test
-    fun `createMember saves member without group when groupId is null`() {
+    fun `createMember saves member without group when groupPublicId is null`() {
         val req = CreateMemberRequest(lastName = "김", firstName = "철수")
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
 
         val result = memberService.createMember(req)
 
         assertNull(result.groupName)
-        verify(churchGroupRepository, never()).findById(anyLong())
+        verify(churchGroupRepository, never()).findByPublicIdAndDeletedAtIsNull(any<UUID>())
     }
 
     @Test
-    fun `createMember assigns group when groupId provided`() {
+    fun `createMember assigns group when groupPublicId provided`() {
         val grp = group(5L, "다니엘조")
-        val req = CreateMemberRequest(lastName = "김", firstName = "철수", groupId = 5L)
-        `when`(churchGroupRepository.findById(5L)).thenReturn(Optional.of(grp))
+        val req = CreateMemberRequest(lastName = "김", firstName = "철수", groupPublicId = grp.publicId.toString())
+        `when`(churchGroupRepository.findByPublicIdAndDeletedAtIsNull(grp.publicId)).thenReturn(Optional.of(grp))
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
 
         val result = memberService.createMember(req)
@@ -244,8 +243,9 @@ class MemberServiceTest {
 
     @Test
     fun `createMember throws EntityNotFoundException when group not found`() {
-        val req = CreateMemberRequest(lastName = "김", firstName = "철수", groupId = 99L)
-        `when`(churchGroupRepository.findById(99L)).thenReturn(Optional.empty())
+        val missingId = UUID.randomUUID()
+        val req = CreateMemberRequest(lastName = "김", firstName = "철수", groupPublicId = missingId.toString())
+        `when`(churchGroupRepository.findByPublicIdAndDeletedAtIsNull(missingId)).thenReturn(Optional.empty())
 
         assertThrows<EntityNotFoundException> { memberService.createMember(req) }
     }
@@ -262,7 +262,7 @@ class MemberServiceTest {
     // --- updateMember ---
 
     @Test
-    fun `updateMember does not call groupRepository when groupId is null`() {
+    fun `updateMember does not call groupRepository when groupPublicId is null`() {
         val member = memberWithId(1L)
         `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
             .thenReturn(Optional.of(member))
@@ -270,23 +270,23 @@ class MemberServiceTest {
 
         memberService.updateMember(
             member.publicId,
-            UpdateMemberRequest(lastName = "김", firstName = "철수", groupId = null),
+            UpdateMemberRequest(lastName = "김", firstName = "철수", groupPublicId = null),
         )
 
-        verify(churchGroupRepository, never()).findById(anyLong())
+        verify(churchGroupRepository, never()).findByPublicIdAndDeletedAtIsNull(any<UUID>())
     }
 
     @Test
-    fun `updateMember updates group when groupId changes`() {
+    fun `updateMember updates group when groupPublicId changes`() {
         val oldGroup = group(1L, "구 그룹")
         val newGroup = group(2L, "새 그룹")
         val member = memberWithId(10L)
         member.group = oldGroup
-        val req = UpdateMemberRequest(lastName = "김", firstName = "철수", groupId = 2L)
+        val req = UpdateMemberRequest(lastName = "김", firstName = "철수", groupPublicId = newGroup.publicId.toString())
 
         `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
             .thenReturn(Optional.of(member))
-        `when`(churchGroupRepository.findById(2L)).thenReturn(Optional.of(newGroup))
+        `when`(churchGroupRepository.findByPublicIdAndDeletedAtIsNull(newGroup.publicId)).thenReturn(Optional.of(newGroup))
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
 
         val result = memberService.updateMember(member.publicId, req)
@@ -295,11 +295,11 @@ class MemberServiceTest {
     }
 
     @Test
-    fun `updateMember does not call groupRepository when groupId is same as current`() {
+    fun `updateMember does not call groupRepository when groupPublicId is same as current`() {
         val grp = group(1L, "기존 그룹")
         val member = memberWithId(10L)
         member.group = grp
-        val req = UpdateMemberRequest(lastName = "김", firstName = "철수", groupId = 1L)
+        val req = UpdateMemberRequest(lastName = "김", firstName = "철수", groupPublicId = grp.publicId.toString())
 
         `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
             .thenReturn(Optional.of(member))
@@ -307,7 +307,7 @@ class MemberServiceTest {
 
         memberService.updateMember(member.publicId, req)
 
-        verify(churchGroupRepository, never()).findById(anyLong())
+        verify(churchGroupRepository, never()).findByPublicIdAndDeletedAtIsNull(any<UUID>())
     }
 
     // --- softDeleteMember ---
