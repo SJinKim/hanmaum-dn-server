@@ -98,7 +98,11 @@ ktlint {
 
 tasks.withType<Test> {
     useJUnitPlatform {
-        excludeTags("integration")
+        // Integration-tagged tests need the Docker stack (Postgres/Keycloak); excluded by
+        // default. Run them with: ./gradlew test -PincludeIntegration
+        if (!project.hasProperty("includeIntegration")) {
+            excludeTags("integration")
+        }
     }
 }
 

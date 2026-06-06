@@ -43,7 +43,11 @@ interface MinistryAssignmentRepository : JpaRepository<MinistryAssignment, Long>
         @Param("memberIds") memberIds: Collection<Long>,
     ): List<MemberMinistryView>
 
-    @Modifying(clearAutomatically = true)
+    // NOTE: deliberately NOT clearAutomatically=true. Clearing the persistence context
+    // here detaches the already-loaded `member` (and its lazy `group`), which made
+    // MemberService.replaceMemberMinistries throw LazyInitializationException when it
+    // built the response DTO. The service flush()es to order this delete before re-inserts.
+    @Modifying
     @Transactional
     @Query("DELETE FROM MinistryAssignment a WHERE a.member.id = :memberId")
     fun deleteByMemberId(
