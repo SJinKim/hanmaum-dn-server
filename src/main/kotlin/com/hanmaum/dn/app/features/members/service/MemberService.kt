@@ -272,11 +272,11 @@ class MemberService(
             }
         }
         val member = request.toEntity()
-        request.groupId?.let { gid ->
+        request.groupPublicId?.let { gpid ->
             member.group =
                 churchGroupRepository
-                    .findById(gid)
-                    .orElseThrow { EntityNotFoundException("Group not found: $gid") }
+                    .findByPublicIdAndDeletedAtIsNull(UUID.fromString(gpid))
+                    .orElseThrow { EntityNotFoundException("Group not found: $gpid") }
         }
         return memberRepository.save(member).toDto()
     }
@@ -293,12 +293,13 @@ class MemberService(
 
         member.applyPatch(request)
 
-        request.groupId?.let { gid ->
-            if (member.group?.id != gid) {
+        request.groupPublicId?.let { gpid ->
+            val groupPublicId = UUID.fromString(gpid)
+            if (member.group?.publicId != groupPublicId) {
                 member.group =
                     churchGroupRepository
-                        .findById(gid)
-                        .orElseThrow { EntityNotFoundException("Group not found: $gid") }
+                        .findByPublicIdAndDeletedAtIsNull(groupPublicId)
+                        .orElseThrow { EntityNotFoundException("Group not found: $gpid") }
             }
         }
         return memberRepository.save(member).toDto()

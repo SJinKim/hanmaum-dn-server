@@ -30,6 +30,8 @@ data class MemberDto(
     val registrationDate: LocalDate? = null,
     val memberStatus: String,
     val churchRole: String? = null,
+    /** publicId of the member's church group, or null. Used to pre-select the group on edit. */
+    val groupPublicId: String? = null,
     val groupName: String? = null,
     val profileImageUrl: String? = null,
     /** Full training history, ordered by training sort order. */
@@ -117,8 +119,8 @@ data class CreateMemberRequest(
     val registrationDate: LocalDate? = null,
     /** Church position/title (직분), not the app access role. */
     val churchRole: String? = null,
-    /** Internal group id — used server-side only, never returned. */
-    val groupId: Long? = null,
+    /** publicId of the church group to assign; null leaves the member ungrouped. */
+    val groupPublicId: String? = null,
     val profileImageUrl: String? = null,
 )
 
@@ -143,7 +145,8 @@ data class UpdateMemberRequest(
     val registrationDate: LocalDate? = null,
     val memberStatus: String? = null,
     val churchRole: String? = null,
-    val groupId: Long? = null,
+    /** publicId of the church group to assign; null leaves the current group unchanged. */
+    val groupPublicId: String? = null,
     val profileImageUrl: String? = null,
 )
 
