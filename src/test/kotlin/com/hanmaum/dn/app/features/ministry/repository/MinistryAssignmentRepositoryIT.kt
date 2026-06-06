@@ -9,9 +9,9 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase
 import org.springframework.test.context.ActiveProfiles
-import org.springframework.transaction.annotation.Transactional
 
 /**
  * Guards against the replace-set delete detaching the member it was loaded with.
@@ -20,10 +20,12 @@ import org.springframework.transaction.annotation.Transactional
  * which clears the whole persistence context. In `MemberService.replaceMemberMinistries`
  * that detached the already-loaded `member`, so building the response DTO threw
  * `LazyInitializationException` when it read the member's lazy `group`.
+ *
+ * JPA slice (no Keycloak/web context); needs the test DB (see -PincludeIntegration).
  */
-@SpringBootTest
+@DataJpaTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
-@Transactional
 @Tag("integration")
 class MinistryAssignmentRepositoryIT {
     @Autowired lateinit var members: MemberRepository
