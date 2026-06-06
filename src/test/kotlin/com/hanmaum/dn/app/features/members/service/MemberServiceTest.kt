@@ -4,10 +4,19 @@ import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.MemberMinistryItem
 import com.hanmaum.dn.app.features.members.api.v1.dto.RegisterMemberRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberMinistriesRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.ministry.domain.Ministry
+import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
+import com.hanmaum.dn.app.features.ministry.repository.MemberMinistryView
+import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
+import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
+import com.hanmaum.dn.app.features.training.repository.TrainingRepository
+import com.hanmaum.dn.app.features.training.repository.UserTrainingRepository
 import jakarta.persistence.EntityNotFoundException
 import jakarta.ws.rs.core.Response
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -32,6 +41,7 @@ import org.mockito.kotlin.anyOrNull
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
 import org.springframework.web.server.ResponseStatusException
+import java.time.LocalDate
 import java.util.Optional
 import java.util.UUID
 
@@ -40,6 +50,14 @@ class MemberServiceTest {
     @Mock private lateinit var memberRepository: MemberRepository
 
     @Mock private lateinit var churchGroupRepository: ChurchGroupRepository
+
+    @Mock private lateinit var userTrainingRepository: UserTrainingRepository
+
+    @Mock private lateinit var trainingRepository: TrainingRepository
+
+    @Mock private lateinit var ministryAssignmentRepository: MinistryAssignmentRepository
+
+    @Mock private lateinit var ministryRepository: MinistryRepository
 
     @Mock private lateinit var keycloak: Keycloak
 
@@ -53,7 +71,17 @@ class MemberServiceTest {
 
     @BeforeEach
     fun setUp() {
-        memberService = MemberService(memberRepository, churchGroupRepository, keycloak, "test-realm")
+        memberService =
+            MemberService(
+                memberRepository,
+                churchGroupRepository,
+                userTrainingRepository,
+                trainingRepository,
+                ministryAssignmentRepository,
+                ministryRepository,
+                keycloak,
+                "test-realm",
+            )
     }
 
     private fun memberWithId(
@@ -121,6 +149,46 @@ class MemberServiceTest {
         assertEquals(member.firstName, result.firstName)
     }
 
+    // --- replaceMemberMinistries ---
+
+    @Test
+    fun `replaceMemberMinistries deletes existing then inserts from request`() {
+        val member = memberWithId(42L)
+        val ministry =
+            Ministry(
+                name = "찬양팀",
+                shortDescription = "찬양 사역팀",
+            ).also { it.id = 1L }
+
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
+        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId))
+            .thenReturn(Optional.of(ministry))
+        `when`(userTrainingRepository.findByMemberId(42L)).thenReturn(emptyList())
+        `when`(ministryAssignmentRepository.findByMemberId(42L)).thenReturn(emptyList())
+        `when`(ministryAssignmentRepository.saveAll(any<List<MinistryAssignment>>()))
+            .thenAnswer { it.arguments[0] }
+
+        val request =
+            ReplaceMemberMinistriesRequest(
+                listOf(
+                    MemberMinistryItem(
+                        ministryPublicId = ministry.publicId.toString(),
+                        startDate = LocalDate.of(2024, 3, 1),
+                        endDate = null,
+                        note = "악기",
+                    ),
+                ),
+            )
+
+        val result = memberService.replaceMemberMinistries(member.publicId, request)
+
+        verify(ministryAssignmentRepository).deleteByMemberId(42L)
+        verify(ministryAssignmentRepository).flush()
+        verify(ministryAssignmentRepository).saveAll(any<List<MinistryAssignment>>())
+        assertEquals(member.publicId.toString(), result.publicId)
+    }
+
     // --- getMembers ---
 
     @Test
@@ -132,6 +200,21 @@ class MemberServiceTest {
         val result = memberService.getMembers(null, null, null, 0, 20)
 
         assertEquals(2, result.totalElements)
+    }
+
+    @Test
+    fun `getMembers maps multiple active ministries sorted for a member`() {
+        val member = memberWithId(1L)
+        `when`(memberRepository.findActiveMembers(anyOrNull(), anyOrNull(), anyOrNull(), any<Pageable>()))
+            .thenReturn(PageImpl(listOf(member)))
+        `when`(ministryAssignmentRepository.findActiveByMemberIds(listOf(1L)))
+            // Returned out of order on purpose so the assertion proves .sorted() runs.
+            .thenReturn(listOf(MemberMinistryView(1L, "찬양팀"), MemberMinistryView(1L, "미디어팀")))
+
+        val result = memberService.getMembers(null, null, null, 0, 20)
+
+        val summary = result.content.single()
+        assertEquals(listOf("미디어팀", "찬양팀"), summary.activeMinistries)
     }
 
     // --- createMember ---

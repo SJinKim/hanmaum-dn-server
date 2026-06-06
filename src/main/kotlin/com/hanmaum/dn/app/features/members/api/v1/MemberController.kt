@@ -8,6 +8,8 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberSummaryDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.RegisterMemberRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberMinistriesRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberTrainingsRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMyProfileRequest
 import com.hanmaum.dn.app.features.members.service.MemberService
@@ -23,6 +25,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
@@ -121,6 +124,34 @@ class MemberController(
         @Valid @RequestBody request: UpdateMemberRequest,
     ): ResponseEntity<ApiResponse<MemberDto>> {
         val updated = memberService.updateMember(publicId, request)
+        return ResponseEntity.ok(ApiResponse.success(data = updated))
+    }
+
+    /**
+     * PUT /api/v1/members/{publicId}/trainings
+     * Role: ADMIN — replaces the member's entire training set. Returns refreshed detail.
+     */
+    @PutMapping("/{publicId}/trainings")
+    @PreAuthorize("hasRole('ADMIN')")
+    fun replaceMemberTrainings(
+        @PathVariable publicId: UUID,
+        @Valid @RequestBody request: ReplaceMemberTrainingsRequest,
+    ): ResponseEntity<ApiResponse<MemberDto>> {
+        val updated = memberService.replaceMemberTrainings(publicId, request)
+        return ResponseEntity.ok(ApiResponse.success(data = updated))
+    }
+
+    /**
+     * PUT /api/v1/members/{publicId}/ministries
+     * Role: ADMIN — replaces the member's entire ministry assignment set. Returns refreshed detail.
+     */
+    @PutMapping("/{publicId}/ministries")
+    @PreAuthorize("hasRole('ADMIN')")
+    fun replaceMemberMinistries(
+        @PathVariable publicId: UUID,
+        @Valid @RequestBody request: ReplaceMemberMinistriesRequest,
+    ): ResponseEntity<ApiResponse<MemberDto>> {
+        val updated = memberService.replaceMemberMinistries(publicId, request)
         return ResponseEntity.ok(ApiResponse.success(data = updated))
     }
 

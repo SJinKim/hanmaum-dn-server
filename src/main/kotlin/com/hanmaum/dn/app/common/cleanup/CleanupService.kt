@@ -2,7 +2,7 @@ package com.hanmaum.dn.app.common.cleanup
 
 import com.hanmaum.dn.app.features.announcements.repository.AnnouncementRepository
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
-import com.hanmaum.dn.app.features.ministry.repository.MinistryRegistrationRepository
+import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
@@ -11,7 +11,7 @@ import java.time.temporal.ChronoUnit
 
 @Service
 class CleanupService(
-    private val ministryRegistrationRepository: MinistryRegistrationRepository,
+    private val ministryAssignmentRepository: MinistryAssignmentRepository,
     private val announcementRepository: AnnouncementRepository,
     private val attendanceLogRepository: AttendanceLogRepository,
 ) {
@@ -22,8 +22,8 @@ class CleanupService(
         val now = Instant.now()
         log.info("Cleanup job started cutoff={}", now)
 
-        purge("MinistryRegistration") {
-            ministryRegistrationRepository.hardDeleteExpired(now)
+        purge("MinistryAssignment") {
+            ministryAssignmentRepository.hardDeleteExpired(now)
         }
         purge("Announcement") {
             // Announcements use delete_entry_at = admin click time; purge 30 days after.

@@ -7,7 +7,10 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberSummaryDto
+import com.hanmaum.dn.app.features.members.api.v1.dto.MinistryHistoryDto
+import com.hanmaum.dn.app.features.members.api.v1.dto.SummaryTrainingDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.UserTrainingDto
 import com.hanmaum.dn.app.features.members.domain.Member
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
@@ -104,8 +107,14 @@ fun Member.applyPatch(request: UpdateMemberRequest) {
 
 // ─── Entity → DTO mappings ────────────────────────────────────────────────────
 
-/** Full detail DTO. publicId (UUID string) is the only external identifier; internal Long id is never returned. */
-fun Member.toDto(): MemberDto =
+/**
+ * Full detail DTO. publicId (UUID string) is the only external identifier; internal Long id is never returned.
+ * [trainings] and [ministries] are enriched by the service (default empty for create/update responses).
+ */
+fun Member.toDto(
+    trainings: List<UserTrainingDto> = emptyList(),
+    ministries: List<MinistryHistoryDto> = emptyList(),
+): MemberDto =
     MemberDto(
         publicId = this.publicId.toString(),
         lastName = this.lastName,
@@ -124,9 +133,19 @@ fun Member.toDto(): MemberDto =
         churchRole = this.churchRole,
         groupName = this.group?.name,
         profileImageUrl = this.profileImageUrl,
+        trainings = trainings,
+        ministries = ministries,
     )
 
-fun Member.toSummaryDto(): MemberSummaryDto =
+/**
+ * Lightweight list DTO. [latestTraining] / [trainings] / [activeMinistries] are derived per page
+ * by the service (batched, no N+1) and passed in here.
+ */
+fun Member.toSummaryDto(
+    latestTraining: String? = null,
+    trainings: List<SummaryTrainingDto> = emptyList(),
+    activeMinistries: List<String> = emptyList(),
+): MemberSummaryDto =
     MemberSummaryDto(
         publicId = this.publicId.toString(),
         lastName = this.lastName,
@@ -136,6 +155,9 @@ fun Member.toSummaryDto(): MemberSummaryDto =
         baptism = this.baptism?.name,
         groupName = this.group?.name,
         updatedAt = this.updatedAt,
+        latestTraining = latestTraining,
+        trainings = trainings,
+        activeMinistries = activeMinistries,
     )
 
 fun Member.toResponse(): MemberResponse =

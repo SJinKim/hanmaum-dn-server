@@ -1,7 +1,6 @@
 package com.hanmaum.dn.app.features.ministry.api.v1.dto
 
 import jakarta.validation.constraints.NotBlank
-import jakarta.validation.constraints.Pattern
 import jakarta.validation.constraints.Size
 
 // ─── Response DTOs ────────────────────────────────────────────────────────────
@@ -33,22 +32,6 @@ data class LeaderDto(
     val fullName: String,
 )
 
-/** DTO returned after creating/reading a registration. */
-data class RegistrationDto(
-    val publicId: String,
-    val ministryPublicId: String,
-    val memberPublicId: String,
-    val memberName: String,
-    val registrationPeriod: String,
-    val note: String?,
-    val status: String,
-)
-
-/** PATCH body for admin approve/reject. Only "APPROVED" or "REJECTED" are accepted. */
-data class UpdateRegistrationStatusRequest(
-    val status: String,
-)
-
 // ─── Request DTOs ─────────────────────────────────────────────────────────────
 
 data class CreateMinistryRequest(
@@ -75,12 +58,4 @@ data class UpdateMinistryRequest(
     /** null = keep current; empty string = remove leader */
     val leaderPublicId: String? = null,
     val isActive: Boolean? = null,
-)
-
-data class CreateRegistrationRequest(
-    @field:NotBlank(message = "등록 기간은 필수입니다.")
-    @field:Pattern(regexp = "\\d{4}", message = "등록 기간은 4자리 연도 형식입니다. (예: 2026)")
-    val period: String,
-    @field:Size(max = 500)
-    val note: String? = null,
 )
