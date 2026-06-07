@@ -14,6 +14,7 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMyProfileRequest
 import com.hanmaum.dn.app.features.members.service.MemberService
 import jakarta.validation.Valid
+import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Page
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -39,6 +40,8 @@ import java.util.UUID
 class MemberController(
     private val memberService: MemberService,
 ) {
+    private val log = LoggerFactory.getLogger(MemberController::class.java)
+
     /**
      * GET /api/v1/members
      * Role: ADMIN — paginated member list with optional search.
@@ -178,17 +181,45 @@ class MemberController(
         @Valid @RequestBody request: RegisterMemberRequest,
     ): ResponseEntity<ApiResponse<Unit>> =
         try {
+            log.info(
+                "Self-registration request received emailDomain={} firstNameLength={} lastNameLength={} cityPresent={} zipCodePresent={} birthDatePresent={}",
+                request.emailDomain(),
+                request.firstName.length,
+                request.lastName.length,
+                request.city?.isNotBlank() == true,
+                request.zipCode?.isNotBlank() == true,
+                request.birthDate != null,
+            )
             memberService.registerMember(request)
+            log.info("Self-registration request completed emailDomain={}", request.emailDomain())
             ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success(message = "등록이 완료되었습니다."))
         } catch (e: ResponseStatusException) {
+            log.warn(
+                "Self-registration rejected status={} emailDomain={} reason={}",
+                e.statusCode.value(),
+                request.emailDomain(),
+                e.reason?.redactEmail(),
+            )
             ResponseEntity
                 .status(e.statusCode)
                 .body(ApiResponse.error(e.reason ?: e.message ?: "등록 실패"))
         } catch (e: Exception) {
+            log.error(
+                "Self-registration failed emailDomain={} firstNameLength={} lastNameLength={} exceptionType={} message={}",
+                request.emailDomain(),
+                request.firstName.length,
+                request.lastName.length,
+                e::class.qualifiedName,
+                e.message?.redactEmail(),
+            )
             ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error("서버 오류가 발생했습니다."))
         }
+
+    private fun RegisterMemberRequest.emailDomain(): String = email.substringAfter('@', missingDelimiterValue = "<missing-at>")
+
+    private fun String.redactEmail(): String = replace(Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"), "<redacted-email>")
 }

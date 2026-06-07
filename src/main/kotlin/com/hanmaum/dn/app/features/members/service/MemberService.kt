@@ -31,9 +31,11 @@ import com.hanmaum.dn.app.features.training.domain.UserTraining
 import com.hanmaum.dn.app.features.training.repository.TrainingRepository
 import com.hanmaum.dn.app.features.training.repository.UserTrainingRepository
 import jakarta.persistence.EntityNotFoundException
+import jakarta.ws.rs.ProcessingException
 import org.keycloak.admin.client.Keycloak
 import org.keycloak.representations.idm.CredentialRepresentation
 import org.keycloak.representations.idm.UserRepresentation
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageRequest
@@ -57,6 +59,8 @@ class MemberService(
     private val keycloak: Keycloak,
     @Value("\${app.keycloak.realm}") private val realm: String,
 ) {
+    private val log = LoggerFactory.getLogger(MemberService::class.java)
+
     /**
      * READ Operations
      * ──────────────────────────────────────────────────────────────────
@@ -324,7 +328,17 @@ class MemberService(
      */
     @Transactional
     fun registerMember(req: RegisterMemberRequest): Member {
+        log.info(
+            "Register member started realm={} emailDomain={} firstNameLength={} lastNameLength={} cityPresent={} zipCodePresent={}",
+            realm,
+            req.emailDomain(),
+            req.firstName.length,
+            req.lastName.length,
+            req.city?.isNotBlank() == true,
+            req.zipCode?.isNotBlank() == true,
+        )
         if (memberRepository.findByEmailAndDeletedAtIsNull(req.email) != null) {
+            log.warn("Register member rejected duplicate emailDomain={}", req.emailDomain())
             throw ResponseStatusException(HttpStatus.CONFLICT, "이미 가입된 이메일입니다: ${req.email}")
         }
 
@@ -368,6 +382,12 @@ class MemberService(
             )
 
         val savedMember = memberRepository.save(newMember)
+        log.info(
+            "Register member saved pending DB record memberId={} emailDomain={} discriminatorAssigned={}",
+            savedMember.id,
+            req.emailDomain(),
+            discriminator != null,
+        )
 
         // Create Keycloak user and store keycloakId back on the member record
         val keycloakUser =
@@ -388,10 +408,40 @@ class MemberService(
                     )
             }
 
-        val kcResponse = keycloak.realm(realm).users().create(keycloakUser)
+        log.info("Creating Keycloak user realm={} emailDomain={}", realm, req.emailDomain())
+        val kcResponse =
+            try {
+                keycloak.realm(realm).users().create(keycloakUser)
+            } catch (e: ProcessingException) {
+                log.error(
+                    "Keycloak user creation transport failure realm={} emailDomain={} exceptionType={} message={}",
+                    realm,
+                    req.emailDomain(),
+                    e::class.qualifiedName,
+                    e.message?.redactEmail(),
+                )
+                throw RuntimeException("Keycloak user creation transport failure", e)
+            } catch (e: RuntimeException) {
+                log.error(
+                    "Keycloak user creation runtime failure realm={} emailDomain={} exceptionType={} message={}",
+                    realm,
+                    req.emailDomain(),
+                    e::class.qualifiedName,
+                    e.message?.redactEmail(),
+                )
+                throw e
+            }
+        log.info("Keycloak user creation response realm={} emailDomain={} status={}", realm, req.emailDomain(), kcResponse.status)
         if (kcResponse.status != 201) {
-            val body = kcResponse.readEntity(String::class.java)
-            throw RuntimeException("Keycloak 사용자 생성 실패 (HTTP ${kcResponse.status}): $body")
+            val body = kcResponse.readEntity(String::class.java).orEmpty()
+            log.error(
+                "Keycloak user creation rejected realm={} emailDomain={} status={} body={}",
+                realm,
+                req.emailDomain(),
+                kcResponse.status,
+                body.redactEmail().take(500),
+            )
+            throw RuntimeException("Keycloak user creation failed (HTTP ${kcResponse.status})")
         }
 
         val keycloakId =
@@ -402,8 +452,16 @@ class MemberService(
         if (keycloakId.isNotBlank()) {
             savedMember.keycloakId = keycloakId
             memberRepository.save(savedMember)
+            log.info("Register member linked Keycloak user memberId={} emailDomain={}", savedMember.id, req.emailDomain())
+        } else {
+            log.warn("Keycloak user created without location header memberId={} emailDomain={}", savedMember.id, req.emailDomain())
         }
 
+        log.info("Register member completed memberId={} emailDomain={}", savedMember.id, req.emailDomain())
         return savedMember
     }
+
+    private fun RegisterMemberRequest.emailDomain(): String = email.substringAfter('@', missingDelimiterValue = "<missing-at>")
+
+    private fun String.redactEmail(): String = replace(Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"), "<redacted-email>")
 }
