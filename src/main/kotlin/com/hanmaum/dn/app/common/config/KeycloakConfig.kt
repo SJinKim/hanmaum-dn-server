@@ -9,13 +9,13 @@ import org.springframework.context.annotation.Configuration
 
 @Configuration
 class KeycloakConfig(
-    @Value($$"${app.keycloak.server-url_docker}")
+    @Value("\${app.keycloak.server-url_docker:http://hanmaumApp-keycloak:8090}")
     private val serverUrl: String,
-    @Value($$"${app.keycloak.realm}")
+    @Value("\${app.keycloak.realm:hanmaum}")
     private val realm: String,
-    @Value($$"${app.keycloak.admin-client-id}")
+    @Value("\${app.keycloak.admin-client-id:}")
     private val clientId: String,
-    @Value($$"${app.keycloak.admin-client-secret}")
+    @Value("\${app.keycloak.admin-client-secret:}")
     private val clientSecret: String,
 ) {
     @Bean
