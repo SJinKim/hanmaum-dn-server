@@ -57,7 +57,7 @@ class MemberService(
     private val ministryAssignmentRepository: MinistryAssignmentRepository,
     private val ministryRepository: MinistryRepository,
     private val keycloak: Keycloak,
-    @Value("\${app.keycloak.realm}") private val realm: String,
+    @Value("\${app.keycloak.realm:hanmaum}") private val realm: String,
 ) {
     private val log = LoggerFactory.getLogger(MemberService::class.java)
 
@@ -376,6 +376,7 @@ class MemberService(
                 birthDate = req.birthDate,
                 phoneNumber = req.phoneNumber,
                 street = req.street,
+                houseNumber = req.houseNumber,
                 zipCode = req.zipCode,
                 registrationDate = LocalDate.now(),
                 memberStatus = MemberStatus.PENDING,

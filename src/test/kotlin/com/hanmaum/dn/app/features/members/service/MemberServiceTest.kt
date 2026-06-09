@@ -121,6 +121,8 @@ class MemberServiceTest {
         lastName = lastName,
         password = "secret123",
         email = email,
+        street = "Hauptstraße",
+        houseNumber = "12a",
         city = "서울",
     )
 
@@ -422,6 +424,20 @@ class MemberServiceTest {
 
         assertEquals(MemberStatus.PENDING, result.memberStatus)
         assertNull(result.group)
+    }
+
+    @Test
+    fun `registerMember persists street and house number separately`() {
+        val req = registerReq()
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
+        `when`(memberRepository.findSimilarNames(req.firstName, req.lastName)).thenReturn(emptyList())
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+        setupKeycloakMock()
+
+        val result = memberService.registerMember(req)
+
+        assertEquals("Hauptstraße", result.street)
+        assertEquals("12a", result.houseNumber)
     }
 
     // --- getMemberProfile ---
