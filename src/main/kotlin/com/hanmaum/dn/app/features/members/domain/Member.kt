@@ -35,6 +35,8 @@ class Member(
     var email: String? = null,
     // --- ADRESSE ---
     var street: String? = null,
+    @Column(name = "house_number", length = 50)
+    var houseNumber: String? = null,
     @Column(name = "zip_code")
     var zipCode: String? = null,
     var city: String? = null,

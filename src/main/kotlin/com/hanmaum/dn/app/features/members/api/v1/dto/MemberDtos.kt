@@ -25,6 +25,7 @@ data class MemberDto(
     val phoneNumber: String? = null,
     val email: String? = null,
     val street: String? = null,
+    val houseNumber: String? = null,
     val zipCode: String? = null,
     val city: String? = null,
     val registrationDate: LocalDate? = null,
@@ -93,6 +94,9 @@ data class MemberResponse(
     val status: MemberStatus,
     val churchRole: String? = null,
     val groupName: String? = null,
+    val street: String? = null,
+    val houseNumber: String? = null,
+    val zipCode: String? = null,
     val city: String? = null,
     val phoneNumber: String? = null,
     val profileImageUrl: String? = null,
@@ -114,6 +118,8 @@ data class CreateMemberRequest(
     @field:Email
     val email: String? = null,
     val street: String? = null,
+    @field:Size(max = 50)
+    val houseNumber: String? = null,
     val zipCode: String? = null,
     val city: String? = null,
     val registrationDate: LocalDate? = null,
@@ -140,6 +146,8 @@ data class UpdateMemberRequest(
     @field:Email
     val email: String? = null,
     val street: String? = null,
+    @field:Size(max = 50)
+    val houseNumber: String? = null,
     val zipCode: String? = null,
     val city: String? = null,
     val registrationDate: LocalDate? = null,
@@ -167,6 +175,8 @@ data class RegisterMemberRequest(
     @field:Size(max = 50)
     val phoneNumber: String? = null,
     val street: String? = null,
+    @field:Size(max = 50)
+    val houseNumber: String? = null,
     val zipCode: String? = null,
 )
 
