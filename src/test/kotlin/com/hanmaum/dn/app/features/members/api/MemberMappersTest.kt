@@ -322,4 +322,53 @@ class MemberMappersTest {
         member.group = group
         assertEquals("다니엘조", member.toResponse().groupName)
     }
+
+    // --- isNextGroupLeader / oneOnOneSignupFilled ---
+
+    @Test
+    fun `applyPatch sets isNextGroupLeader when provided`() {
+        val member = memberWithId(1L)
+        member.applyPatch(UpdateMemberRequest(isNextGroupLeader = true))
+        assertEquals(true, member.isNextGroupLeader)
+    }
+
+    @Test
+    fun `applyPatch sets oneOnOneSignupFilled when provided`() {
+        val member = memberWithId(1L)
+        member.applyPatch(UpdateMemberRequest(oneOnOneSignupFilled = true))
+        assertEquals(true, member.oneOnOneSignupFilled)
+    }
+
+    @Test
+    fun `applyPatch does not change isNextGroupLeader when null`() {
+        val member = memberWithId(1L)
+        member.isNextGroupLeader = true
+        member.applyPatch(UpdateMemberRequest(lastName = "박"))
+        assertEquals(true, member.isNextGroupLeader)
+    }
+
+    @Test
+    fun `toSummaryDto includes groupPublicId from group`() {
+        val group = ChurchGroup(name = "믿음")
+        val pubId = java.util.UUID.randomUUID()
+        val pubIdField = group.javaClass.superclass.getDeclaredField("publicId")
+        pubIdField.isAccessible = true
+        pubIdField.set(group, pubId)
+
+        val member = memberWithId(1L)
+        member.group = group
+
+        val dto = member.toSummaryDto()
+        assertEquals(pubId.toString(), dto.groupPublicId)
+    }
+
+    @Test
+    fun `toSummaryDto maps isNextGroupLeader and oneOnOneSignupFilled`() {
+        val member = memberWithId(1L)
+        member.isNextGroupLeader = true
+        member.oneOnOneSignupFilled = true
+        val dto = member.toSummaryDto()
+        assertEquals(true, dto.isNextGroupLeader)
+        assertEquals(true, dto.oneOnOneSignupFilled)
+    }
 }
