@@ -38,6 +38,7 @@ data class ActiveMinistryMemberDto(
     val fullName: String,
     val startDate: String, // ISO 'YYYY-MM-DD'
     val note: String?,
+    val gender: String?,  // "M" | "F" | null
 )
 
 // ─── Request DTOs ─────────────────────────────────────────────────────────────
