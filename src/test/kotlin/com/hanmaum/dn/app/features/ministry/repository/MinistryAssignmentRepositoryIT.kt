@@ -3,6 +3,8 @@ package com.hanmaum.dn.app.features.ministry.repository
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.ministry.domain.Ministry
+import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
 import jakarta.persistence.EntityManager
 import jakarta.persistence.PersistenceContext
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -12,6 +14,8 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase
 import org.springframework.test.context.ActiveProfiles
+import java.time.Instant
+import java.time.LocalDate
 
 /**
  * Guards against the replace-set delete detaching the member it was loaded with.
@@ -31,6 +35,8 @@ class MinistryAssignmentRepositoryIT {
     @Autowired lateinit var members: MemberRepository
 
     @Autowired lateinit var assignments: MinistryAssignmentRepository
+
+    @Autowired lateinit var ministries: MinistryRepository
 
     @PersistenceContext lateinit var em: EntityManager
 
@@ -52,5 +58,32 @@ class MinistryAssignmentRepositoryIT {
 
         // Would throw LazyInitializationException if the context was cleared above.
         assertEquals("다니엘조", reloaded.group?.name)
+    }
+
+    @Test
+    fun `findActiveByMinistryPublicId - excludes soft-deleted members`() {
+        val ministry = Ministry(name = "찬양팀", shortDescription = "Worship team")
+        em.persist(ministry)
+
+        val activeMember = Member(lastName = "이", firstName = "영희")
+        em.persist(activeMember)
+
+        val deletedMember =
+            Member(lastName = "박", firstName = "민준").apply {
+                deletedAt = Instant.now()
+            }
+        em.persist(deletedMember)
+
+        val startDate = LocalDate.of(2024, 1, 1)
+        em.persist(MinistryAssignment(ministry = ministry, member = activeMember, startDate = startDate))
+        em.persist(MinistryAssignment(ministry = ministry, member = deletedMember, startDate = startDate))
+
+        em.flush()
+        em.clear()
+
+        val results = assignments.findActiveByMinistryPublicId(ministry.publicId)
+
+        assertEquals(1, results.size)
+        assertEquals("이영희", results.single().fullName)
     }
 }
