@@ -58,7 +58,8 @@ class MinistryController(
 
     /**
      * GET /api/v1/ministries/{publicId}
-     * Role: MEMBER — full detail including leader info.
+     * Role: MEMBER — full backend-driven page content including requirements,
+     * schedules, and ordered role-based contacts.
      */
     @GetMapping("/{publicId}")
     @PreAuthorize("isAuthenticated()")

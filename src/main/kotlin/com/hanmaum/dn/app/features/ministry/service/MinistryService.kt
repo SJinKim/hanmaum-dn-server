@@ -1,7 +1,5 @@
 package com.hanmaum.dn.app.features.ministry.service
 
-import com.hanmaum.dn.app.features.members.domain.Member
-import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.ministry.api.applyPatch
 import com.hanmaum.dn.app.features.ministry.api.toDto
 import com.hanmaum.dn.app.features.ministry.api.toEntity
@@ -9,6 +7,7 @@ import com.hanmaum.dn.app.features.ministry.api.toSummaryDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.ActiveMinistryMemberDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.CreateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryDto
+import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryScheduleRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistrySummaryDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
@@ -23,25 +22,22 @@ import java.util.UUID
 @Service
 class MinistryService(
     private val ministryRepository: MinistryRepository,
-    private val memberRepository: MemberRepository,
     private val ministryAssignmentRepository: MinistryAssignmentRepository,
 ) {
     // ─── Ministry CRUD ─────────────────────────────────────────────────────────
 
     /**
      * Create a new ministry.
-     * [req.leaderPublicId] is optional; if provided, the Member must exist.
-     *
      * @throws ResponseStatusException 409 if name already taken
-     * @throws EntityNotFoundException if leaderPublicId is provided but not found
+     * @throws ResponseStatusException 400 if a schedule has an invalid time range
      */
     @Transactional
     fun createMinistry(req: CreateMinistryRequest): MinistryDto {
-        if (ministryRepository.existsByNameAndDeletedAtIsNull(req.name)) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "부서 이름이 이미 사용 중입니다: ${req.name}")
+        if (ministryRepository.existsByNameAndDeletedAtIsNull(req.title)) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "사역 제목이 이미 사용 중입니다: ${req.title}")
         }
-        val leader = req.leaderPublicId?.let { resolveLeader(it) }
-        val ministry = ministryRepository.save(req.toEntity(leader))
+        validateScheduleTimes(req.schedules)
+        val ministry = ministryRepository.save(req.toEntity())
         return ministry.toDto()
     }
 
@@ -69,8 +65,8 @@ class MinistryService(
     /**
      * Partial update (PATCH semantics).
      *
-     * @throws EntityNotFoundException  if ministry not found
-     * @throws EntityNotFoundException  if leaderPublicId provided but not found
+     * @throws EntityNotFoundException if ministry not found
+     * @throws ResponseStatusException 400 if a schedule has an invalid time range
      */
     @Transactional
     fun updateMinistry(
@@ -82,14 +78,8 @@ class MinistryService(
                 .findByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow { EntityNotFoundException("Ministry not found: $publicId") }
 
-        val leaderResolver: ((String) -> Member?)? =
-            if (req.leaderPublicId != null) {
-                { id -> if (id.isBlank()) null else resolveLeader(id) }
-            } else {
-                null
-            }
-
-        ministry.applyPatch(req, leaderResolver)
+        req.schedules?.let(::validateScheduleTimes)
+        ministry.applyPatch(req)
         return ministry.toDto()
     }
 
@@ -125,17 +115,14 @@ class MinistryService(
             .map { it.toDto() }
     }
 
-    // ─── Private helpers ───────────────────────────────────────────────────────
-
-    private fun resolveLeader(leaderPublicId: String): Member {
-        val uuid =
-            try {
-                UUID.fromString(leaderPublicId)
-            } catch (e: IllegalArgumentException) {
-                throw ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 leaderPublicId 형식입니다.")
+    private fun validateScheduleTimes(schedules: List<MinistryScheduleRequest>) {
+        schedules.forEachIndexed { index, schedule ->
+            if (!schedule.endTime.isAfter(schedule.startTime)) {
+                throw ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "사역 일정 ${index + 1}의 종료 시간은 시작 시간보다 늦어야 합니다.",
+                )
             }
-        return memberRepository
-            .findByPublicIdAndDeletedAtIsNull(uuid)
-            .orElseThrow { EntityNotFoundException("Leader member not found: $leaderPublicId") }
+        }
     }
 }

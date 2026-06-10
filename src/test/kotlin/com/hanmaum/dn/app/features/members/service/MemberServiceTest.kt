@@ -160,6 +160,7 @@ class MemberServiceTest {
             Ministry(
                 name = "찬양팀",
                 shortDescription = "찬양 사역팀",
+                longDescription = "찬양으로 예배를 섬깁니다.",
             ).also { it.id = 1L }
 
         `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
