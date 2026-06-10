@@ -8,6 +8,7 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.MemberMinistryItem
 import com.hanmaum.dn.app.features.members.api.v1.dto.RegisterMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberMinistriesRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMyProfileRequest
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.ministry.domain.Ministry
@@ -485,5 +486,59 @@ class MemberServiceTest {
 
         assertEquals(member.publicId.toString(), response.publicId)
         assertEquals("영희", response.firstName)
+    }
+
+    @Test
+    fun `updateMyProfile updates address fields`() {
+        val keycloakSub = UUID.randomUUID().toString()
+        val member = memberWithId(1L)
+        member.keycloakId = keycloakSub
+        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(member)
+        `when`(memberRepository.save(member)).thenReturn(member)
+
+        val response =
+            memberService.updateMyProfile(
+                keycloakSubject = keycloakSub,
+                email = null,
+                request =
+                    UpdateMyProfileRequest(
+                        street = "Hauptstraße",
+                        houseNumber = "12a",
+                        zipCode = "10115",
+                        city = "Berlin",
+                    ),
+            )
+
+        assertEquals("Hauptstraße", response.street)
+        assertEquals("12a", response.houseNumber)
+        assertEquals("10115", response.zipCode)
+        assertEquals("Berlin", response.city)
+        verify(memberRepository).save(member)
+    }
+
+    @Test
+    fun `updateMyProfile preserves address fields omitted from patch`() {
+        val keycloakSub = UUID.randomUUID().toString()
+        val member = memberWithId(1L)
+        member.keycloakId = keycloakSub
+        member.street = "Existing Street"
+        member.houseNumber = "7"
+        member.zipCode = "50667"
+        member.city = "Köln"
+        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(member)
+        `when`(memberRepository.save(member)).thenReturn(member)
+
+        val response =
+            memberService.updateMyProfile(
+                keycloakSubject = keycloakSub,
+                email = null,
+                request = UpdateMyProfileRequest(phoneNumber = "+49 123"),
+            )
+
+        assertEquals("Existing Street", response.street)
+        assertEquals("7", response.houseNumber)
+        assertEquals("50667", response.zipCode)
+        assertEquals("Köln", response.city)
+        assertEquals("+49 123", response.phoneNumber)
     }
 }
