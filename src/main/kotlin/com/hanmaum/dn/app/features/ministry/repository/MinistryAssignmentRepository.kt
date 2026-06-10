@@ -60,6 +60,7 @@ interface MinistryAssignmentRepository : JpaRepository<MinistryAssignment, Long>
         WHERE a.ministry.publicId = :ministryPublicId
           AND a.endDate IS NULL
           AND a.deletedAt IS NULL
+          AND a.member.deletedAt IS NULL
         ORDER BY a.startDate ASC
         """,
     )

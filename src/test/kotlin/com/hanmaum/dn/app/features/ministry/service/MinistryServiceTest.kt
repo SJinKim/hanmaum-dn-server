@@ -5,6 +5,8 @@ import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.CreateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.domain.Ministry
+import com.hanmaum.dn.app.features.ministry.repository.ActiveMemberView
+import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
 import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
 import jakarta.persistence.EntityNotFoundException
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -22,6 +24,7 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.never
 import org.springframework.web.server.ResponseStatusException
 import java.lang.reflect.Field
+import java.time.LocalDate
 import java.util.Optional
 import java.util.UUID
 
@@ -31,11 +34,13 @@ class MinistryServiceTest {
 
     @Mock private lateinit var memberRepository: MemberRepository
 
+    @Mock private lateinit var ministryAssignmentRepository: MinistryAssignmentRepository
+
     private lateinit var service: MinistryService
 
     @BeforeEach
     fun setUp() {
-        service = MinistryService(ministryRepository, memberRepository)
+        service = MinistryService(ministryRepository, memberRepository, ministryAssignmentRepository)
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -203,5 +208,56 @@ class MinistryServiceTest {
             .thenReturn(Optional.empty())
 
         assertThrows<EntityNotFoundException> { service.deactivateMinistry(id) }
+    }
+
+    // ─── getActiveMembers ─────────────────────────────────────────────────────
+
+    @Test
+    fun `getActiveMembers - returns active member dtos for ministry`() {
+        val ministry = makeMinistry()
+        val publicId = ministry.publicId
+        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(publicId))
+            .thenReturn(Optional.of(ministry))
+        val memberPublicId = UUID.randomUUID()
+        val view =
+            ActiveMemberView(
+                memberPublicId = memberPublicId,
+                fullName = "김철수",
+                startDate = LocalDate.of(2025, 1, 1),
+                note = null,
+            )
+        `when`(ministryAssignmentRepository.findActiveByMinistryPublicId(publicId))
+            .thenReturn(listOf(view))
+
+        val result = service.getActiveMembers(publicId)
+
+        assertEquals(1, result.size)
+        assertEquals(memberPublicId.toString(), result[0].publicId)
+        assertEquals("김철수", result[0].fullName)
+        assertEquals("2025-01-01", result[0].startDate)
+        assertNull(result[0].note)
+    }
+
+    @Test
+    fun `getActiveMembers - returns empty list when ministry has no active members`() {
+        val ministry = makeMinistry()
+        val publicId = ministry.publicId
+        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(publicId))
+            .thenReturn(Optional.of(ministry))
+        `when`(ministryAssignmentRepository.findActiveByMinistryPublicId(publicId))
+            .thenReturn(emptyList())
+
+        val result = service.getActiveMembers(publicId)
+
+        assertEquals(0, result.size)
+    }
+
+    @Test
+    fun `getActiveMembers - throws EntityNotFoundException when ministry not found`() {
+        val id = UUID.randomUUID()
+        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(id))
+            .thenReturn(Optional.empty())
+
+        assertThrows<EntityNotFoundException> { service.getActiveMembers(id) }
     }
 }
