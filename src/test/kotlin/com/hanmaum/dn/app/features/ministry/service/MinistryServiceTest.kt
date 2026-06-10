@@ -225,6 +225,7 @@ class MinistryServiceTest {
                 fullName = "김철수",
                 startDate = LocalDate.of(2025, 1, 1),
                 note = null,
+                gender = null,
             )
         `when`(ministryAssignmentRepository.findActiveByMinistryPublicId(publicId))
             .thenReturn(listOf(view))
