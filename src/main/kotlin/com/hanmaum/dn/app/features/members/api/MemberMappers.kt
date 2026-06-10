@@ -95,6 +95,8 @@ fun Member.applyPatch(request: UpdateMemberRequest) {
     request.churchRole?.let { this.churchRole = it }
     request.baptism?.let { this.baptism = mapBaptism(it) }
     request.profileImageUrl?.let { this.profileImageUrl = it }
+    request.isNextGroupLeader?.let { this.isNextGroupLeader = it }
+    request.oneOnOneSignupFilled?.let { this.oneOnOneSignupFilled = it }
 
     request.memberStatus?.let { statusStr ->
         val target =
@@ -139,6 +141,8 @@ fun Member.toDto(
         profileImageUrl = this.profileImageUrl,
         trainings = trainings,
         ministries = ministries,
+        isNextGroupLeader = this.isNextGroupLeader,
+        oneOnOneSignupFilled = this.oneOnOneSignupFilled,
     )
 
 /**
@@ -157,11 +161,14 @@ fun Member.toSummaryDto(
         email = this.email,
         memberStatus = this.memberStatus.name,
         baptism = this.baptism?.name,
+        groupPublicId = this.group?.publicId?.toString(),
         groupName = this.group?.name,
         updatedAt = this.updatedAt,
         latestTraining = latestTraining,
         trainings = trainings,
         activeMinistries = activeMinistries,
+        isNextGroupLeader = this.isNextGroupLeader,
+        oneOnOneSignupFilled = this.oneOnOneSignupFilled,
     )
 
 fun Member.toResponse(): MemberResponse =
