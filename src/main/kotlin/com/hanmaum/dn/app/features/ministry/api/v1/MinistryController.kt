@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.ministry.api.v1
 
 import com.hanmaum.dn.app.common.dto.ApiResponse
+import com.hanmaum.dn.app.features.ministry.api.v1.dto.ActiveMinistryMemberDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.CreateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistrySummaryDto
@@ -66,6 +67,19 @@ class MinistryController(
     ): ResponseEntity<ApiResponse<MinistryDto>> {
         val ministry = ministryService.getMinistry(publicId)
         return ResponseEntity.ok(ApiResponse.success(data = ministry))
+    }
+
+    /**
+     * GET /api/v1/ministries/{publicId}/members
+     * Role: authenticated — list members currently active in this ministry (endDate IS NULL).
+     */
+    @GetMapping("/{publicId}/members")
+    @PreAuthorize("isAuthenticated()")
+    fun getActiveMembers(
+        @PathVariable publicId: UUID,
+    ): ResponseEntity<ApiResponse<List<ActiveMinistryMemberDto>>> {
+        val members = ministryService.getActiveMembers(publicId)
+        return ResponseEntity.ok(ApiResponse.success(data = members))
     }
 
     /**
