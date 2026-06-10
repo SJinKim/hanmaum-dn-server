@@ -4,10 +4,20 @@ import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.MemberMinistryItem
 import com.hanmaum.dn.app.features.members.api.v1.dto.RegisterMemberRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberMinistriesRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMyProfileRequest
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.ministry.domain.Ministry
+import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
+import com.hanmaum.dn.app.features.ministry.repository.MemberMinistryView
+import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
+import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
+import com.hanmaum.dn.app.features.training.repository.TrainingRepository
+import com.hanmaum.dn.app.features.training.repository.UserTrainingRepository
 import jakarta.persistence.EntityNotFoundException
 import jakarta.ws.rs.core.Response
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -21,7 +31,6 @@ import org.keycloak.admin.client.Keycloak
 import org.keycloak.admin.client.resource.RealmResource
 import org.keycloak.admin.client.resource.UsersResource
 import org.keycloak.representations.idm.UserRepresentation
-import org.mockito.ArgumentMatchers.anyLong
 import org.mockito.Mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
@@ -32,6 +41,7 @@ import org.mockito.kotlin.anyOrNull
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
 import org.springframework.web.server.ResponseStatusException
+import java.time.LocalDate
 import java.util.Optional
 import java.util.UUID
 
@@ -40,6 +50,14 @@ class MemberServiceTest {
     @Mock private lateinit var memberRepository: MemberRepository
 
     @Mock private lateinit var churchGroupRepository: ChurchGroupRepository
+
+    @Mock private lateinit var userTrainingRepository: UserTrainingRepository
+
+    @Mock private lateinit var trainingRepository: TrainingRepository
+
+    @Mock private lateinit var ministryAssignmentRepository: MinistryAssignmentRepository
+
+    @Mock private lateinit var ministryRepository: MinistryRepository
 
     @Mock private lateinit var keycloak: Keycloak
 
@@ -53,7 +71,17 @@ class MemberServiceTest {
 
     @BeforeEach
     fun setUp() {
-        memberService = MemberService(memberRepository, churchGroupRepository, keycloak, "test-realm")
+        memberService =
+            MemberService(
+                memberRepository,
+                churchGroupRepository,
+                userTrainingRepository,
+                trainingRepository,
+                ministryAssignmentRepository,
+                ministryRepository,
+                keycloak,
+                "test-realm",
+            )
     }
 
     private fun memberWithId(
@@ -94,6 +122,8 @@ class MemberServiceTest {
         lastName = lastName,
         password = "secret123",
         email = email,
+        street = "Hauptstraße",
+        houseNumber = "12a",
         city = "서울",
     )
 
@@ -121,6 +151,47 @@ class MemberServiceTest {
         assertEquals(member.firstName, result.firstName)
     }
 
+    // --- replaceMemberMinistries ---
+
+    @Test
+    fun `replaceMemberMinistries deletes existing then inserts from request`() {
+        val member = memberWithId(42L)
+        val ministry =
+            Ministry(
+                name = "찬양팀",
+                shortDescription = "찬양 사역팀",
+                longDescription = "찬양으로 예배를 섬깁니다.",
+            ).also { it.id = 1L }
+
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
+        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId))
+            .thenReturn(Optional.of(ministry))
+        `when`(userTrainingRepository.findByMemberId(42L)).thenReturn(emptyList())
+        `when`(ministryAssignmentRepository.findByMemberId(42L)).thenReturn(emptyList())
+        `when`(ministryAssignmentRepository.saveAll(any<List<MinistryAssignment>>()))
+            .thenAnswer { it.arguments[0] }
+
+        val request =
+            ReplaceMemberMinistriesRequest(
+                listOf(
+                    MemberMinistryItem(
+                        ministryPublicId = ministry.publicId.toString(),
+                        startDate = LocalDate.of(2024, 3, 1),
+                        endDate = null,
+                        note = "악기",
+                    ),
+                ),
+            )
+
+        val result = memberService.replaceMemberMinistries(member.publicId, request)
+
+        verify(ministryAssignmentRepository).deleteByMemberId(42L)
+        verify(ministryAssignmentRepository).flush()
+        verify(ministryAssignmentRepository).saveAll(any<List<MinistryAssignment>>())
+        assertEquals(member.publicId.toString(), result.publicId)
+    }
+
     // --- getMembers ---
 
     @Test
@@ -134,24 +205,39 @@ class MemberServiceTest {
         assertEquals(2, result.totalElements)
     }
 
+    @Test
+    fun `getMembers maps multiple active ministries sorted for a member`() {
+        val member = memberWithId(1L)
+        `when`(memberRepository.findActiveMembers(anyOrNull(), anyOrNull(), anyOrNull(), any<Pageable>()))
+            .thenReturn(PageImpl(listOf(member)))
+        `when`(ministryAssignmentRepository.findActiveByMemberIds(listOf(1L)))
+            // Returned out of order on purpose so the assertion proves .sorted() runs.
+            .thenReturn(listOf(MemberMinistryView(1L, "찬양팀"), MemberMinistryView(1L, "미디어팀")))
+
+        val result = memberService.getMembers(null, null, null, 0, 20)
+
+        val summary = result.content.single()
+        assertEquals(listOf("미디어팀", "찬양팀"), summary.activeMinistries)
+    }
+
     // --- createMember ---
 
     @Test
-    fun `createMember saves member without group when groupId is null`() {
+    fun `createMember saves member without group when groupPublicId is null`() {
         val req = CreateMemberRequest(lastName = "김", firstName = "철수")
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
 
         val result = memberService.createMember(req)
 
         assertNull(result.groupName)
-        verify(churchGroupRepository, never()).findById(anyLong())
+        verify(churchGroupRepository, never()).findByPublicIdAndDeletedAtIsNull(any<UUID>())
     }
 
     @Test
-    fun `createMember assigns group when groupId provided`() {
+    fun `createMember assigns group when groupPublicId provided`() {
         val grp = group(5L, "다니엘조")
-        val req = CreateMemberRequest(lastName = "김", firstName = "철수", groupId = 5L)
-        `when`(churchGroupRepository.findById(5L)).thenReturn(Optional.of(grp))
+        val req = CreateMemberRequest(lastName = "김", firstName = "철수", groupPublicId = grp.publicId.toString())
+        `when`(churchGroupRepository.findByPublicIdAndDeletedAtIsNull(grp.publicId)).thenReturn(Optional.of(grp))
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
 
         val result = memberService.createMember(req)
@@ -161,8 +247,9 @@ class MemberServiceTest {
 
     @Test
     fun `createMember throws EntityNotFoundException when group not found`() {
-        val req = CreateMemberRequest(lastName = "김", firstName = "철수", groupId = 99L)
-        `when`(churchGroupRepository.findById(99L)).thenReturn(Optional.empty())
+        val missingId = UUID.randomUUID()
+        val req = CreateMemberRequest(lastName = "김", firstName = "철수", groupPublicId = missingId.toString())
+        `when`(churchGroupRepository.findByPublicIdAndDeletedAtIsNull(missingId)).thenReturn(Optional.empty())
 
         assertThrows<EntityNotFoundException> { memberService.createMember(req) }
     }
@@ -179,7 +266,7 @@ class MemberServiceTest {
     // --- updateMember ---
 
     @Test
-    fun `updateMember does not call groupRepository when groupId is null`() {
+    fun `updateMember does not call groupRepository when groupPublicId is null`() {
         val member = memberWithId(1L)
         `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
             .thenReturn(Optional.of(member))
@@ -187,23 +274,23 @@ class MemberServiceTest {
 
         memberService.updateMember(
             member.publicId,
-            UpdateMemberRequest(lastName = "김", firstName = "철수", groupId = null),
+            UpdateMemberRequest(lastName = "김", firstName = "철수", groupPublicId = null),
         )
 
-        verify(churchGroupRepository, never()).findById(anyLong())
+        verify(churchGroupRepository, never()).findByPublicIdAndDeletedAtIsNull(any<UUID>())
     }
 
     @Test
-    fun `updateMember updates group when groupId changes`() {
+    fun `updateMember updates group when groupPublicId changes`() {
         val oldGroup = group(1L, "구 그룹")
         val newGroup = group(2L, "새 그룹")
         val member = memberWithId(10L)
         member.group = oldGroup
-        val req = UpdateMemberRequest(lastName = "김", firstName = "철수", groupId = 2L)
+        val req = UpdateMemberRequest(lastName = "김", firstName = "철수", groupPublicId = newGroup.publicId.toString())
 
         `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
             .thenReturn(Optional.of(member))
-        `when`(churchGroupRepository.findById(2L)).thenReturn(Optional.of(newGroup))
+        `when`(churchGroupRepository.findByPublicIdAndDeletedAtIsNull(newGroup.publicId)).thenReturn(Optional.of(newGroup))
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
 
         val result = memberService.updateMember(member.publicId, req)
@@ -212,11 +299,11 @@ class MemberServiceTest {
     }
 
     @Test
-    fun `updateMember does not call groupRepository when groupId is same as current`() {
+    fun `updateMember does not call groupRepository when groupPublicId is same as current`() {
         val grp = group(1L, "기존 그룹")
         val member = memberWithId(10L)
         member.group = grp
-        val req = UpdateMemberRequest(lastName = "김", firstName = "철수", groupId = 1L)
+        val req = UpdateMemberRequest(lastName = "김", firstName = "철수", groupPublicId = grp.publicId.toString())
 
         `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
             .thenReturn(Optional.of(member))
@@ -224,7 +311,7 @@ class MemberServiceTest {
 
         memberService.updateMember(member.publicId, req)
 
-        verify(churchGroupRepository, never()).findById(anyLong())
+        verify(churchGroupRepository, never()).findByPublicIdAndDeletedAtIsNull(any<UUID>())
     }
 
     // --- softDeleteMember ---
@@ -341,6 +428,20 @@ class MemberServiceTest {
         assertNull(result.group)
     }
 
+    @Test
+    fun `registerMember persists street and house number separately`() {
+        val req = registerReq()
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
+        `when`(memberRepository.findSimilarNames(req.firstName, req.lastName)).thenReturn(emptyList())
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+        setupKeycloakMock()
+
+        val result = memberService.registerMember(req)
+
+        assertEquals("Hauptstraße", result.street)
+        assertEquals("12a", result.houseNumber)
+    }
+
     // --- getMemberProfile ---
 
     @Test
@@ -386,5 +487,59 @@ class MemberServiceTest {
 
         assertEquals(member.publicId.toString(), response.publicId)
         assertEquals("영희", response.firstName)
+    }
+
+    @Test
+    fun `updateMyProfile updates address fields`() {
+        val keycloakSub = UUID.randomUUID().toString()
+        val member = memberWithId(1L)
+        member.keycloakId = keycloakSub
+        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(member)
+        `when`(memberRepository.save(member)).thenReturn(member)
+
+        val response =
+            memberService.updateMyProfile(
+                keycloakSubject = keycloakSub,
+                email = null,
+                request =
+                    UpdateMyProfileRequest(
+                        street = "Hauptstraße",
+                        houseNumber = "12a",
+                        zipCode = "10115",
+                        city = "Berlin",
+                    ),
+            )
+
+        assertEquals("Hauptstraße", response.street)
+        assertEquals("12a", response.houseNumber)
+        assertEquals("10115", response.zipCode)
+        assertEquals("Berlin", response.city)
+        verify(memberRepository).save(member)
+    }
+
+    @Test
+    fun `updateMyProfile preserves address fields omitted from patch`() {
+        val keycloakSub = UUID.randomUUID().toString()
+        val member = memberWithId(1L)
+        member.keycloakId = keycloakSub
+        member.street = "Existing Street"
+        member.houseNumber = "7"
+        member.zipCode = "50667"
+        member.city = "Köln"
+        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(member)
+        `when`(memberRepository.save(member)).thenReturn(member)
+
+        val response =
+            memberService.updateMyProfile(
+                keycloakSubject = keycloakSub,
+                email = null,
+                request = UpdateMyProfileRequest(phoneNumber = "+49 123"),
+            )
+
+        assertEquals("Existing Street", response.street)
+        assertEquals("7", response.houseNumber)
+        assertEquals("50667", response.zipCode)
+        assertEquals("Köln", response.city)
+        assertEquals("+49 123", response.phoneNumber)
     }
 }

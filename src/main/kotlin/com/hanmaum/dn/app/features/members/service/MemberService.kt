@@ -13,15 +13,29 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberSummaryDto
+import com.hanmaum.dn.app.features.members.api.v1.dto.MinistryHistoryDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.RegisterMemberRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberMinistriesRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberTrainingsRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.SummaryTrainingDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMyProfileRequest
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
+import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
+import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
+import com.hanmaum.dn.app.features.training.api.toDto
+import com.hanmaum.dn.app.features.training.domain.TrainingStatus
+import com.hanmaum.dn.app.features.training.domain.UserTraining
+import com.hanmaum.dn.app.features.training.repository.TrainingRepository
+import com.hanmaum.dn.app.features.training.repository.UserTrainingRepository
 import jakarta.persistence.EntityNotFoundException
+import jakarta.ws.rs.ProcessingException
 import org.keycloak.admin.client.Keycloak
 import org.keycloak.representations.idm.CredentialRepresentation
 import org.keycloak.representations.idm.UserRepresentation
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageRequest
@@ -38,9 +52,15 @@ import java.util.UUID
 class MemberService(
     private val memberRepository: MemberRepository,
     private val churchGroupRepository: ChurchGroupRepository,
+    private val userTrainingRepository: UserTrainingRepository,
+    private val trainingRepository: TrainingRepository,
+    private val ministryAssignmentRepository: MinistryAssignmentRepository,
+    private val ministryRepository: MinistryRepository,
     private val keycloak: Keycloak,
-    @Value("\${app.keycloak.realm}") private val realm: String,
+    @Value("\${app.keycloak.realm:hanmaum}") private val realm: String,
 ) {
+    private val log = LoggerFactory.getLogger(MemberService::class.java)
+
     /**
      * READ Operations
      * ──────────────────────────────────────────────────────────────────
@@ -61,9 +81,50 @@ class MemberService(
                 size,
                 Sort.by("lastName").ascending().and(Sort.by("firstName").ascending()),
             )
-        return memberRepository
-            .findActiveMembers(search?.takeIf { it.isNotBlank() }.orEmpty(), status, baptism, pageable)
-            .map { it.toSummaryDto() }
+        val members =
+            memberRepository
+                .findActiveMembers(search?.takeIf { it.isNotBlank() }.orEmpty(), status, baptism, pageable)
+
+        // Enrich the page in batch queries (no N+1):
+        //  - all trainings (with status) per member = grid chips, ordered by progression
+        //  - latest completed training               = highest sort_order among COMPLETED chips
+        //  - active ministries                       = ministry names where end_date IS NULL
+        val memberIds = members.content.mapNotNull { it.id }
+        val trainingsByMember: Map<Long, List<SummaryTrainingDto>> =
+            if (memberIds.isEmpty()) {
+                emptyMap()
+            } else {
+                userTrainingRepository
+                    .findByMemberIds(memberIds)
+                    .groupBy { it.memberId }
+                    .mapValues { (_, rows) ->
+                        rows
+                            .sortedBy { it.sortOrder }
+                            .map { SummaryTrainingDto(name = it.trainingName, status = it.status.name) }
+                    }
+            }
+        val latestTrainingByMember: Map<Long, String> =
+            trainingsByMember
+                .mapNotNull { (memberId, rows) ->
+                    rows.lastOrNull { it.status == TrainingStatus.COMPLETED.name }?.let { memberId to it.name }
+                }.toMap()
+        val activeMinistriesByMember: Map<Long, List<String>> =
+            if (memberIds.isEmpty()) {
+                emptyMap()
+            } else {
+                ministryAssignmentRepository
+                    .findActiveByMemberIds(memberIds)
+                    .groupBy { it.memberId }
+                    .mapValues { (_, rows) -> rows.map { it.ministryName }.sorted() }
+            }
+
+        return members.map {
+            it.toSummaryDto(
+                latestTraining = it.id?.let(latestTrainingByMember::get),
+                trainings = it.id?.let(trainingsByMember::get).orEmpty(),
+                activeMinistries = it.id?.let(activeMinistriesByMember::get).orEmpty(),
+            )
+        }
     }
 
     @Transactional(readOnly = true)
@@ -72,8 +133,107 @@ class MemberService(
             memberRepository
                 .findByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow { EntityNotFoundException("Member not found: $publicId") }
-        return member.toDto()
+        val memberId = member.id!!
+        val trainings = userTrainingRepository.findByMemberId(memberId).map { it.toDto() }
+        val ministries = ministryAssignmentRepository.findByMemberId(memberId).map { it.toHistoryDto() }
+        return member.toDto(trainings, ministries)
     }
+
+    /**
+     * Replaces a member's entire training set (PUT semantics). Existing rows are
+     * removed and re-created from the request. Returns the refreshed member detail.
+     */
+    @Transactional
+    fun replaceMemberTrainings(
+        publicId: UUID,
+        request: ReplaceMemberTrainingsRequest,
+    ): MemberDto {
+        val member =
+            memberRepository
+                .findByPublicIdAndDeletedAtIsNull(publicId)
+                .orElseThrow { EntityNotFoundException("Member not found: $publicId") }
+        val memberId = member.id!!
+
+        // Flush the delete before re-inserting: Hibernate orders inserts before deletes
+        // by default, which would otherwise violate the (user_id, training_id) unique key.
+        userTrainingRepository.deleteByMemberId(memberId)
+        userTrainingRepository.flush()
+        val rows =
+            request.trainings.map { item ->
+                val training =
+                    trainingRepository
+                        .findByPublicIdAndDeletedAtIsNull(UUID.fromString(item.trainingPublicId))
+                        .orElseThrow { EntityNotFoundException("Training not found: ${item.trainingPublicId}") }
+                val status =
+                    try {
+                        TrainingStatus.valueOf(item.status.uppercase())
+                    } catch (e: IllegalArgumentException) {
+                        throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown training status: ${item.status}")
+                    }
+                UserTraining(
+                    member = member,
+                    training = training,
+                    status = status,
+                    completedAt = item.completedAt,
+                )
+            }
+        userTrainingRepository.saveAll(rows)
+
+        val trainings = rows.map { it.toDto() }
+        val ministries = ministryAssignmentRepository.findByMemberId(memberId).map { it.toHistoryDto() }
+        return member.toDto(trainings, ministries)
+    }
+
+    /**
+     * Replaces a member's entire ministry assignment set (PUT semantics). Existing
+     * rows are deleted and re-created from the request. Returns refreshed member detail.
+     */
+    @Transactional
+    fun replaceMemberMinistries(
+        publicId: UUID,
+        request: ReplaceMemberMinistriesRequest,
+    ): MemberDto {
+        val member =
+            memberRepository
+                .findByPublicIdAndDeletedAtIsNull(publicId)
+                .orElseThrow { EntityNotFoundException("Member not found: $publicId") }
+        val memberId = member.id!!
+
+        // Flush the delete before re-inserting so Hibernate doesn't reorder the new
+        // inserts ahead of the delete (mirrors replaceMemberTrainings).
+        ministryAssignmentRepository.deleteByMemberId(memberId)
+        ministryAssignmentRepository.flush()
+
+        val rows =
+            request.ministries.map { item ->
+                val ministry =
+                    ministryRepository
+                        .findByPublicIdAndDeletedAtIsNull(UUID.fromString(item.ministryPublicId))
+                        .orElseThrow { EntityNotFoundException("Ministry not found: ${item.ministryPublicId}") }
+                MinistryAssignment(
+                    ministry = ministry,
+                    member = member,
+                    startDate = item.startDate,
+                    endDate = item.endDate,
+                    note = item.note,
+                )
+            }
+        ministryAssignmentRepository.saveAll(rows)
+
+        // Re-read both lists from the DB so the returned detail reflects persisted state.
+        val trainings = userTrainingRepository.findByMemberId(memberId).map { it.toDto() }
+        val ministries = ministryAssignmentRepository.findByMemberId(memberId).map { it.toHistoryDto() }
+        return member.toDto(trainings, ministries)
+    }
+
+    private fun MinistryAssignment.toHistoryDto(): MinistryHistoryDto =
+        MinistryHistoryDto(
+            ministryPublicId = this.ministry.publicId.toString(),
+            name = this.ministry.name,
+            startDate = this.startDate,
+            endDate = this.endDate,
+            note = this.note,
+        )
 
     /**
      * Own-profile lookup — [keycloakSubject] is the JWT `sub` claim (Keycloak UUID).
@@ -103,6 +263,10 @@ class MemberService(
                 ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Member profile not found.")
         request.phoneNumber?.let { member.phoneNumber = it }
         request.profileImageUrl?.let { member.profileImageUrl = it }
+        request.street?.let { member.street = it }
+        request.houseNumber?.let { member.houseNumber = it }
+        request.zipCode?.let { member.zipCode = it }
+        request.city?.let { member.city = it }
         return memberRepository.save(member).toResponse()
     }
 
@@ -116,11 +280,11 @@ class MemberService(
             }
         }
         val member = request.toEntity()
-        request.groupId?.let { gid ->
+        request.groupPublicId?.let { gpid ->
             member.group =
                 churchGroupRepository
-                    .findById(gid)
-                    .orElseThrow { EntityNotFoundException("Group not found: $gid") }
+                    .findByPublicIdAndDeletedAtIsNull(UUID.fromString(gpid))
+                    .orElseThrow { EntityNotFoundException("Group not found: $gpid") }
         }
         return memberRepository.save(member).toDto()
     }
@@ -137,12 +301,13 @@ class MemberService(
 
         member.applyPatch(request)
 
-        request.groupId?.let { gid ->
-            if (member.group?.id != gid) {
+        request.groupPublicId?.let { gpid ->
+            val groupPublicId = UUID.fromString(gpid)
+            if (member.group?.publicId != groupPublicId) {
                 member.group =
                     churchGroupRepository
-                        .findById(gid)
-                        .orElseThrow { EntityNotFoundException("Group not found: $gid") }
+                        .findByPublicIdAndDeletedAtIsNull(groupPublicId)
+                        .orElseThrow { EntityNotFoundException("Group not found: $gpid") }
             }
         }
         return memberRepository.save(member).toDto()
@@ -167,7 +332,17 @@ class MemberService(
      */
     @Transactional
     fun registerMember(req: RegisterMemberRequest): Member {
+        log.info(
+            "Register member started realm={} emailDomain={} firstNameLength={} lastNameLength={} cityPresent={} zipCodePresent={}",
+            realm,
+            req.emailDomain(),
+            req.firstName.length,
+            req.lastName.length,
+            req.city?.isNotBlank() == true,
+            req.zipCode?.isNotBlank() == true,
+        )
         if (memberRepository.findByEmailAndDeletedAtIsNull(req.email) != null) {
+            log.warn("Register member rejected duplicate emailDomain={}", req.emailDomain())
             throw ResponseStatusException(HttpStatus.CONFLICT, "이미 가입된 이메일입니다: ${req.email}")
         }
 
@@ -205,12 +380,19 @@ class MemberService(
                 birthDate = req.birthDate,
                 phoneNumber = req.phoneNumber,
                 street = req.street,
+                houseNumber = req.houseNumber,
                 zipCode = req.zipCode,
                 registrationDate = LocalDate.now(),
                 memberStatus = MemberStatus.PENDING,
             )
 
         val savedMember = memberRepository.save(newMember)
+        log.info(
+            "Register member saved pending DB record memberId={} emailDomain={} discriminatorAssigned={}",
+            savedMember.id,
+            req.emailDomain(),
+            discriminator != null,
+        )
 
         // Create Keycloak user and store keycloakId back on the member record
         val keycloakUser =
@@ -231,10 +413,40 @@ class MemberService(
                     )
             }
 
-        val kcResponse = keycloak.realm(realm).users().create(keycloakUser)
+        log.info("Creating Keycloak user realm={} emailDomain={}", realm, req.emailDomain())
+        val kcResponse =
+            try {
+                keycloak.realm(realm).users().create(keycloakUser)
+            } catch (e: ProcessingException) {
+                log.error(
+                    "Keycloak user creation transport failure realm={} emailDomain={} exceptionType={} message={}",
+                    realm,
+                    req.emailDomain(),
+                    e::class.qualifiedName,
+                    e.message?.redactEmail(),
+                )
+                throw RuntimeException("Keycloak user creation transport failure", e)
+            } catch (e: RuntimeException) {
+                log.error(
+                    "Keycloak user creation runtime failure realm={} emailDomain={} exceptionType={} message={}",
+                    realm,
+                    req.emailDomain(),
+                    e::class.qualifiedName,
+                    e.message?.redactEmail(),
+                )
+                throw e
+            }
+        log.info("Keycloak user creation response realm={} emailDomain={} status={}", realm, req.emailDomain(), kcResponse.status)
         if (kcResponse.status != 201) {
-            val body = kcResponse.readEntity(String::class.java)
-            throw RuntimeException("Keycloak 사용자 생성 실패 (HTTP ${kcResponse.status}): $body")
+            val body = kcResponse.readEntity(String::class.java).orEmpty()
+            log.error(
+                "Keycloak user creation rejected realm={} emailDomain={} status={} body={}",
+                realm,
+                req.emailDomain(),
+                kcResponse.status,
+                body.redactEmail().take(500),
+            )
+            throw RuntimeException("Keycloak user creation failed (HTTP ${kcResponse.status})")
         }
 
         val keycloakId =
@@ -245,8 +457,16 @@ class MemberService(
         if (keycloakId.isNotBlank()) {
             savedMember.keycloakId = keycloakId
             memberRepository.save(savedMember)
+            log.info("Register member linked Keycloak user memberId={} emailDomain={}", savedMember.id, req.emailDomain())
+        } else {
+            log.warn("Keycloak user created without location header memberId={} emailDomain={}", savedMember.id, req.emailDomain())
         }
 
+        log.info("Register member completed memberId={} emailDomain={}", savedMember.id, req.emailDomain())
         return savedMember
     }
+
+    private fun RegisterMemberRequest.emailDomain(): String = email.substringAfter('@', missingDelimiterValue = "<missing-at>")
+
+    private fun String.redactEmail(): String = replace(Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"), "<redacted-email>")
 }

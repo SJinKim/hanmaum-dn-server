@@ -1,15 +1,14 @@
 package com.hanmaum.dn.app.features.ministry.service
 
-import com.hanmaum.dn.app.features.members.domain.Member
-import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.CreateMinistryRequest
-import com.hanmaum.dn.app.features.ministry.api.v1.dto.CreateRegistrationRequest
+import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryContactRequest
+import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryScheduleRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateMinistryRequest
-import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateRegistrationStatusRequest
 import com.hanmaum.dn.app.features.ministry.domain.Ministry
-import com.hanmaum.dn.app.features.ministry.domain.MinistryRegistration
-import com.hanmaum.dn.app.features.ministry.domain.RegistrationStatus
-import com.hanmaum.dn.app.features.ministry.repository.MinistryRegistrationRepository
+import com.hanmaum.dn.app.features.ministry.domain.MinistryContact
+import com.hanmaum.dn.app.features.ministry.domain.MinistrySchedule
+import com.hanmaum.dn.app.features.ministry.repository.ActiveMemberView
+import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
 import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
 import jakarta.persistence.EntityNotFoundException
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -27,6 +26,8 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.never
 import org.springframework.web.server.ResponseStatusException
 import java.lang.reflect.Field
+import java.time.LocalDate
+import java.time.LocalTime
 import java.util.Optional
 import java.util.UUID
 
@@ -34,15 +35,13 @@ import java.util.UUID
 class MinistryServiceTest {
     @Mock private lateinit var ministryRepository: MinistryRepository
 
-    @Mock private lateinit var registrationRepository: MinistryRegistrationRepository
-
-    @Mock private lateinit var memberRepository: MemberRepository
+    @Mock private lateinit var ministryAssignmentRepository: MinistryAssignmentRepository
 
     private lateinit var service: MinistryService
 
     @BeforeEach
     fun setUp() {
-        service = MinistryService(ministryRepository, registrationRepository, memberRepository)
+        service = MinistryService(ministryRepository, ministryAssignmentRepository)
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -53,20 +52,16 @@ class MinistryServiceTest {
         shortDescription: String = "예배 찬양을 담당합니다.",
         isActive: Boolean = true,
     ): Ministry {
-        val m = Ministry(name = name, shortDescription = shortDescription, isMinistryActive = isActive)
+        val m =
+            Ministry(
+                name = name,
+                shortDescription = shortDescription,
+                longDescription = "찬양으로 예배를 섬기는 사역입니다.",
+                isMinistryActive = isActive,
+            ).also {
+                it.replaceContacts(listOf(MinistryContact(role = "팀장", name = "김민준 집사님")))
+            }
         setId(m, id)
-        return m
-    }
-
-    private fun makeMember(
-        id: Long = 1L,
-        keycloakId: String = "kc-sub-001",
-        lastName: String = "김",
-        firstName: String = "철수",
-    ): Member {
-        val m = Member(lastName = lastName, firstName = firstName)
-        setId(m, id)
-        setKeycloakId(m, keycloakId)
         return m
     }
 
@@ -80,45 +75,81 @@ class MinistryServiceTest {
         field.set(entity, id)
     }
 
-    private fun setKeycloakId(
-        member: Member,
-        keycloakId: String,
-    ) {
-        val field: Field = member.javaClass.getDeclaredField("keycloakId")
-        field.isAccessible = true
-        field.set(member, keycloakId)
-    }
-
-    private fun makeRegistration(
-        id: Long = 10L,
-        ministry: Ministry = makeMinistry(),
-        member: Member = makeMember(),
-        period: String = "2026",
-        status: RegistrationStatus = RegistrationStatus.PENDING,
-    ): MinistryRegistration {
-        val r = MinistryRegistration(ministry = ministry, member = member, registrationPeriod = period, status = status)
-        setId(r, id)
-        return r
-    }
-
     // ─── createMinistry ───────────────────────────────────────────────────────
 
     @Test
     fun `createMinistry - success when name is unique`() {
-        val req = CreateMinistryRequest(name = "찬양팀", shortDescription = "예배 찬양 담당")
-        val saved = makeMinistry()
-        `when`(ministryRepository.existsByNameAndDeletedAtIsNull("찬양팀")).thenReturn(false)
+        val req =
+            CreateMinistryRequest(
+                title = "난민 사역",
+                subtitle = "하나님의 사랑을 나누고 복음을 전합니다.",
+                about = "한 달에 한 번 난민 아이들을 섬깁니다.",
+                requirements = listOf("아이들을 섬기려는 마음이 있으신 분"),
+                schedules =
+                    listOf(
+                        MinistryScheduleRequest(
+                            description = "매달 넷째 주 토요일: 새벽기도 후 준비모임",
+                            startTime = LocalTime.of(7, 0),
+                            endTime = LocalTime.of(9, 0),
+                        ),
+                    ),
+                contacts =
+                    listOf(
+                        MinistryContactRequest(role = "팀장", name = "김영원 권사님"),
+                        MinistryContactRequest(role = "간사", name = "최혜령 자매님"),
+                    ),
+            )
+        val saved =
+            Ministry(
+                name = req.title,
+                shortDescription = req.subtitle,
+                longDescription = req.about,
+            ).also {
+                it.replaceRequirements(req.requirements)
+                it.replaceSchedules(
+                    listOf(
+                        MinistrySchedule(
+                            description = req.schedules.single().description,
+                            startTime = req.schedules.single().startTime,
+                            endTime = req.schedules.single().endTime,
+                        ),
+                    ),
+                )
+                it.replaceContacts(
+                    req.contacts.map { contact ->
+                        MinistryContact(role = contact.role, name = contact.name)
+                    },
+                )
+            }
+        `when`(ministryRepository.existsByNameAndDeletedAtIsNull("난민 사역")).thenReturn(false)
         `when`(ministryRepository.save(any())).thenReturn(saved)
 
         val result = service.createMinistry(req)
 
-        assertEquals("찬양팀", result.name)
+        assertEquals("난민 사역", result.title)
+        assertEquals(req.requirements, result.requirements)
+        assertEquals(
+            "07:00",
+            result.schedules
+                .single()
+                .startTime
+                .toString(),
+        )
+        assertEquals("팀장", result.contacts[0].role)
+        assertEquals("김영원 권사님", result.contacts[0].name)
+        assertEquals("간사", result.contacts[1].role)
+        assertEquals("최혜령 자매님", result.contacts[1].name)
         verify(ministryRepository).save(any())
     }
 
     @Test
     fun `createMinistry - 409 when name already taken`() {
-        val req = CreateMinistryRequest(name = "찬양팀", shortDescription = "...")
+        val req =
+            CreateMinistryRequest(
+                title = "찬양팀",
+                subtitle = "예배 찬양 담당",
+                about = "찬양으로 예배를 섬깁니다.",
+            )
         `when`(ministryRepository.existsByNameAndDeletedAtIsNull("찬양팀")).thenReturn(true)
 
         assertThrows<ResponseStatusException> { service.createMinistry(req) }
@@ -135,7 +166,7 @@ class MinistryServiceTest {
         val result = service.getMinistries(active = true)
 
         assertEquals(1, result.size)
-        assertEquals("찬양팀", result[0].name)
+        assertEquals("찬양팀", result[0].title)
     }
 
     @Test
@@ -159,8 +190,9 @@ class MinistryServiceTest {
         val result = service.getMinistry(publicId)
 
         assertEquals(publicId.toString(), result.publicId)
-        assertEquals("찬양팀", result.name)
-        assertNull(result.leader)
+        assertEquals("찬양팀", result.title)
+        assertEquals("팀장", result.contacts.single().role)
+        assertEquals("김민준 집사님", result.contacts.single().name)
     }
 
     @Test
@@ -181,12 +213,86 @@ class MinistryServiceTest {
         `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(publicId))
             .thenReturn(Optional.of(ministry))
 
-        val req = UpdateMinistryRequest(name = "새 이름")
+        val req = UpdateMinistryRequest(title = "새 이름")
         val result = service.updateMinistry(publicId, req)
 
-        assertEquals("새 이름", result.name)
-        // shortDescription unchanged
-        assertEquals("예배 찬양을 담당합니다.", result.shortDescription)
+        assertEquals("새 이름", result.title)
+        assertEquals("예배 찬양을 담당합니다.", result.subtitle)
+    }
+
+    @Test
+    fun `updateMinistry - replaces structured detail lists and contacts`() {
+        val ministry =
+            makeMinistry().also {
+                it.replaceRequirements(listOf("기존 자격"))
+                it.replaceSchedules(
+                    listOf(
+                        MinistrySchedule(
+                            description = "기존 일정",
+                            startTime = LocalTime.of(10, 0),
+                            endTime = LocalTime.of(11, 0),
+                        ),
+                    ),
+                )
+                it.replaceContacts(
+                    listOf(
+                        MinistryContact(role = "팀장", name = "기존 팀장님"),
+                        MinistryContact(role = "간사", name = "기존 간사님"),
+                    ),
+                )
+            }
+        val publicId = ministry.publicId
+        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(publicId))
+            .thenReturn(Optional.of(ministry))
+
+        val result =
+            service.updateMinistry(
+                publicId,
+                UpdateMinistryRequest(
+                    requirements = listOf("새 자격 1", "새 자격 2"),
+                    schedules =
+                        listOf(
+                            MinistryScheduleRequest(
+                                description = "새 일정",
+                                startTime = LocalTime.of(16, 0),
+                                endTime = LocalTime.of(18, 0),
+                            ),
+                        ),
+                    contacts =
+                        listOf(
+                            MinistryContactRequest(role = "담당 교역자", name = "새 담당자님"),
+                        ),
+                ),
+            )
+
+        assertEquals(listOf("새 자격 1", "새 자격 2"), result.requirements)
+        assertEquals("새 일정", result.schedules.single().description)
+        assertEquals("담당 교역자", result.contacts.single().role)
+        assertEquals("새 담당자님", result.contacts.single().name)
+    }
+
+    @Test
+    fun `createMinistry - rejects schedule whose end is not after start`() {
+        val request =
+            CreateMinistryRequest(
+                title = "난민 사역",
+                subtitle = "아이들을 섬깁니다.",
+                about = "난민 아이들과 함께합니다.",
+                schedules =
+                    listOf(
+                        MinistryScheduleRequest(
+                            description = "준비모임",
+                            startTime = LocalTime.of(9, 0),
+                            endTime = LocalTime.of(9, 0),
+                        ),
+                    ),
+            )
+        `when`(ministryRepository.existsByNameAndDeletedAtIsNull(request.title)).thenReturn(false)
+
+        val exception = assertThrows<ResponseStatusException> { service.createMinistry(request) }
+
+        assertEquals(400, exception.statusCode.value())
+        verify(ministryRepository, never()).save(any())
     }
 
     @Test
@@ -224,241 +330,55 @@ class MinistryServiceTest {
         assertThrows<EntityNotFoundException> { service.deactivateMinistry(id) }
     }
 
-    // ─── registerSelf ─────────────────────────────────────────────────────────
+    // ─── getActiveMembers ─────────────────────────────────────────────────────
 
     @Test
-    fun `registerSelf - success when no duplicate`() {
+    fun `getActiveMembers - returns active member dtos for ministry`() {
         val ministry = makeMinistry()
-        val member = makeMember()
-        val ministryPublicId = ministry.publicId
-        val req = CreateRegistrationRequest(period = "2026", note = null)
-        val saved = MinistryRegistration(ministry = ministry, member = member, registrationPeriod = "2026")
-        setId(saved, 10L)
-
-        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministryPublicId))
+        val publicId = ministry.publicId
+        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(publicId))
             .thenReturn(Optional.of(ministry))
-        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull("kc-sub-001"))
-            .thenReturn(member)
-        `when`(registrationRepository.findByMinistryIdAndMemberIdAndPeriod(1L, 1L, "2026"))
-            .thenReturn(Optional.empty())
-        `when`(registrationRepository.save(any())).thenReturn(saved)
+        val memberPublicId = UUID.randomUUID()
+        val view =
+            ActiveMemberView(
+                memberPublicId = memberPublicId,
+                fullName = "김철수",
+                startDate = LocalDate.of(2025, 1, 1),
+                note = null,
+                gender = null,
+            )
+        `when`(ministryAssignmentRepository.findActiveByMinistryPublicId(publicId))
+            .thenReturn(listOf(view))
 
-        val result = service.registerSelf(ministryPublicId, "kc-sub-001", req)
+        val result = service.getActiveMembers(publicId)
 
-        assertEquals("2026", result.registrationPeriod)
-        verify(registrationRepository).save(any())
+        assertEquals(1, result.size)
+        assertEquals(memberPublicId.toString(), result[0].publicId)
+        assertEquals("김철수", result[0].fullName)
+        assertEquals("2025-01-01", result[0].startDate)
+        assertNull(result[0].note)
     }
 
     @Test
-    fun `registerSelf - 409 on duplicate registration`() {
+    fun `getActiveMembers - returns empty list when ministry has no active members`() {
         val ministry = makeMinistry()
-        val member = makeMember()
-        val ministryPublicId = ministry.publicId
-        val req = CreateRegistrationRequest(period = "2026")
-        val approved = makeRegistration(ministry = ministry, member = member, status = RegistrationStatus.APPROVED)
-
-        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministryPublicId))
+        val publicId = ministry.publicId
+        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(publicId))
             .thenReturn(Optional.of(ministry))
-        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull("kc-sub-001"))
-            .thenReturn(member)
-        `when`(registrationRepository.findByMinistryIdAndMemberIdAndPeriod(1L, 1L, "2026"))
-            .thenReturn(Optional.of(approved))
+        `when`(ministryAssignmentRepository.findActiveByMinistryPublicId(publicId))
+            .thenReturn(emptyList())
 
-        assertThrows<ResponseStatusException> {
-            service.registerSelf(ministryPublicId, "kc-sub-001", req)
-        }
-        verify(registrationRepository, never()).save(any())
+        val result = service.getActiveMembers(publicId)
+
+        assertEquals(0, result.size)
     }
 
     @Test
-    fun `registerSelf - 400 when ministry is inactive`() {
-        val ministry = makeMinistry(isActive = false)
-        val ministryPublicId = ministry.publicId
-        val req = CreateRegistrationRequest(period = "2026")
-
-        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministryPublicId))
-            .thenReturn(Optional.of(ministry))
-        // memberRepository is NOT called — service short-circuits on inactive check
-
-        val ex =
-            assertThrows<ResponseStatusException> {
-                service.registerSelf(ministryPublicId, "kc-sub-001", req)
-            }
-        assertEquals(400, ex.statusCode.value())
-    }
-
-    // ─── withdrawRegistration ─────────────────────────────────────────────────
-
-    @Test
-    fun `withdrawRegistration - 403 when registration belongs to another member`() {
-        val ministry = makeMinistry()
-        val owner = makeMember(id = 1L, keycloakId = "kc-owner")
-        val caller = makeMember(id = 2L, keycloakId = "kc-caller")
-
-        val registration = MinistryRegistration(ministry = ministry, member = owner, registrationPeriod = "2026")
-        setId(registration, 5L)
-
-        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId))
-            .thenReturn(Optional.of(ministry))
-        `when`(registrationRepository.findByPublicIdAndDeletedAtIsNull(registration.publicId))
-            .thenReturn(Optional.of(registration))
-        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull("kc-caller"))
-            .thenReturn(caller)
-
-        val ex =
-            assertThrows<ResponseStatusException> {
-                service.withdrawRegistration(ministry.publicId, registration.publicId, "kc-caller")
-            }
-        assertEquals(403, ex.statusCode.value())
-    }
-
-    @Test
-    fun `withdrawRegistration - soft deletes own registration`() {
-        val ministry = makeMinistry()
-        val member = makeMember(keycloakId = "kc-sub-001")
-        val registration = MinistryRegistration(ministry = ministry, member = member, registrationPeriod = "2026")
-        setId(registration, 5L)
-
-        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId))
-            .thenReturn(Optional.of(ministry))
-        `when`(registrationRepository.findByPublicIdAndDeletedAtIsNull(registration.publicId))
-            .thenReturn(Optional.of(registration))
-        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull("kc-sub-001"))
-            .thenReturn(member)
-
-        service.withdrawRegistration(ministry.publicId, registration.publicId, "kc-sub-001")
-
-        org.junit.jupiter.api.Assertions
-            .assertNotNull(registration.deletedAt)
-    }
-
-    // ─── registerSelf re-apply ────────────────────────────────────────────────
-
-    @Test
-    fun `registerSelf - re-applies when existing registration is REJECTED`() {
-        val ministry = makeMinistry()
-        val member = makeMember()
-        val rejected = makeRegistration(ministry = ministry, member = member, status = RegistrationStatus.REJECTED)
-        val req = CreateRegistrationRequest(period = "2026")
-
-        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId)).thenReturn(Optional.of(ministry))
-        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull("kc-sub-001")).thenReturn(member)
-        `when`(registrationRepository.findByMinistryIdAndMemberIdAndPeriod(1L, 1L, "2026"))
-            .thenReturn(Optional.of(rejected))
-        val newReg = makeRegistration(id = 11L, ministry = ministry, member = member, status = RegistrationStatus.PENDING)
-        `when`(registrationRepository.save(any())).thenReturn(newReg)
-
-        val result = service.registerSelf(ministry.publicId, "kc-sub-001", req)
-
-        assertEquals("PENDING", result.status)
-        verify(registrationRepository).flush()
-        verify(registrationRepository).save(any())
-    }
-
-    @Test
-    fun `registerSelf - 409 when existing registration is PENDING`() {
-        val ministry = makeMinistry()
-        val member = makeMember()
-        val pending = makeRegistration(ministry = ministry, member = member, status = RegistrationStatus.PENDING)
-        val req = CreateRegistrationRequest(period = "2026")
-
-        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId)).thenReturn(Optional.of(ministry))
-        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull("kc-sub-001")).thenReturn(member)
-        `when`(registrationRepository.findByMinistryIdAndMemberIdAndPeriod(1L, 1L, "2026"))
-            .thenReturn(Optional.of(pending))
-
-        assertThrows<ResponseStatusException> { service.registerSelf(ministry.publicId, "kc-sub-001", req) }
-        verify(registrationRepository, never()).save(any())
-    }
-
-    // ─── approveOrRejectRegistration ─────────────────────────────────────────
-
-    @Test
-    fun `approveOrRejectRegistration - approves pending registration`() {
-        val ministry = makeMinistry()
-        val reg = makeRegistration(ministry = ministry)
-        val req = UpdateRegistrationStatusRequest(status = "APPROVED")
-
-        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId)).thenReturn(Optional.of(ministry))
-        `when`(registrationRepository.findByPublicIdAndDeletedAtIsNull(reg.publicId)).thenReturn(Optional.of(reg))
-
-        val result = service.approveOrRejectRegistration(ministry.publicId, reg.publicId, req)
-
-        assertEquals("APPROVED", result.status)
-    }
-
-    @Test
-    fun `approveOrRejectRegistration - rejects pending registration`() {
-        val ministry = makeMinistry()
-        val reg = makeRegistration(ministry = ministry)
-        val req = UpdateRegistrationStatusRequest(status = "REJECTED")
-
-        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId)).thenReturn(Optional.of(ministry))
-        `when`(registrationRepository.findByPublicIdAndDeletedAtIsNull(reg.publicId)).thenReturn(Optional.of(reg))
-
-        val result = service.approveOrRejectRegistration(ministry.publicId, reg.publicId, req)
-
-        assertEquals("REJECTED", result.status)
-    }
-
-    @Test
-    fun `approveOrRejectRegistration - 409 when registration is not PENDING`() {
-        val ministry = makeMinistry()
-        val reg = makeRegistration(ministry = ministry, status = RegistrationStatus.APPROVED)
-        val req = UpdateRegistrationStatusRequest(status = "REJECTED")
-
-        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId)).thenReturn(Optional.of(ministry))
-        `when`(registrationRepository.findByPublicIdAndDeletedAtIsNull(reg.publicId)).thenReturn(Optional.of(reg))
-
-        assertThrows<ResponseStatusException> {
-            service.approveOrRejectRegistration(ministry.publicId, reg.publicId, req)
-        }
-    }
-
-    @Test
-    fun `approveOrRejectRegistration - 400 on invalid status value`() {
-        val ministry = makeMinistry()
-        val reg = makeRegistration(ministry = ministry)
-        val req = UpdateRegistrationStatusRequest(status = "GARBAGE")
-
-        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId)).thenReturn(Optional.of(ministry))
-        `when`(registrationRepository.findByPublicIdAndDeletedAtIsNull(reg.publicId)).thenReturn(Optional.of(reg))
-
-        assertThrows<ResponseStatusException> {
-            service.approveOrRejectRegistration(ministry.publicId, reg.publicId, req)
-        }
-    }
-
-    // ─── getMyRegistration ────────────────────────────────────────────────────
-
-    @Test
-    fun `getMyRegistration - returns dto when found`() {
-        val ministry = makeMinistry()
-        val member = makeMember()
-        val reg = makeRegistration(ministry = ministry, member = member, status = RegistrationStatus.PENDING)
-
-        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId)).thenReturn(Optional.of(ministry))
-        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull("kc-sub-001")).thenReturn(member)
-        `when`(registrationRepository.findByMinistryIdAndMemberIdAndPeriod(1L, 1L, "2026"))
-            .thenReturn(Optional.of(reg))
-
-        val result = service.getMyRegistration(ministry.publicId, "kc-sub-001", "2026")
-
-        assertEquals("PENDING", result?.status)
-    }
-
-    @Test
-    fun `getMyRegistration - returns null when no record`() {
-        val ministry = makeMinistry()
-        val member = makeMember()
-
-        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId)).thenReturn(Optional.of(ministry))
-        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull("kc-sub-001")).thenReturn(member)
-        `when`(registrationRepository.findByMinistryIdAndMemberIdAndPeriod(1L, 1L, "2026"))
+    fun `getActiveMembers - throws EntityNotFoundException when ministry not found`() {
+        val id = UUID.randomUUID()
+        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(id))
             .thenReturn(Optional.empty())
 
-        val result = service.getMyRegistration(ministry.publicId, "kc-sub-001", "2026")
-
-        assertNull(result)
+        assertThrows<EntityNotFoundException> { service.getActiveMembers(id) }
     }
 }

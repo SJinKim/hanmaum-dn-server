@@ -13,6 +13,10 @@
 # Usage:
 #   make prod-up    →  docker compose --project-name hanmaum-prod -f docker-compose.prod.yml up -d
 #   make prod-down  →  docker compose --project-name hanmaum-prod -f docker-compose.prod.yml down
+#
+# SSH tunnel access from a workstation:
+#   ssh -L 5433:127.0.0.1:5433 <server>
+#   psql -h localhost -p 5433 -U <DB_HANMAUM_DN_USER> -d <DB_HANMAUM_DN_NAME>
 
 services:
   hanmaumApp-db:
@@ -23,6 +27,8 @@ services:
       POSTGRES_DB: ${DB_HANMAUM_DN_NAME}
       POSTGRES_USER: ${DB_HANMAUM_DN_USER}
       POSTGRES_PASSWORD: ${DB_HANMAUM_DN_SECRET}
+    ports:
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./infrastructure/postgres-init:/docker-entrypoint-initdb.d
@@ -60,7 +66,11 @@ services:
     volumes:
       - ./infrastructure/docker/keycloak/export:/opt/keycloak/data/import
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9000/health/ready || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "{ printf 'HEAD /health/ready HTTP/1.0\\r\\n\\r\\n' >&0; grep 'HTTP/1.0 200'; } 0<>/dev/tcp/localhost/9000"
+        ]
       interval: 30s
       timeout: 10s
       retries: 10

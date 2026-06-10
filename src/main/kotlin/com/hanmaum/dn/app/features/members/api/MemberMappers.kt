@@ -7,7 +7,10 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberSummaryDto
+import com.hanmaum.dn.app.features.members.api.v1.dto.MinistryHistoryDto
+import com.hanmaum.dn.app.features.members.api.v1.dto.SummaryTrainingDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.UserTrainingDto
 import com.hanmaum.dn.app.features.members.domain.Member
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
@@ -53,6 +56,7 @@ fun CreateMemberRequest.toEntity(): Member =
         phoneNumber = this.phoneNumber,
         email = this.email,
         street = this.street,
+        houseNumber = this.houseNumber,
         zipCode = this.zipCode,
         city = this.city,
         registrationDate = this.registrationDate,
@@ -84,6 +88,7 @@ fun Member.applyPatch(request: UpdateMemberRequest) {
     request.phoneNumber?.let { this.phoneNumber = it }
     request.email?.let { this.email = it }
     request.street?.let { this.street = it }
+    request.houseNumber?.let { this.houseNumber = it }
     request.zipCode?.let { this.zipCode = it }
     request.city?.let { this.city = it }
     request.registrationDate?.let { this.registrationDate = it }
@@ -104,8 +109,14 @@ fun Member.applyPatch(request: UpdateMemberRequest) {
 
 // ─── Entity → DTO mappings ────────────────────────────────────────────────────
 
-/** Full detail DTO. publicId (UUID string) is the only external identifier; internal Long id is never returned. */
-fun Member.toDto(): MemberDto =
+/**
+ * Full detail DTO. publicId (UUID string) is the only external identifier; internal Long id is never returned.
+ * [trainings] and [ministries] are enriched by the service (default empty for create/update responses).
+ */
+fun Member.toDto(
+    trainings: List<UserTrainingDto> = emptyList(),
+    ministries: List<MinistryHistoryDto> = emptyList(),
+): MemberDto =
     MemberDto(
         publicId = this.publicId.toString(),
         lastName = this.lastName,
@@ -117,16 +128,28 @@ fun Member.toDto(): MemberDto =
         phoneNumber = this.phoneNumber,
         email = this.email,
         street = this.street,
+        houseNumber = this.houseNumber,
         zipCode = this.zipCode,
         city = this.city,
         registrationDate = this.registrationDate,
         memberStatus = this.memberStatus.name,
         churchRole = this.churchRole,
+        groupPublicId = this.group?.publicId?.toString(),
         groupName = this.group?.name,
         profileImageUrl = this.profileImageUrl,
+        trainings = trainings,
+        ministries = ministries,
     )
 
-fun Member.toSummaryDto(): MemberSummaryDto =
+/**
+ * Lightweight list DTO. [latestTraining] / [trainings] / [activeMinistries] are derived per page
+ * by the service (batched, no N+1) and passed in here.
+ */
+fun Member.toSummaryDto(
+    latestTraining: String? = null,
+    trainings: List<SummaryTrainingDto> = emptyList(),
+    activeMinistries: List<String> = emptyList(),
+): MemberSummaryDto =
     MemberSummaryDto(
         publicId = this.publicId.toString(),
         lastName = this.lastName,
@@ -136,6 +159,9 @@ fun Member.toSummaryDto(): MemberSummaryDto =
         baptism = this.baptism?.name,
         groupName = this.group?.name,
         updatedAt = this.updatedAt,
+        latestTraining = latestTraining,
+        trainings = trainings,
+        activeMinistries = activeMinistries,
     )
 
 fun Member.toResponse(): MemberResponse =
@@ -147,6 +173,9 @@ fun Member.toResponse(): MemberResponse =
         status = this.memberStatus,
         churchRole = this.churchRole,
         groupName = this.group?.name,
+        street = this.street,
+        houseNumber = this.houseNumber,
+        zipCode = this.zipCode,
         city = this.city,
         phoneNumber = this.phoneNumber,
         profileImageUrl = this.profileImageUrl,

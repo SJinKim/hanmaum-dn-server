@@ -2,7 +2,7 @@ package com.hanmaum.dn.app.common.cleanup
 
 import com.hanmaum.dn.app.features.announcements.repository.AnnouncementRepository
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
-import com.hanmaum.dn.app.features.ministry.repository.MinistryRegistrationRepository
+import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
@@ -18,7 +18,7 @@ import java.time.Instant
 
 @ExtendWith(MockitoExtension::class)
 class CleanupServiceTest {
-    @Mock private lateinit var ministryRegistrationRepository: MinistryRegistrationRepository
+    @Mock private lateinit var ministryAssignmentRepository: MinistryAssignmentRepository
 
     @Mock private lateinit var announcementRepository: AnnouncementRepository
 
@@ -30,7 +30,7 @@ class CleanupServiceTest {
     @Test
     fun `purge passes a cutoff timestamp close to now`() {
         val before = Instant.now()
-        `when`(ministryRegistrationRepository.hardDeleteExpired(any())).thenReturn(0)
+        `when`(ministryAssignmentRepository.hardDeleteExpired(any())).thenReturn(0)
         `when`(announcementRepository.hardDeleteExpired(any())).thenReturn(0)
         `when`(attendanceLogRepository.hardDeleteExpired(any())).thenReturn(0)
 
@@ -38,7 +38,7 @@ class CleanupServiceTest {
 
         val after = Instant.now()
         val captor = argumentCaptor<Instant>()
-        verify(ministryRegistrationRepository).hardDeleteExpired(captor.capture())
+        verify(ministryAssignmentRepository).hardDeleteExpired(captor.capture())
         val captured = captor.firstValue
         assertTrue(!captured.isBefore(before)) { "cutoff should be >= before" }
         assertTrue(!captured.isAfter(after)) { "cutoff should be <= after" }
@@ -46,20 +46,20 @@ class CleanupServiceTest {
 
     @Test
     fun `purge calls all three repositories`() {
-        `when`(ministryRegistrationRepository.hardDeleteExpired(any())).thenReturn(2)
+        `when`(ministryAssignmentRepository.hardDeleteExpired(any())).thenReturn(2)
         `when`(announcementRepository.hardDeleteExpired(any())).thenReturn(1)
         `when`(attendanceLogRepository.hardDeleteExpired(any())).thenReturn(0)
 
         cleanupService.purgeExpiredSoftDeletedEntries()
 
-        verify(ministryRegistrationRepository).hardDeleteExpired(any())
+        verify(ministryAssignmentRepository).hardDeleteExpired(any())
         verify(announcementRepository).hardDeleteExpired(any())
         verify(attendanceLogRepository).hardDeleteExpired(any())
     }
 
     @Test
     fun `purge continues with remaining tables when one fails`() {
-        doThrow(RuntimeException("DB error")).`when`(ministryRegistrationRepository).hardDeleteExpired(any())
+        doThrow(RuntimeException("DB error")).`when`(ministryAssignmentRepository).hardDeleteExpired(any())
         `when`(announcementRepository.hardDeleteExpired(any())).thenReturn(0)
         `when`(attendanceLogRepository.hardDeleteExpired(any())).thenReturn(0)
 

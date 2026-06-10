@@ -8,6 +8,8 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberSummaryDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.RegisterMemberRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberMinistriesRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberTrainingsRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMyProfileRequest
 import com.hanmaum.dn.app.features.members.service.MemberService
@@ -23,12 +25,12 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
-import org.springframework.web.server.ResponseStatusException
 import java.util.UUID
 
 @RestController
@@ -69,7 +71,7 @@ class MemberController(
 
     /**
      * PATCH /api/v1/members/me
-     * Role: any authenticated member — partial self-update; only phoneNumber and profileImageUrl.
+     * Role: any authenticated member — partial self-update of contact, profile image, and address.
      */
     @PatchMapping("/me")
     @PreAuthorize("isAuthenticated()")
@@ -125,6 +127,34 @@ class MemberController(
     }
 
     /**
+     * PUT /api/v1/members/{publicId}/trainings
+     * Role: ADMIN — replaces the member's entire training set. Returns refreshed detail.
+     */
+    @PutMapping("/{publicId}/trainings")
+    @PreAuthorize("hasRole('ADMIN')")
+    fun replaceMemberTrainings(
+        @PathVariable publicId: UUID,
+        @Valid @RequestBody request: ReplaceMemberTrainingsRequest,
+    ): ResponseEntity<ApiResponse<MemberDto>> {
+        val updated = memberService.replaceMemberTrainings(publicId, request)
+        return ResponseEntity.ok(ApiResponse.success(data = updated))
+    }
+
+    /**
+     * PUT /api/v1/members/{publicId}/ministries
+     * Role: ADMIN — replaces the member's entire ministry assignment set. Returns refreshed detail.
+     */
+    @PutMapping("/{publicId}/ministries")
+    @PreAuthorize("hasRole('ADMIN')")
+    fun replaceMemberMinistries(
+        @PathVariable publicId: UUID,
+        @Valid @RequestBody request: ReplaceMemberMinistriesRequest,
+    ): ResponseEntity<ApiResponse<MemberDto>> {
+        val updated = memberService.replaceMemberMinistries(publicId, request)
+        return ResponseEntity.ok(ApiResponse.success(data = updated))
+    }
+
+    /**
      * DELETE /api/v1/members/{publicId}
      * Role: ADMIN — soft delete; sets deletedAt + memberStatus=DELETED (terminal).
      */
@@ -145,19 +175,10 @@ class MemberController(
     @PostMapping("/register")
     fun registerMember(
         @Valid @RequestBody request: RegisterMemberRequest,
-    ): ResponseEntity<ApiResponse<Unit>> =
-        try {
-            memberService.registerMember(request)
-            ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(ApiResponse.success(message = "등록이 완료되었습니다."))
-        } catch (e: ResponseStatusException) {
-            ResponseEntity
-                .status(e.statusCode)
-                .body(ApiResponse.error(e.reason ?: e.message ?: "등록 실패"))
-        } catch (e: Exception) {
-            ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error("서버 오류가 발생했습니다."))
-        }
+    ): ResponseEntity<ApiResponse<Unit>> {
+        memberService.registerMember(request)
+        return ResponseEntity
+            .status(HttpStatus.CREATED)
+            .body(ApiResponse.success(message = "등록이 완료되었습니다."))
+    }
 }

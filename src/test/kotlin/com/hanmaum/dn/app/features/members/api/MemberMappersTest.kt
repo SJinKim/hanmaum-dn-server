@@ -114,7 +114,8 @@ class MemberMappersTest {
                 birthDate = LocalDate.of(1995, 5, 15),
                 phoneNumber = "010-1234-5678",
                 email = "test@example.com",
-                street = "테스트로 1",
+                street = "테스트로",
+                houseNumber = "1",
                 zipCode = "12345",
                 city = "서울",
                 churchRole = "청년부원",
@@ -129,7 +130,8 @@ class MemberMappersTest {
         assertEquals(LocalDate.of(1995, 5, 15), entity.birthDate)
         assertEquals("010-1234-5678", entity.phoneNumber)
         assertEquals("test@example.com", entity.email)
-        assertEquals("테스트로 1", entity.street)
+        assertEquals("테스트로", entity.street)
+        assertEquals("1", entity.houseNumber)
         assertEquals("12345", entity.zipCode)
         assertEquals("서울", entity.city)
         assertEquals("청년부원", entity.churchRole)
@@ -150,6 +152,7 @@ class MemberMappersTest {
                 phoneNumber = "010-9999-8888",
                 email = "updated@example.com",
                 street = "새 주소",
+                houseNumber = "12a",
                 zipCode = "99999",
                 city = "부산",
                 memberStatus = "ACTIVE",
@@ -165,6 +168,7 @@ class MemberMappersTest {
         assertEquals("010-9999-8888", member.phoneNumber)
         assertEquals("updated@example.com", member.email)
         assertEquals("새 주소", member.street)
+        assertEquals("12a", member.houseNumber)
         assertEquals("99999", member.zipCode)
         assertEquals("부산", member.city)
         assertEquals(MemberStatus.ACTIVE, member.memberStatus)
@@ -227,6 +231,9 @@ class MemberMappersTest {
                 firstName = "준호",
                 gender = Gender.M,
                 memberStatus = MemberStatus.ACTIVE,
+                street = "Hauptstraße",
+                houseNumber = "5",
+                zipCode = "12345",
                 city = "서울",
                 churchRole = "팀장",
             )
@@ -236,6 +243,9 @@ class MemberMappersTest {
         assertEquals("준호", dto.firstName)
         assertEquals("M", dto.gender)
         assertEquals("ACTIVE", dto.memberStatus)
+        assertEquals("Hauptstraße", dto.street)
+        assertEquals("5", dto.houseNumber)
+        assertEquals("12345", dto.zipCode)
         assertEquals("서울", dto.city)
         assertEquals("팀장", dto.churchRole)
         assertNull(dto.groupName)
@@ -271,6 +281,9 @@ class MemberMappersTest {
         member.email = "test@example.com"
         member.memberStatus = MemberStatus.ACTIVE
         member.churchRole = "청년부원"
+        member.street = "Hauptstraße"
+        member.houseNumber = "5"
+        member.zipCode = "12345"
         member.city = "서울"
 
         val response = member.toResponse()
@@ -281,6 +294,9 @@ class MemberMappersTest {
         assertEquals("test@example.com", response.email)
         assertEquals(MemberStatus.ACTIVE, response.status)
         assertEquals("청년부원", response.churchRole)
+        assertEquals("Hauptstraße", response.street)
+        assertEquals("5", response.houseNumber)
+        assertEquals("12345", response.zipCode)
         assertEquals("서울", response.city)
         assertNull(response.groupName)
     }

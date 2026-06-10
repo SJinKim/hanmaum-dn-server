@@ -57,6 +57,7 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     // --- TEST SETUP (Spring Boot 4 & Testcontainers 2) ---
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.springframework.security:spring-security-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
     // Test Container libs
@@ -98,7 +99,11 @@ ktlint {
 
 tasks.withType<Test> {
     useJUnitPlatform {
-        excludeTags("integration")
+        // Integration-tagged tests need the Docker stack (Postgres/Keycloak); excluded by
+        // default. Run them with: ./gradlew test -PincludeIntegration
+        if (!project.hasProperty("includeIntegration")) {
+            excludeTags("integration")
+        }
     }
 }
 
