@@ -36,8 +36,6 @@ class MinistryAssignmentRepositoryIT {
 
     @Autowired lateinit var assignments: MinistryAssignmentRepository
 
-    @Autowired lateinit var ministries: MinistryRepository
-
     @PersistenceContext lateinit var em: EntityManager
 
     @Test
@@ -85,5 +83,29 @@ class MinistryAssignmentRepositoryIT {
 
         assertEquals(1, results.size)
         assertEquals("이영희", results.single().fullName)
+    }
+
+    @Test
+    fun `findActiveByMinistryPublicId - excludes soft-deleted assignments`() {
+        val ministry = Ministry(name = "봉사팀", shortDescription = "Service team")
+        em.persist(ministry)
+
+        val member = Member(lastName = "최", firstName = "지수")
+        em.persist(member)
+
+        val startDate = LocalDate.of(2024, 1, 1)
+        em.persist(MinistryAssignment(ministry = ministry, member = member, startDate = startDate))
+        em.persist(
+            MinistryAssignment(ministry = ministry, member = member, startDate = startDate).apply {
+                deletedAt = Instant.now()
+            },
+        )
+
+        em.flush()
+        em.clear()
+
+        val results = assignments.findActiveByMinistryPublicId(ministry.publicId)
+
+        assertEquals(1, results.size)
     }
 }
