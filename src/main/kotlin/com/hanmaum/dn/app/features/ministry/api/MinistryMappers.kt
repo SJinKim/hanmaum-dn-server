@@ -84,4 +84,5 @@ fun ActiveMemberView.toDto(): ActiveMinistryMemberDto =
         fullName = this.fullName,
         startDate = this.startDate.toString(),
         note = this.note,
+        gender = this.gender?.name,
     )

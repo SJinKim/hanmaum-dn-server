@@ -54,7 +54,8 @@ interface MinistryAssignmentRepository : JpaRepository<MinistryAssignment, Long>
             a.member.publicId,
             CONCAT(a.member.lastName, a.member.firstName),
             a.startDate,
-            a.note
+            a.note,
+            a.member.gender
         )
         FROM MinistryAssignment a
         WHERE a.ministry.publicId = :ministryPublicId

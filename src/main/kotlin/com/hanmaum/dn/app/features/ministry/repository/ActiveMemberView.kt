@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.ministry.repository
 
+import com.hanmaum.dn.app.common.domainvalue.Gender
 import java.time.LocalDate
 import java.util.UUID
 
@@ -9,4 +10,5 @@ data class ActiveMemberView(
     val fullName: String,
     val startDate: LocalDate,
     val note: String?,
+    val gender: Gender?,
 )
