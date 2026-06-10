@@ -1,12 +1,14 @@
 package com.hanmaum.dn.app.features.ministry.api
 
 import com.hanmaum.dn.app.features.members.domain.Member
+import com.hanmaum.dn.app.features.ministry.api.v1.dto.ActiveMinistryMemberDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.CreateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.LeaderDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistrySummaryDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.domain.Ministry
+import com.hanmaum.dn.app.features.ministry.repository.ActiveMemberView
 
 // ─── Entity creation ──────────────────────────────────────────────────────────
 
@@ -74,4 +76,12 @@ fun Member.toLeaderDto(): LeaderDto =
     LeaderDto(
         publicId = this.publicId.toString(),
         fullName = "${this.lastName}${this.firstName}",
+    )
+
+fun ActiveMemberView.toDto(): ActiveMinistryMemberDto =
+    ActiveMinistryMemberDto(
+        publicId = this.memberPublicId.toString(),
+        fullName = this.fullName,
+        startDate = this.startDate.toString(),
+        note = this.note,
     )

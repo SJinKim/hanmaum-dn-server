@@ -32,6 +32,14 @@ data class LeaderDto(
     val fullName: String,
 )
 
+/** One active member in a ministry — returned by GET /{publicId}/members. */
+data class ActiveMinistryMemberDto(
+    val publicId: String, // member public ID
+    val fullName: String,
+    val startDate: String, // ISO 'YYYY-MM-DD'
+    val note: String?,
+)
+
 // ─── Request DTOs ─────────────────────────────────────────────────────────────
 
 data class CreateMinistryRequest(

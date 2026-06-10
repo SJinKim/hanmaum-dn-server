@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
+import java.util.UUID
 
 @Repository
 interface MinistryAssignmentRepository : JpaRepository<MinistryAssignment, Long> {
@@ -42,6 +43,29 @@ interface MinistryAssignmentRepository : JpaRepository<MinistryAssignment, Long>
     fun findActiveByMemberIds(
         @Param("memberIds") memberIds: Collection<Long>,
     ): List<MemberMinistryView>
+
+    /**
+     * All currently active assignments (endDate IS NULL) for a given ministry,
+     * projected flat for the ministry detail view.
+     */
+    @Query(
+        """
+        SELECT new com.hanmaum.dn.app.features.ministry.repository.ActiveMemberView(
+            a.member.publicId,
+            CONCAT(a.member.lastName, a.member.firstName),
+            a.startDate,
+            a.note
+        )
+        FROM MinistryAssignment a
+        WHERE a.ministry.publicId = :ministryPublicId
+          AND a.endDate IS NULL
+          AND a.deletedAt IS NULL
+        ORDER BY a.startDate ASC
+        """,
+    )
+    fun findActiveByMinistryPublicId(
+        @Param("ministryPublicId") ministryPublicId: UUID,
+    ): List<ActiveMemberView>
 
     // NOTE: deliberately NOT clearAutomatically=true. Clearing the persistence context
     // here detaches the already-loaded `member` (and its lazy `group`), which made
