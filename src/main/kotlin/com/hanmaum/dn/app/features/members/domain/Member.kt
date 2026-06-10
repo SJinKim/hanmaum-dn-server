@@ -66,6 +66,11 @@ class Member(
     // --- PROFILE ---
     @Column(name = "profile_image_url", length = 500)
     var profileImageUrl: String? = null,
+    // --- DASHBOARD FLAGS ---
+    @Column(name = "is_next_group_leader", nullable = false)
+    var isNextGroupLeader: Boolean = false,
+    @Column(name = "one_on_one_signup_filled", nullable = false)
+    var oneOnOneSignupFilled: Boolean = false,
 ) : BaseEntity() {
     fun getFullName(): String = "$lastName$firstName" // Korean: no space between surname and given name
 }
