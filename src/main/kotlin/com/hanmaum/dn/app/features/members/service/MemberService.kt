@@ -298,13 +298,20 @@ class MemberService(
         member.applyPatch(request)
 
         request.groupPublicId?.let { gpid ->
-            val groupPublicId = UUID.fromString(gpid)
-            if (member.group?.publicId != groupPublicId) {
-                member.group =
-                    churchGroupRepository
-                        .findByPublicIdAndDeletedAtIsNull(groupPublicId)
-                        .orElseThrow { EntityNotFoundException("Group not found: $gpid") }
-            }
+            member.group =
+                if (gpid.isBlank()) {
+                    // Explicit blank string clears the group assignment.
+                    null
+                } else {
+                    val groupPublicId = UUID.fromString(gpid)
+                    if (member.group?.publicId == groupPublicId) {
+                        member.group
+                    } else {
+                        churchGroupRepository
+                            .findByPublicIdAndDeletedAtIsNull(groupPublicId)
+                            .orElseThrow { EntityNotFoundException("Group not found: $gpid") }
+                    }
+                }
         }
         return memberRepository.save(member).toDto()
     }

@@ -312,6 +312,24 @@ class MemberServiceTest {
         verify(churchGroupRepository, never()).findByPublicIdAndDeletedAtIsNull(any<UUID>())
     }
 
+    @Test
+    fun `updateMember clears the group when groupPublicId is a blank string`() {
+        val grp = group(1L, "기존 그룹")
+        val member = memberWithId(10L)
+        member.group = grp
+        val req = UpdateMemberRequest(lastName = "김", firstName = "철수", groupPublicId = "")
+
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+
+        val result = memberService.updateMember(member.publicId, req)
+
+        assertNull(result.groupName)
+        assertNull(member.group)
+        verify(churchGroupRepository, never()).findByPublicIdAndDeletedAtIsNull(any<UUID>())
+    }
+
     // --- softDeleteMember ---
 
     @Test

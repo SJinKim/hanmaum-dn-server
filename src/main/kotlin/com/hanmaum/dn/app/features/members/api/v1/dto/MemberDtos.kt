@@ -159,7 +159,10 @@ data class UpdateMemberRequest(
     val registrationDate: LocalDate? = null,
     val memberStatus: String? = null,
     val churchRole: String? = null,
-    /** publicId of the church group to assign; null leaves the current group unchanged. */
+    /**
+     * publicId of the church group to assign. Null/absent leaves the current group
+     * unchanged; a blank string ("") clears it (leaves the member ungrouped).
+     */
     val groupPublicId: String? = null,
     val profileImageUrl: String? = null,
     val isNextGroupLeader: Boolean? = null,
