@@ -39,6 +39,8 @@ data class MemberDto(
     val trainings: List<UserTrainingDto> = emptyList(),
     /** Full ministry history, most recent registration period first. */
     val ministries: List<MinistryHistoryDto> = emptyList(),
+    val isNextGroupLeader: Boolean = false,
+    val oneOnOneSignupFilled: Boolean = false,
 )
 
 /** Lightweight DTO used in the paginated list endpoint. */
@@ -49,6 +51,7 @@ data class MemberSummaryDto(
     val email: String? = null,
     val memberStatus: String,
     val baptism: String? = null,
+    val groupPublicId: String? = null,
     val groupName: String? = null,
     val updatedAt: Instant? = null,
     /** Name of the member's latest completed training (highest sort order), or null. */
@@ -57,6 +60,8 @@ data class MemberSummaryDto(
     val trainings: List<SummaryTrainingDto> = emptyList(),
     /** Names of the member's currently-active ministry assignments (end_date IS NULL), sorted. */
     val activeMinistries: List<String> = emptyList(),
+    val isNextGroupLeader: Boolean = false,
+    val oneOnOneSignupFilled: Boolean = false,
 )
 
 /** A member's training as shown on the grid chip: catalog name + status (IN_PROGRESS | COMPLETED). */
@@ -156,6 +161,8 @@ data class UpdateMemberRequest(
     /** publicId of the church group to assign; null leaves the current group unchanged. */
     val groupPublicId: String? = null,
     val profileImageUrl: String? = null,
+    val isNextGroupLeader: Boolean? = null,
+    val oneOnOneSignupFilled: Boolean? = null,
 )
 
 data class RegisterMemberRequest(
