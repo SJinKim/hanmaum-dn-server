@@ -167,6 +167,7 @@ fun Member.toSummaryDto(
         latestTraining = latestTraining,
         trainings = trainings,
         activeMinistries = activeMinistries,
+        churchRole = this.churchRole,
         isNextGroupLeader = this.isNextGroupLeader,
         oneOnOneSignupFilled = this.oneOnOneSignupFilled,
     )

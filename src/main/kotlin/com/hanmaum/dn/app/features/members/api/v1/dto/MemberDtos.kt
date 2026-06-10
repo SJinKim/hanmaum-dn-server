@@ -60,6 +60,7 @@ data class MemberSummaryDto(
     val trainings: List<SummaryTrainingDto> = emptyList(),
     /** Names of the member's currently-active ministry assignments (end_date IS NULL), sorted. */
     val activeMinistries: List<String> = emptyList(),
+    val churchRole: String? = null,
     val isNextGroupLeader: Boolean = false,
     val oneOnOneSignupFilled: Boolean = false,
 )
