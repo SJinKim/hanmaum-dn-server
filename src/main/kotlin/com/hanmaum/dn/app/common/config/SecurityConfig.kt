@@ -53,6 +53,8 @@ class SecurityConfig(
                 auth
                     .requestMatchers("/actuator/health", "/actuator/info")
                     .permitAll()
+                    .requestMatchers("/v3/api-docs/**", "/v3/api-docs.yaml", "/swagger-ui/**", "/swagger-ui.html")
+                    .permitAll()
                     .requestMatchers(HttpMethod.GET, "$apiPrefix/announcements")
                     .permitAll()
                     .requestMatchers(HttpMethod.GET, "$apiPrefix/albums")
@@ -74,7 +76,6 @@ class SecurityConfig(
             web
                 .ignoring()
                 .requestMatchers(HttpMethod.POST, "$apiPrefix/members/register")
-                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
         }
 
     /**

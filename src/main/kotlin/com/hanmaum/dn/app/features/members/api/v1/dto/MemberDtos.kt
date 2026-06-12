@@ -191,13 +191,16 @@ data class RegisterMemberRequest(
     val zipCode: String? = null,
 )
 
-/**
- * PATCH /me — member can update only their own phone and profile image.
- */
+/** PATCH /me — member can update their own contact, profile image, and address. */
 data class UpdateMyProfileRequest(
     @field:Size(max = 50)
     val phoneNumber: String? = null,
     val profileImageUrl: String? = null,
+    val street: String? = null,
+    @field:Size(max = 50)
+    val houseNumber: String? = null,
+    val zipCode: String? = null,
+    val city: String? = null,
 )
 
 /**

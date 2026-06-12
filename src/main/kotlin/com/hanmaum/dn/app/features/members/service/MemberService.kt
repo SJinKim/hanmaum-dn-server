@@ -263,6 +263,10 @@ class MemberService(
                 ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Member profile not found.")
         request.phoneNumber?.let { member.phoneNumber = it }
         request.profileImageUrl?.let { member.profileImageUrl = it }
+        request.street?.let { member.street = it }
+        request.houseNumber?.let { member.houseNumber = it }
+        request.zipCode?.let { member.zipCode = it }
+        request.city?.let { member.city = it }
         return memberRepository.save(member).toResponse()
     }
 

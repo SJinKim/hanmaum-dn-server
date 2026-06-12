@@ -71,7 +71,7 @@ class MemberController(
 
     /**
      * PATCH /api/v1/members/me
-     * Role: any authenticated member — partial self-update; only phoneNumber and profileImageUrl.
+     * Role: any authenticated member — partial self-update of contact, profile image, and address.
      */
     @PatchMapping("/me")
     @PreAuthorize("isAuthenticated()")
