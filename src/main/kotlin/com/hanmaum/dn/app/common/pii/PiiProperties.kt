@@ -5,6 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 @ConfigurationProperties(prefix = "app.pii")
 data class PiiProperties(
     var strict: Boolean = false,
+    var localPlaintextEnabled: Boolean = false,
     var keyringPath: String = "",
     var activeKeyId: String = "v1",
     var encryptionKey: String = "",

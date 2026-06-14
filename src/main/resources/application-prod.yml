@@ -18,6 +18,7 @@ logging:
 app:
   pii:
     strict: ${PII_STRICT:true}
+    local-plaintext-enabled: false
     keyring-path: ${PII_KEYRING_PATH:/run/secrets/hanmaum-pii-keyring.properties}
     legacy-plaintext-read-enabled: ${PII_LEGACY_PLAINTEXT_READ_ENABLED:true}
     backfill-enabled: ${PII_BACKFILL_ENABLED:true}
