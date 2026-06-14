@@ -17,6 +17,7 @@ spring:
 app:
   pii:
     strict: ${PII_STRICT:false}
+    local-plaintext-enabled: ${PII_LOCAL_PLAINTEXT_ENABLED:false}
     keyring-path: ${PII_KEYRING_PATH:}
     active-key-id: ${PII_ACTIVE_KEY_ID:v1}
     encryption-key: ${PII_ENCRYPTION_KEY:}

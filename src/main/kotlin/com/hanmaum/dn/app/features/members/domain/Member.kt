@@ -126,6 +126,6 @@ class Member(
     fun refreshPiiLookupHashes() {
         emailLookupHash = PiiCryptoContext.lookupHash(email)
         keycloakLookupHash = PiiCryptoContext.lookupHash(keycloakId)
-        piiKeyId = PiiCryptoContext.activeKeyId()
+        piiKeyId = PiiCryptoContext.storageKeyId()
     }
 }

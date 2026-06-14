@@ -23,6 +23,11 @@ class PiiBackfillRunner(
     private val log = LoggerFactory.getLogger(PiiBackfillRunner::class.java)
 
     override fun run(args: ApplicationArguments) {
+        if (PiiCryptoContext.plaintextWriteEnabled()) {
+            log.warn("PII backfill skipped mode=LOCAL_PLAINTEXT")
+            return
+        }
+
         var remaining = countLegacyRows()
         val sensitiveTextRemaining = countLegacySensitiveText()
         if (remaining == 0L && sensitiveTextRemaining == 0L) {
