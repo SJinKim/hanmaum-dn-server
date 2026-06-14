@@ -20,3 +20,9 @@ spring:
 # Verhindert, dass Tests den Port 8080 blockieren
 server:
   port: 0
+
+app:
+  pii:
+    strict: false
+    backfill-enabled: true
+    max-in-memory-members: 5000

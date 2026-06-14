@@ -2,6 +2,7 @@ package com.hanmaum.dn.app.common.cleanup
 
 import com.hanmaum.dn.app.features.announcements.repository.AnnouncementRepository
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
+import com.hanmaum.dn.app.features.members.service.MemberPurgeService
 import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -15,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
 import java.time.Instant
+import kotlin.test.assertFailsWith
 
 @ExtendWith(MockitoExtension::class)
 class CleanupServiceTest {
@@ -23,6 +25,8 @@ class CleanupServiceTest {
     @Mock private lateinit var announcementRepository: AnnouncementRepository
 
     @Mock private lateinit var attendanceLogRepository: AttendanceLogRepository
+
+    @Mock private lateinit var memberPurgeService: MemberPurgeService
 
     @InjectMocks
     private lateinit var cleanupService: CleanupService
@@ -33,6 +37,7 @@ class CleanupServiceTest {
         `when`(ministryAssignmentRepository.hardDeleteExpired(any())).thenReturn(0)
         `when`(announcementRepository.hardDeleteExpired(any())).thenReturn(0)
         `when`(attendanceLogRepository.hardDeleteExpired(any())).thenReturn(0)
+        `when`(memberPurgeService.purgeExpired(any())).thenReturn(0)
 
         cleanupService.purgeExpiredSoftDeletedEntries()
 
@@ -45,16 +50,18 @@ class CleanupServiceTest {
     }
 
     @Test
-    fun `purge calls all three repositories`() {
+    fun `purge calls all repositories and member purge`() {
         `when`(ministryAssignmentRepository.hardDeleteExpired(any())).thenReturn(2)
         `when`(announcementRepository.hardDeleteExpired(any())).thenReturn(1)
         `when`(attendanceLogRepository.hardDeleteExpired(any())).thenReturn(0)
+        `when`(memberPurgeService.purgeExpired(any())).thenReturn(0)
 
         cleanupService.purgeExpiredSoftDeletedEntries()
 
         verify(ministryAssignmentRepository).hardDeleteExpired(any())
         verify(announcementRepository).hardDeleteExpired(any())
         verify(attendanceLogRepository).hardDeleteExpired(any())
+        verify(memberPurgeService).purgeExpired(any())
     }
 
     @Test
@@ -62,11 +69,14 @@ class CleanupServiceTest {
         doThrow(RuntimeException("DB error")).`when`(ministryAssignmentRepository).hardDeleteExpired(any())
         `when`(announcementRepository.hardDeleteExpired(any())).thenReturn(0)
         `when`(attendanceLogRepository.hardDeleteExpired(any())).thenReturn(0)
+        `when`(memberPurgeService.purgeExpired(any())).thenReturn(0)
 
-        // Must not throw — failure on one table must not abort the others
-        cleanupService.purgeExpiredSoftDeletedEntries()
+        assertFailsWith<IllegalStateException> {
+            cleanupService.purgeExpiredSoftDeletedEntries()
+        }
 
         verify(announcementRepository).hardDeleteExpired(any())
         verify(attendanceLogRepository).hardDeleteExpired(any())
+        verify(memberPurgeService).purgeExpired(any())
     }
 }
