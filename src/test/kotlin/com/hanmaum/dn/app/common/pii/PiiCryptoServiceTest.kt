@@ -94,4 +94,20 @@ class PiiCryptoServiceTest {
             )
         }
     }
+
+    @Test
+    fun `local plaintext mode writes readable values and still decrypts ciphertext`() {
+        val plaintextService =
+            PiiCryptoService(
+                keyring = PiiKeyring("v1", mapOf("v1" to encryptionKey), indexKey),
+                legacyPlaintextReadEnabled = false,
+                plaintextWriteEnabled = true,
+            )
+        val existingCiphertext = service.encrypt("encrypted", "members.email")
+
+        assertEquals("readable", plaintextService.encrypt("readable", "members.email"))
+        assertEquals("readable", plaintextService.decrypt("readable", "members.email"))
+        assertEquals("encrypted", plaintextService.decrypt(existingCiphertext, "members.email"))
+        assertEquals(null, plaintextService.storageKeyId())
+    }
 }

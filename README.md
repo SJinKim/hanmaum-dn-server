@@ -97,6 +97,22 @@ gradlew.bat bootRun
 
 The app starts on **http://localhost:8080** with the `dev` Spring profile active.
 
+### Optional: readable PII in the local database
+
+PII is encrypted locally by default so development follows the production
+storage path. For temporary database debugging, add this opt-in to your local
+`.env`:
+
+```env
+PII_LOCAL_PLAINTEXT_ENABLED=true
+```
+
+The backend accepts this setting only with the `dev` or `local` profile and a
+local PostgreSQL host. Startup fails if it is enabled for staging, production,
+or a remote database. Existing encrypted rows remain readable; new and updated
+PII is stored as plaintext. After removing the setting and restarting, the
+normal startup backfill encrypts plaintext rows again.
+
 ---
 
 ## 4. Run tests

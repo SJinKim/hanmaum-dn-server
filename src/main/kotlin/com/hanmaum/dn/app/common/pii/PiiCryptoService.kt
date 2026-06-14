@@ -14,6 +14,7 @@ import javax.crypto.spec.GCMParameterSpec
 class PiiCryptoService(
     private val keyring: PiiKeyring,
     private val legacyPlaintextReadEnabled: Boolean,
+    private val plaintextWriteEnabled: Boolean = false,
 ) {
     private val secureRandom = SecureRandom()
 
@@ -23,6 +24,9 @@ class PiiCryptoService(
     ): String? {
         if (plaintext == null) {
             return null
+        }
+        if (plaintextWriteEnabled) {
+            return plaintext
         }
 
         val nonce = ByteArray(NONCE_BYTES).also(secureRandom::nextBytes)
@@ -51,7 +55,7 @@ class PiiCryptoService(
             return null
         }
         if (!storedValue.startsWith("$PREFIX$SEPARATOR")) {
-            check(legacyPlaintextReadEnabled) {
+            check(legacyPlaintextReadEnabled || plaintextWriteEnabled) {
                 "Plaintext PII encountered after legacy reads were disabled."
             }
             return storedValue
@@ -91,6 +95,10 @@ class PiiCryptoService(
     fun isEncrypted(value: String?): Boolean = value?.startsWith("$PREFIX$SEPARATOR") == true
 
     fun activeKeyId(): String = keyring.activeKeyId
+
+    fun plaintextWriteEnabled(): Boolean = plaintextWriteEnabled
+
+    fun storageKeyId(): String? = keyring.activeKeyId.takeUnless { plaintextWriteEnabled }
 
     fun normalize(value: String): String =
         Normalizer
@@ -134,6 +142,10 @@ object PiiCryptoContext {
     fun isEncrypted(value: String?): Boolean = requiredService().isEncrypted(value)
 
     fun activeKeyId(): String = requiredService().activeKeyId()
+
+    fun plaintextWriteEnabled(): Boolean = requiredService().plaintextWriteEnabled()
+
+    fun storageKeyId(): String? = requiredService().storageKeyId()
 
     fun normalize(value: String): String = requiredService().normalize(value)
 
