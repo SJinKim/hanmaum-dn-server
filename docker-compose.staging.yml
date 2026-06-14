@@ -59,6 +59,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${DB_HANMAUM_DN_USER}
       SPRING_DATASOURCE_PASSWORD: ${DB_HANMAUM_DN_SECRET}
       SPRING_FLYWAY_ENABLED: "true"
+      PII_KEYRING_PATH: /run/secrets/hanmaum-pii-keyring.properties
       # Keycloak is shared with prod — staging uses its own realm on the same instance.
       # hanmaumApp-keycloak is reachable via the caddy-proxy network.
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://hanmaumApp-keycloak:8090/realms/${KEYCLOAK_REALM}/protocol/openid-connect/certs
@@ -66,6 +67,8 @@ services:
     env_file:
       - path: .env.staging
         required: false
+    volumes:
+      - ${PII_KEYRING_FILE:-./secrets/staging-pii-keyring.properties}:/run/secrets/hanmaum-pii-keyring.properties:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
       interval: 30s

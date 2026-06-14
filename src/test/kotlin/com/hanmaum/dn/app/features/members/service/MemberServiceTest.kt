@@ -41,6 +41,7 @@ import org.mockito.kotlin.anyOrNull
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
 import org.springframework.web.server.ResponseStatusException
+import java.time.Instant
 import java.time.LocalDate
 import java.util.Optional
 import java.util.UUID
@@ -341,10 +342,15 @@ class MemberServiceTest {
             .thenReturn(Optional.of(member))
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
 
+        val before = Instant.now().plusSeconds(30L * 24 * 60 * 60)
         memberService.softDeleteMember(member.publicId)
+        val after = Instant.now().plusSeconds(30L * 24 * 60 * 60)
 
         assertNotNull(member.deletedAt)
         assertEquals(MemberStatus.DELETED, member.memberStatus)
+        assertNotNull(member.deleteEntryAt)
+        assert(member.deleteEntryAt!! >= before)
+        assert(member.deleteEntryAt!! <= after)
     }
 
     // --- registerMember ---
@@ -470,7 +476,7 @@ class MemberServiceTest {
         `when`(memberRepository.findByEmailAndDeletedAtIsNull(email)).thenReturn(null)
 
         assertThrows<ResponseStatusException> {
-            memberService.getMemberProfile(keycloakSub, email)
+            memberService.getMemberProfile(keycloakSub, email, emailVerified = true)
         }
     }
 
@@ -500,11 +506,27 @@ class MemberServiceTest {
         member.city = "부산"
         `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(null)
         `when`(memberRepository.findByEmailAndDeletedAtIsNull(email)).thenReturn(member)
+        `when`(memberRepository.save(member)).thenReturn(member)
 
-        val response = memberService.getMemberProfile(keycloakSub, email)
+        val response = memberService.getMemberProfile(keycloakSub, email, emailVerified = true)
 
         assertEquals(member.publicId.toString(), response.publicId)
         assertEquals("영희", response.firstName)
+        assertEquals(keycloakSub, member.keycloakId)
+        verify(memberRepository).save(member)
+    }
+
+    @Test
+    fun `getMemberProfile does not link an unverified email`() {
+        val keycloakSub = UUID.randomUUID().toString()
+        val email = "unverified@example.com"
+        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(null)
+
+        assertThrows<ResponseStatusException> {
+            memberService.getMemberProfile(keycloakSub, email, emailVerified = false)
+        }
+
+        verify(memberRepository, never()).findByEmailAndDeletedAtIsNull(email)
     }
 
     @Test

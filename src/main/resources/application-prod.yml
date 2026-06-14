@@ -16,6 +16,13 @@ logging:
     root: INFO
 
 app:
+  pii:
+    strict: ${PII_STRICT:true}
+    keyring-path: ${PII_KEYRING_PATH:/run/secrets/hanmaum-pii-keyring.properties}
+    legacy-plaintext-read-enabled: ${PII_LEGACY_PLAINTEXT_READ_ENABLED:true}
+    backfill-enabled: ${PII_BACKFILL_ENABLED:true}
+    backfill-batch-size: ${PII_BACKFILL_BATCH_SIZE:200}
+    max-in-memory-members: ${PII_MAX_IN_MEMORY_MEMBERS:5000}
   cors:
     allowed-origins: "https://dn-admin-dashboard.graceops.de,https://dn-admin-dashboard.st.graceops.de"
   keycloak:
