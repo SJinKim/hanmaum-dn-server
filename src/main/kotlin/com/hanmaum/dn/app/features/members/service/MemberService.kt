@@ -58,6 +58,7 @@ class MemberService(
     private val ministryRepository: MinistryRepository,
     private val keycloak: Keycloak,
     @Value("\${app.keycloak.realm:hanmaum}") private val realm: String,
+    @Value("\${app.member-retention.days:30}") private val memberRetentionDays: Long = 30,
 ) {
     private val log = LoggerFactory.getLogger(MemberService::class.java)
 
@@ -239,28 +240,21 @@ class MemberService(
      * Own-profile lookup — [keycloakSubject] is the JWT `sub` claim (Keycloak UUID).
      * Falls back to email for legacy records that pre-date the keycloakId column.
      */
-    @Transactional(readOnly = true)
+    @Transactional
     fun getMemberProfile(
         keycloakSubject: String,
         email: String?,
-    ): MemberResponse {
-        val member =
-            memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSubject)
-                ?: email?.let { memberRepository.findByEmailAndDeletedAtIsNull(it) }
-                ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Member profile not found.")
-        return member.toResponse()
-    }
+        emailVerified: Boolean = false,
+    ): MemberResponse = resolveAndLinkMember(keycloakSubject, email, emailVerified).toResponse()
 
     @Transactional
     fun updateMyProfile(
         keycloakSubject: String,
         email: String?,
+        emailVerified: Boolean = false,
         request: UpdateMyProfileRequest,
     ): MemberResponse {
-        val member =
-            memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSubject)
-                ?: email?.let { memberRepository.findByEmailAndDeletedAtIsNull(it) }
-                ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Member profile not found.")
+        val member = resolveAndLinkMember(keycloakSubject, email, emailVerified)
         request.phoneNumber?.let { member.phoneNumber = it }
         request.profileImageUrl?.let { member.profileImageUrl = it }
         request.street?.let { member.street = it }
@@ -276,7 +270,7 @@ class MemberService(
     fun createMember(request: CreateMemberRequest): MemberDto {
         request.email?.let { email ->
             if (memberRepository.findByEmailAndDeletedAtIsNull(email) != null) {
-                throw ResponseStatusException(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다: $email")
+                throw ResponseStatusException(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다.")
             }
         }
         val member = request.toEntity()
@@ -299,6 +293,12 @@ class MemberService(
                 .findByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow { EntityNotFoundException("Member not found: $publicId") }
 
+        request.email?.let { email ->
+            val existing = memberRepository.findByEmailAndDeletedAtIsNull(email)
+            if (existing != null && existing.id != member.id) {
+                throw ResponseStatusException(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다.")
+            }
+        }
         member.applyPatch(request)
 
         request.groupPublicId?.let { gpid ->
@@ -331,6 +331,7 @@ class MemberService(
                 .orElseThrow { EntityNotFoundException("Member not found or already deleted: $publicId") }
         member.memberStatus = MemberStatus.DELETED
         member.deletedAt = Instant.now()
+        member.deleteEntryAt = Instant.now().plusSeconds(memberRetentionDays * 24 * 60 * 60)
         memberRepository.save(member)
     }
 
@@ -340,17 +341,16 @@ class MemberService(
     @Transactional
     fun registerMember(req: RegisterMemberRequest): Member {
         log.info(
-            "Register member started realm={} emailDomain={} firstNameLength={} lastNameLength={} cityPresent={} zipCodePresent={}",
+            "Register member started realm={} firstNameLength={} lastNameLength={} cityPresent={} zipCodePresent={}",
             realm,
-            req.emailDomain(),
             req.firstName.length,
             req.lastName.length,
             req.city?.isNotBlank() == true,
             req.zipCode?.isNotBlank() == true,
         )
         if (memberRepository.findByEmailAndDeletedAtIsNull(req.email) != null) {
-            log.warn("Register member rejected duplicate emailDomain={}", req.emailDomain())
-            throw ResponseStatusException(HttpStatus.CONFLICT, "이미 가입된 이메일입니다: ${req.email}")
+            log.warn("Register member rejected duplicate email")
+            throw ResponseStatusException(HttpStatus.CONFLICT, "이미 가입된 이메일입니다.")
         }
 
         // Discriminator logic: if name already exists, append A, B, C…
@@ -395,9 +395,8 @@ class MemberService(
 
         val savedMember = memberRepository.save(newMember)
         log.info(
-            "Register member saved pending DB record memberId={} emailDomain={} discriminatorAssigned={}",
+            "Register member saved pending DB record memberId={} discriminatorAssigned={}",
             savedMember.id,
-            req.emailDomain(),
             discriminator != null,
         )
 
@@ -420,36 +419,33 @@ class MemberService(
                     )
             }
 
-        log.info("Creating Keycloak user realm={} emailDomain={}", realm, req.emailDomain())
+        log.info("Creating Keycloak user realm={}", realm)
         val kcResponse =
             try {
                 keycloak.realm(realm).users().create(keycloakUser)
             } catch (e: ProcessingException) {
                 log.error(
-                    "Keycloak user creation transport failure realm={} emailDomain={} exceptionType={} message={}",
+                    "Keycloak user creation transport failure realm={} exceptionType={} message={}",
                     realm,
-                    req.emailDomain(),
                     e::class.qualifiedName,
                     e.message?.redactEmail(),
                 )
                 throw RuntimeException("Keycloak user creation transport failure", e)
             } catch (e: RuntimeException) {
                 log.error(
-                    "Keycloak user creation runtime failure realm={} emailDomain={} exceptionType={} message={}",
+                    "Keycloak user creation runtime failure realm={} exceptionType={} message={}",
                     realm,
-                    req.emailDomain(),
                     e::class.qualifiedName,
                     e.message?.redactEmail(),
                 )
                 throw e
             }
-        log.info("Keycloak user creation response realm={} emailDomain={} status={}", realm, req.emailDomain(), kcResponse.status)
+        log.info("Keycloak user creation response realm={} status={}", realm, kcResponse.status)
         if (kcResponse.status != 201) {
             val body = kcResponse.readEntity(String::class.java).orEmpty()
             log.error(
-                "Keycloak user creation rejected realm={} emailDomain={} status={} body={}",
+                "Keycloak user creation rejected realm={} status={} body={}",
                 realm,
-                req.emailDomain(),
                 kcResponse.status,
                 body.redactEmail().take(500),
             )
@@ -464,16 +460,36 @@ class MemberService(
         if (keycloakId.isNotBlank()) {
             savedMember.keycloakId = keycloakId
             memberRepository.save(savedMember)
-            log.info("Register member linked Keycloak user memberId={} emailDomain={}", savedMember.id, req.emailDomain())
+            log.info("Register member linked Keycloak user memberId={}", savedMember.id)
         } else {
-            log.warn("Keycloak user created without location header memberId={} emailDomain={}", savedMember.id, req.emailDomain())
+            log.warn("Keycloak user created without location header memberId={}", savedMember.id)
         }
 
-        log.info("Register member completed memberId={} emailDomain={}", savedMember.id, req.emailDomain())
+        log.info("Register member completed memberId={}", savedMember.id)
         return savedMember
     }
 
-    private fun RegisterMemberRequest.emailDomain(): String = email.substringAfter('@', missingDelimiterValue = "<missing-at>")
-
     private fun String.redactEmail(): String = replace(Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"), "<redacted-email>")
+
+    private fun resolveAndLinkMember(
+        keycloakSubject: String,
+        email: String?,
+        emailVerified: Boolean,
+    ): Member {
+        memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSubject)?.let { return it }
+
+        if (!emailVerified || email.isNullOrBlank()) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Member profile not found.")
+        }
+
+        val legacyMember =
+            memberRepository.findByEmailAndDeletedAtIsNull(email)
+                ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Member profile not found.")
+        if (legacyMember.keycloakId != null && legacyMember.keycloakId != keycloakSubject) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Member profile is linked to another identity.")
+        }
+
+        legacyMember.keycloakId = keycloakSubject
+        return memberRepository.save(legacyMember)
+    }
 }

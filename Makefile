@@ -18,6 +18,17 @@ build-backend:
 build-keycloak:
 	$(DC) up -d --build hanmaumApp-keycloak
 
+# ── Security: local PII keyring ──────────────────────────────────────────────
+pii-keyring:
+	./scripts/generate-pii-keyring.sh
+
+# ── Production backup helpers (requires .env.backup + restic) ────────────────
+backup-now:
+	set -a; . ./.env.backup; set +a; ./infrastructure/backup/backup.sh
+
+backup-restore-test:
+	set -a; . ./.env.backup; set +a; ./infrastructure/backup/restore-test.sh
+
 # ── Dev: Nuclear reset (destroys all data) ────────────────────────────────────
 # Use when: postgres-init scripts changed, or you need a clean DB slate
 reset:

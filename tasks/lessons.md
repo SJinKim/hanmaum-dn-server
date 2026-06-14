@@ -20,3 +20,7 @@
 ### Model repeatable contacts as a collection
 - **Mistake**: Modeled ministry contacts as fixed leader/coordinator fields even though contact roles can vary and grow.
 - **Rule**: For repeatable role-to-person data, use an ordered collection of `{role, name}` objects instead of role-specific columns or DTO fields.
+
+### Separate undecided infrastructure choices
+- **Mistake**: Mixed a provider-specific pCloud implementation into the PII/security branch before the storage architecture had been decided.
+- **Rule**: Keep unresolved storage-provider work out of unrelated security changes. Decide the abstraction and provider first, then implement object storage in a separate branch and PR.

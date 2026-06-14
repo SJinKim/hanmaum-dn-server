@@ -1,8 +1,10 @@
 package com.hanmaum.dn.app.features.ministry.domain
 
 import com.hanmaum.dn.app.common.jpa.BaseEntity
+import com.hanmaum.dn.app.common.pii.EncryptedMinistryNoteConverter
 import com.hanmaum.dn.app.features.members.domain.Member
 import jakarta.persistence.Column
+import jakarta.persistence.Convert
 import jakarta.persistence.Entity
 import jakarta.persistence.FetchType
 import jakarta.persistence.JoinColumn
@@ -32,6 +34,7 @@ class MinistryAssignment(
     var endDate: LocalDate? = null,
     // Length is enforced at the API layer (MemberMinistryItem @Size max 500);
     // columnDefinition wins over `length` in DDL, so we omit the redundant attribute.
+    @Convert(converter = EncryptedMinistryNoteConverter::class)
     @Column(columnDefinition = "TEXT")
     var note: String? = null,
 ) : BaseEntity() {

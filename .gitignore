@@ -23,6 +23,9 @@ postgres-data/
 
 .env
 **.env
+.env.backup
+.local-secrets/
+secrets/
 # --- Angular ---
 /dist/
 /bazel-out

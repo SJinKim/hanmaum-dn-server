@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.ministry.repository
 
+import com.hanmaum.dn.app.common.pii.PiiCryptoConfiguration
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase
+import org.springframework.context.annotation.Import
 import org.springframework.test.context.ActiveProfiles
 import java.time.Instant
 import java.time.LocalDate
@@ -33,6 +35,7 @@ import java.time.LocalTime
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
+@Import(PiiCryptoConfiguration::class)
 @Tag("integration")
 class MinistryAssignmentRepositoryIT {
     @Autowired lateinit var members: MemberRepository

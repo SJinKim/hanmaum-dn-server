@@ -1,8 +1,10 @@
 package com.hanmaum.dn.app.features.groups.domain
 
 import com.hanmaum.dn.app.common.jpa.BaseEntity
+import com.hanmaum.dn.app.common.pii.EncryptedPrayerRequestConverter
 import com.hanmaum.dn.app.features.members.domain.Member
 import jakarta.persistence.Column
+import jakarta.persistence.Convert
 import jakarta.persistence.Entity
 import jakarta.persistence.FetchType
 import jakarta.persistence.JoinColumn
@@ -34,6 +36,7 @@ class MeetingAttendance(
     val member: Member,
     @Column(name = "attendance_status")
     var status: String = "PRESENT", // "PRESENT" oder "ABSENT"
+    @Convert(converter = EncryptedPrayerRequestConverter::class)
     @Column(name = "prayer_request", columnDefinition = "TEXT")
     var prayerRequest: String? = null,
 ) : BaseEntity()
