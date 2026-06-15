@@ -43,6 +43,15 @@ Copy-Item .env.example .env
 ```
 
 Open `.env` and fill in the required values (see comments inside the file). Never commit `.env`.
+Generate a unique local Keycloak backend client secret, for example:
+
+```bash
+openssl rand -hex 32
+```
+
+Store the result as `KEYCLOAK_BACKEND_CLIENT_SECRET` in `.env`. The same
+environment value is injected into the local Keycloak realm import and used by
+the backend service account.
 
 ---
 
@@ -145,6 +154,15 @@ Integration tests require the test database container (`test-db` on port `5434`)
 ## 6. First-time Keycloak setup
 
 On a fresh volume Keycloak auto-imports the realm from `infrastructure/docker/keycloak/export/`. No manual setup is needed.
+
+Realm imports do not update a realm that already exists. If
+`KEYCLOAK_BACKEND_CLIENT_SECRET` changes, either rotate the
+`dn-backend-admin` client secret in the Keycloak Admin Console and restart the
+backend, or run `make reset` for a disposable local environment.
+
+For staging and production, rotate this client secret independently in each
+Keycloak instance, update the corresponding server environment, and restart
+the backend. Never reuse the local value or commit a generated secret.
 
 If the import fails or you see auth errors, check Keycloak is healthy:
 
