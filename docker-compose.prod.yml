@@ -7,6 +7,7 @@
 #   DB_HANMAUM_DN_NAME, DB_HANMAUM_DN_USER, DB_HANMAUM_DN_SECRET
 #   DB_HANMAUM_DN_URL              — e.g. jdbc:postgresql://hanmaumApp-db:5432
 #   KEYCLOAK_ADMIN_USER, KEYCLOAK_ADMIN_PASSWORD, KEYCLOAK_REALM
+#   KEYCLOAK_BACKEND_CLIENT_SECRET — backend service account client secret
 #   BACKEND_IMAGE                  — set by CI: ghcr.io/sjinkim/hanmaum-dn-server:sha-<short>
 #   API_DOMAIN, AUTH_DOMAIN        — public hostnames (used by Caddy, sourced from .env)
 #
@@ -52,6 +53,7 @@ services:
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KEYCLOAK_BACKEND_CLIENT_SECRET: ${KEYCLOAK_BACKEND_CLIENT_SECRET:?KEYCLOAK_BACKEND_CLIENT_SECRET must be set}
       KC_DB: postgres
       KC_DB_URL: ${DB_HANMAUM_DN_URL}/hanmaum_keycloak_db
       KC_DB_USERNAME: ${DB_HANMAUM_DN_USER}
