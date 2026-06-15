@@ -18,20 +18,37 @@ data class DefinitionDto(
     val isActive: Boolean,
 )
 
-data class AttendanceLogDto(
-    val publicId: String,
+data class AttendanceCheckInResponse(
+    /** Attendance definition used for the accepted check-in. */
     val definitionPublicId: String,
+    /** Current display title of the attendance definition. */
     val definitionTitle: String,
-    val memberPublicId: String,
-    val memberName: String,
+    /** Calendar date recorded for attendance; no exact check-in time is exposed. */
     val attendanceDate: LocalDate,
-    val attended: Boolean,
 )
 
-data class AttendanceStatsDto(
-    val memberPublicId: String,
-    val memberName: String,
-    val attendanceCount: Int,
+data class ChurchGroupAttendanceCountResponse(
+    /** Church-group identifier, or null for members without a group. */
+    val groupPublicId: String?,
+    /** Optional church-group division/category. */
+    val groupDivision: String?,
+    /** Church-group name, or null for members without a group. */
+    val groupName: String?,
+    /** Number of accepted check-ins attributed to this group snapshot. */
+    val attendanceCount: Long,
+)
+
+data class AttendanceGroupCountsResponse(
+    /** Attendance definition represented by this summary. */
+    val definitionPublicId: String,
+    /** Current display title of the attendance definition. */
+    val definitionTitle: String,
+    /** Calendar date represented by this summary. */
+    val attendanceDate: LocalDate,
+    /** Total accepted check-ins across all groups and ungrouped members. */
+    val totalCount: Long,
+    /** Per-group counts, including active groups with zero check-ins. */
+    val groups: List<ChurchGroupAttendanceCountResponse>,
 )
 
 // ─── Request DTOs ─────────────────────────────────────────────────────────────

@@ -1,14 +1,13 @@
 package com.hanmaum.dn.app.features.attendance.service
 
 import com.hanmaum.dn.app.features.attendance.api.toDto
-import com.hanmaum.dn.app.features.attendance.api.toStatsDto
-import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceLogDto
-import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceStatsDto
+import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceCheckInResponse
+import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceGroupCountsResponse
+import com.hanmaum.dn.app.features.attendance.api.v1.dto.ChurchGroupAttendanceCountResponse
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.CreateDefinitionRequest
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.DefinitionDto
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.UpdateDefinitionRequest
 import com.hanmaum.dn.app.features.attendance.domain.AttendanceDefinition
-import com.hanmaum.dn.app.features.attendance.domain.AttendanceLog
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceDefinitionRepository
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
@@ -17,10 +16,9 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
-import java.time.Instant
+import java.time.Clock
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.ZoneId
 import java.util.UUID
 
 @Service
@@ -28,6 +26,7 @@ class AttendanceService(
     private val definitionRepo: AttendanceDefinitionRepository,
     private val logRepo: AttendanceLogRepository,
     private val memberRepo: MemberRepository,
+    private val clock: Clock,
 ) {
     // ─── Definition CRUD ───────────────────────────────────────────────────────
 
@@ -80,18 +79,18 @@ class AttendanceService(
             definitionRepo
                 .findByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow { EntityNotFoundException("AttendanceDefinition not found: $publicId") }
-        definition.deletedAt = Instant.now()
+        definition.isActive = false
     }
 
     // ─── Check-in ─────────────────────────────────────────────────────────────
 
     @Transactional
-    fun checkIn(keycloakSubject: String): AttendanceLogDto {
+    fun checkIn(keycloakSubject: String): AttendanceCheckInResponse {
         val member =
             memberRepo.findByKeycloakIdAndDeletedAtIsNull(keycloakSubject)
                 ?: throw EntityNotFoundException("Member not found for subject: $keycloakSubject")
 
-        val now = LocalDateTime.now(ZoneId.of("Europe/Berlin"))
+        val now = LocalDateTime.now(clock)
         val today = now.toLocalDate()
         val currentTime = now.toLocalTime()
         val currentDay = now.dayOfWeek
@@ -106,69 +105,53 @@ class AttendanceService(
                 "현재 활성화된 출석 체크인 시간이 없습니다.",
             )
 
-        val duplicate =
-            logRepo.existsByMemberIdAndDefinitionIdAndAttendanceDateAndDeletedAtIsNull(
-                member.id!!,
-                matchingDefinition.id!!,
-                today,
+        val inserted =
+            logRepo.insertIfAbsent(
+                publicId = UUID.randomUUID(),
+                definitionId = matchingDefinition.id!!,
+                memberId = member.id!!,
+                groupId = member.group?.id,
+                attendanceDate = today,
             )
-        if (duplicate) {
+        if (inserted == 0) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "이미 오늘 출석 체크인 했습니다.")
         }
 
-        val log =
-            logRepo.save(
-                AttendanceLog(
-                    definition = matchingDefinition,
-                    member = member,
-                    attendanceDate = today,
-                    attended = true,
-                ),
-            )
-        return log.toDto()
-    }
-
-    // ─── Logs ─────────────────────────────────────────────────────────────────
-
-    @Transactional(readOnly = true)
-    fun getLogs(
-        memberPublicId: UUID?,
-        definitionPublicId: UUID?,
-        from: LocalDate,
-        to: LocalDate,
-    ): List<AttendanceLogDto> {
-        val memberId =
-            memberPublicId?.let {
-                memberRepo
-                    .findByPublicIdAndDeletedAtIsNull(it)
-                    .orElseThrow { EntityNotFoundException("Member not found: $it") }
-                    .id
-            }
-        val definitionId =
-            definitionPublicId?.let {
-                definitionRepo
-                    .findByPublicIdAndDeletedAtIsNull(it)
-                    .orElseThrow { EntityNotFoundException("Definition not found: $it") }
-                    .id
-            }
-        return logRepo.findForAdmin(memberId, definitionId, from, to).map { it.toDto() }
+        return AttendanceCheckInResponse(
+            definitionPublicId = matchingDefinition.publicId.toString(),
+            definitionTitle = matchingDefinition.title,
+            attendanceDate = today,
+        )
     }
 
     @Transactional(readOnly = true)
-    fun getMyLogs(keycloakSubject: String): List<AttendanceLogDto> {
-        val member =
-            memberRepo.findByKeycloakIdAndDeletedAtIsNull(keycloakSubject)
-                ?: throw EntityNotFoundException("Member not found for subject: $keycloakSubject")
-        return logRepo
-            .findAllByMemberIdAndDeletedAtIsNullOrderByAttendanceDateDesc(member.id!!)
-            .map { it.toDto() }
+    fun getGroupCounts(
+        definitionPublicId: UUID,
+        attendanceDate: LocalDate,
+    ): AttendanceGroupCountsResponse {
+        val definition =
+            definitionRepo
+                .findByPublicIdAndDeletedAtIsNull(definitionPublicId)
+                .orElseThrow { EntityNotFoundException("AttendanceDefinition not found: $definitionPublicId") }
+
+        val groups =
+            logRepo
+                .countByChurchGroup(definition.id!!, attendanceDate)
+                .map { count ->
+                    ChurchGroupAttendanceCountResponse(
+                        groupPublicId = count.groupPublicId?.toString(),
+                        groupDivision = count.groupDivision,
+                        groupName = count.groupName,
+                        attendanceCount = count.attendanceCount,
+                    )
+                }
+
+        return AttendanceGroupCountsResponse(
+            definitionPublicId = definition.publicId.toString(),
+            definitionTitle = definition.title,
+            attendanceDate = attendanceDate,
+            totalCount = groups.sumOf { it.attendanceCount },
+            groups = groups,
+        )
     }
-
-    // ─── Stats ────────────────────────────────────────────────────────────────
-
-    @Transactional(readOnly = true)
-    fun getStats(
-        from: LocalDate,
-        to: LocalDate,
-    ): List<AttendanceStatsDto> = logRepo.findForStats(from, to).toStatsDto()
 }

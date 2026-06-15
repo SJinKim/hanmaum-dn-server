@@ -62,7 +62,6 @@ class MemberPurgeService(
         jdbcTemplate.update("DELETE FROM car_passengers WHERE member_id = ?", memberId)
         jdbcTemplate.update("DELETE FROM cars WHERE driver_member_id = ?", memberId)
         jdbcTemplate.update("DELETE FROM meeting_attendances WHERE member_id = ?", memberId)
-        jdbcTemplate.update("DELETE FROM attendance_logs WHERE member_id = ?", memberId)
         jdbcTemplate.update("DELETE FROM ministry_registrations WHERE member_id = ?", memberId)
         jdbcTemplate.update("DELETE FROM user_training WHERE user_id = ?", memberId)
         jdbcTemplate.update(

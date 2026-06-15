@@ -24,3 +24,15 @@
 ### Separate undecided infrastructure choices
 - **Mistake**: Mixed a provider-specific pCloud implementation into the PII/security branch before the storage architecture had been decided.
 - **Rule**: Keep unresolved storage-provider work out of unrelated security changes. Decide the abstraction and provider first, then implement object storage in a separate branch and PR.
+
+### Preserve internal audit timestamps unless retention requires removal
+- **Mistake**: Recommended removing exact attendance timestamps even though they may have future operational value and are not exposed by the API.
+- **Rule**: Keep inexpensive internal audit timestamps by default; enforce data minimization at DTO/API boundaries and remove stored metadata only when a concrete privacy or retention requirement calls for it.
+
+### Keep attendance availability definition-driven
+- **Mistake**: Described button availability as if it needed a separate status mechanism.
+- **Rule**: Treat `attendance_definitions` (`dayOfWeek`, `windowStart`, `windowEnd`, `isActive`) as the single source of truth for attendance-button availability; derived API state must not introduce separate mutable availability data.
+
+### Separate attendance deduplication from user-facing tracking
+- **Mistake**: Planned individual attendance logs and member statistics before stakeholders had agreed that person-level reporting was necessary.
+- **Rule**: For attendance V1, expose only church-group aggregates. Keep the minimum internal member reference required to enforce one check-in per person, but do not expose member identities, names, personal history, or person-level statistics until explicitly approved for a later version.

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.keycloak.admin.client.Keycloak
 import org.mockito.Mock
 import org.mockito.Mockito.doAnswer
+import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
@@ -65,7 +66,7 @@ class MemberPurgeServiceTest {
         verify(jdbcTemplate).update(eq("DELETE FROM car_passengers WHERE member_id = ?"), eq(42L))
         verify(jdbcTemplate).update(eq("DELETE FROM cars WHERE driver_member_id = ?"), eq(42L))
         verify(jdbcTemplate).update(eq("DELETE FROM meeting_attendances WHERE member_id = ?"), eq(42L))
-        verify(jdbcTemplate).update(eq("DELETE FROM attendance_logs WHERE member_id = ?"), eq(42L))
+        verify(jdbcTemplate, never()).update(eq("DELETE FROM attendance_logs WHERE member_id = ?"), eq(42L))
         verify(jdbcTemplate).update(eq("DELETE FROM ministry_registrations WHERE member_id = ?"), eq(42L))
         verify(jdbcTemplate).update(eq("DELETE FROM user_training WHERE user_id = ?"), eq(42L))
         verify(jdbcTemplate).update(
