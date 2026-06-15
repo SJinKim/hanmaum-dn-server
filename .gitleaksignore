@@ -1,0 +1,4 @@
+# Historical Keycloak client secret removed from the current realm exports.
+# Rotate the affected client secret in every deployed Keycloak instance.
+ac09a6fa3341f2684e8ac0a946a9f529f348e036:infrastructure/docker/keycloak/export/realm-export.json:generic-api-key:1001
+ac09a6fa3341f2684e8ac0a946a9f529f348e036:infrastructure/docker/keycloak/export/hanmaum-realm.json:generic-api-key:995

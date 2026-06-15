@@ -998,7 +998,7 @@
       "enabled": true,
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
-      "secret": "G7j4TCsfkq1GsYIVUVu4GMMCCmNjF9zh",
+      "secret": "${KEYCLOAK_BACKEND_CLIENT_SECRET}",
       "redirectUris": [],
       "webOrigins": [],
       "notBefore": 0,
