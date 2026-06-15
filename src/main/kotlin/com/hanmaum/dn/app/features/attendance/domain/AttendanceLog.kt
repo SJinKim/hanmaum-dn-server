@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.attendance.domain
 
 import com.hanmaum.dn.app.common.jpa.BaseEntity
+import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.members.domain.Member
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
@@ -27,10 +28,13 @@ class AttendanceLog(
     @JoinColumn(name = "definition_id", nullable = false)
     val definition: AttendanceDefinition,
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "member_id", nullable = false)
-    val member: Member,
+    @JoinColumn(name = "member_id")
+    val member: Member?,
     @Column(name = "attendance_date", nullable = false)
     val attendanceDate: LocalDate,
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "group_id_at_check_in")
+    val groupAtCheckIn: ChurchGroup? = null,
     @Column(name = "attended", nullable = false)
     val attended: Boolean = true,
 ) : BaseEntity() {

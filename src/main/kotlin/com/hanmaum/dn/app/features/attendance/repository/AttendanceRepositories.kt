@@ -37,48 +37,85 @@ interface AttendanceDefinitionRepository : JpaRepository<AttendanceDefinition, L
 
 @Repository
 interface AttendanceLogRepository : JpaRepository<AttendanceLog, Long> {
-    /** Duplicate guard: has this member already checked in for this definition on this date? */
-    fun existsByMemberIdAndDefinitionIdAndAttendanceDateAndDeletedAtIsNull(
-        memberId: Long,
-        definitionId: Long,
-        attendanceDate: LocalDate,
-    ): Boolean
-
-    /** Own history — all logs for a member ordered by date descending. */
-    fun findAllByMemberIdAndDeletedAtIsNullOrderByAttendanceDateDesc(memberId: Long): List<AttendanceLog>
-
-    /** Admin: logs filtered by optional member, definition, and date range. */
+    /**
+     * Atomically records one check-in. The database unique constraint is the
+     * concurrency-safe duplicate guard.
+     */
+    @Modifying
     @Query(
-        """
-        SELECT l FROM AttendanceLog l
-        WHERE l.deletedAt IS NULL
-          AND (:memberId IS NULL OR l.member.id = :memberId)
-          AND (:definitionId IS NULL OR l.definition.id = :definitionId)
-          AND l.attendanceDate >= :from
-          AND l.attendanceDate <= :to
-        ORDER BY l.attendanceDate DESC
+        value = """
+            INSERT INTO attendance_logs (
+                public_id,
+                definition_id,
+                member_id,
+                group_id_at_check_in,
+                attendance_date,
+                attended,
+                created_at
+            )
+            VALUES (
+                :publicId,
+                :definitionId,
+                :memberId,
+                :groupId,
+                :attendanceDate,
+                TRUE,
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT ON CONSTRAINT uq_attendance_log DO NOTHING
         """,
+        nativeQuery = true,
     )
-    fun findForAdmin(
-        @Param("memberId") memberId: Long?,
-        @Param("definitionId") definitionId: Long?,
-        @Param("from") from: LocalDate,
-        @Param("to") to: LocalDate,
-    ): List<AttendanceLog>
+    fun insertIfAbsent(
+        @Param("publicId") publicId: UUID,
+        @Param("definitionId") definitionId: Long,
+        @Param("memberId") memberId: Long,
+        @Param("groupId") groupId: Long?,
+        @Param("attendanceDate") attendanceDate: LocalDate,
+    ): Int
 
-    /** Stats: all logs in a date range for grouping by member. */
     @Query(
-        """
-        SELECT l FROM AttendanceLog l
-        WHERE l.deletedAt IS NULL
-          AND l.attendanceDate >= :from
-          AND l.attendanceDate <= :to
+        value = """
+            WITH target_logs AS (
+                SELECT attendance_log.id, attendance_log.group_id_at_check_in
+                FROM attendance_logs AS attendance_log
+                WHERE attendance_log.definition_id = :definitionId
+                  AND attendance_log.attendance_date = :attendanceDate
+                  AND attendance_log.attended = TRUE
+                  AND attendance_log.deleted_at IS NULL
+            )
+            SELECT *
+            FROM (
+                SELECT
+                    church_group.public_id AS "groupPublicId",
+                    church_group.division AS "groupDivision",
+                    church_group.name AS "groupName",
+                    COUNT(target_log.id) AS "attendanceCount"
+                FROM church_groups AS church_group
+                LEFT JOIN target_logs AS target_log
+                    ON target_log.group_id_at_check_in = church_group.id
+                WHERE church_group.deleted_at IS NULL
+                   OR target_log.id IS NOT NULL
+                GROUP BY church_group.public_id, church_group.division, church_group.name
+
+                UNION ALL
+
+                SELECT
+                    CAST(NULL AS UUID) AS "groupPublicId",
+                    CAST(NULL AS VARCHAR) AS "groupDivision",
+                    CAST(NULL AS VARCHAR) AS "groupName",
+                    COUNT(target_log.id) AS "attendanceCount"
+                FROM target_logs AS target_log
+                WHERE target_log.group_id_at_check_in IS NULL
+            ) AS group_counts
+            ORDER BY "groupDivision" NULLS LAST, "groupName" NULLS LAST
         """,
+        nativeQuery = true,
     )
-    fun findForStats(
-        @Param("from") from: LocalDate,
-        @Param("to") to: LocalDate,
-    ): List<AttendanceLog>
+    fun countByChurchGroup(
+        @Param("definitionId") definitionId: Long,
+        @Param("attendanceDate") attendanceDate: LocalDate,
+    ): List<ChurchGroupAttendanceCountView>
 
     @Modifying(clearAutomatically = true)
     @Transactional
@@ -92,4 +129,11 @@ interface AttendanceLogRepository : JpaRepository<AttendanceLog, Long> {
     fun hardDeleteExpired(
         @Param("now") now: Instant,
     ): Int
+}
+
+interface ChurchGroupAttendanceCountView {
+    val groupPublicId: UUID?
+    val groupDivision: String?
+    val groupName: String?
+    val attendanceCount: Long
 }
