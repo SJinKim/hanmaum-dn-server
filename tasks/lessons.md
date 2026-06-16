@@ -36,3 +36,11 @@
 ### Separate attendance deduplication from user-facing tracking
 - **Mistake**: Planned individual attendance logs and member statistics before stakeholders had agreed that person-level reporting was necessary.
 - **Rule**: For attendance V1, expose only church-group aggregates. Keep the minimum internal member reference required to enforce one check-in per person, but do not expose member identities, names, personal history, or person-level statistics until explicitly approved for a later version.
+
+### Local-only data: run SQL directly, don't touch files
+- **Mistake**: When asked to add local test data, modified/created a seed file instead of running SQL directly against the local DB.
+- **Rule**: "Only on local backend" means `docker exec ... psql` with direct INSERT statements. No file changes. Seed files are for data that must survive a DB wipe; ad-hoc local data does not belong there.
+
+### Don't create new attendance definitions for seed data
+- **Mistake**: Created "로컬 테스트용 (전일)" all-day definitions to simplify date-window matching, without being asked.
+- **Rule**: When asked to add attendance logs, use only the definitions that already exist. Never create new definitions unless explicitly requested.
