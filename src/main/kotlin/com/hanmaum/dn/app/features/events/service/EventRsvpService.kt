@@ -3,9 +3,12 @@ package com.hanmaum.dn.app.features.events.service
 import com.hanmaum.dn.app.common.domainvalue.AnnouncementCategory
 import com.hanmaum.dn.app.features.announcements.repository.AnnouncementRepository
 import com.hanmaum.dn.app.features.events.api.toActiveDto
+import com.hanmaum.dn.app.features.events.api.toAttendeeDto
 import com.hanmaum.dn.app.features.events.api.toDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.ActiveEventRsvpDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.CreateEventRsvpRequest
+import com.hanmaum.dn.app.features.events.api.v1.dto.EventAttendeesResponse
+import com.hanmaum.dn.app.features.events.api.v1.dto.EventCheckInResponse
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.UpdateEventRsvpRequest
 import com.hanmaum.dn.app.features.events.domain.EventRsvp
@@ -91,5 +94,55 @@ class EventRsvpService(
     @Transactional(readOnly = true)
     fun listAllRsvps(): List<EventRsvpDto> = eventRsvpRepo.findAllNotDeleted().map { it.toDto() }
 
-    // checkIn and getAttendees are added in Task 4
+    @Transactional
+    fun checkIn(
+        publicId: UUID,
+        keycloakSub: String,
+    ): EventCheckInResponse {
+        val member =
+            memberRepo.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)
+                ?: throw EntityNotFoundException("Member not found for subject: $keycloakSub")
+        val rsvp =
+            eventRsvpRepo
+                .findByPublicIdAndDeletedAtIsNull(publicId)
+                .orElseThrow { EntityNotFoundException("EventRsvp not found: $publicId") }
+        if (!rsvp.isActive) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "비활성화된 RSVP입니다.")
+        }
+        val now = OffsetDateTime.now(clock)
+        if (now.isBefore(rsvp.windowStart) || !now.isBefore(rsvp.windowEnd)) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "현재 RSVP 신청 기간이 아닙니다.")
+        }
+        val inserted =
+            eventRsvpLogRepo.insertIfAbsent(
+                publicId = UUID.randomUUID(),
+                eventRsvpId = rsvp.id!!,
+                memberId = member.id!!,
+                groupId = member.group?.id,
+                checkedInAt = now.toInstant(),
+            )
+        if (inserted == 0) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "이미 RSVP 신청했습니다.")
+        }
+        return EventCheckInResponse(
+            eventPublicId = rsvp.publicId.toString(),
+            eventTitle = rsvp.title,
+            checkedInAt = now,
+        )
+    }
+
+    @Transactional(readOnly = true)
+    fun getAttendees(publicId: UUID): EventAttendeesResponse {
+        val rsvp =
+            eventRsvpRepo
+                .findByPublicIdAndDeletedAtIsNull(publicId)
+                .orElseThrow { EntityNotFoundException("EventRsvp not found: $publicId") }
+        val logs = eventRsvpLogRepo.findAttendeesWithDetails(rsvp.id!!)
+        return EventAttendeesResponse(
+            eventPublicId = rsvp.publicId.toString(),
+            eventTitle = rsvp.title,
+            totalCount = logs.size,
+            attendees = logs.map { it.toAttendeeDto() },
+        )
+    }
 }
