@@ -42,7 +42,7 @@ interface EventRsvpRepository : JpaRepository<EventRsvp, Long> {
 
 @Repository
 interface EventRsvpLogRepository : JpaRepository<EventRsvpLog, Long> {
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query(
         value = """
             INSERT INTO event_rsvp_logs (
