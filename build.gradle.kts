@@ -111,7 +111,22 @@ openApi {
     apiDocsUrl.set("http://localhost:8080/v3/api-docs.yaml")
     outputDir.set(layout.buildDirectory.dir("openapi"))
     outputFileName.set("openapi.yaml")
-    waitTimeInSeconds.set(40)
+    waitTimeInSeconds.set(60)
+    customBootRun {
+        systemProperties.set(mapOf("spring.profiles.active" to "dev"))
+        val envFile = rootProject.file(".env")
+        if (envFile.exists()) {
+            val envVars =
+                envFile
+                    .readLines()
+                    .filter { it.isNotBlank() && !it.startsWith("#") && it.contains("=") }
+                    .associate { line ->
+                        val idx = line.indexOf("=")
+                        line.substring(0, idx).trim() to line.substring(idx + 1).trim()
+                    }
+            environment.set(envVars)
+        }
+    }
 }
 
 // Run after generateOpenApiDocs to push the spec into the ops repo.
