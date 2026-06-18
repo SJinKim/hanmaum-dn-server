@@ -1,0 +1,1 @@
+ALTER TABLE event_rsvp_logs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
