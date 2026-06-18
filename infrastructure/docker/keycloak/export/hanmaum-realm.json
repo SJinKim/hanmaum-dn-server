@@ -66,6 +66,15 @@
         "attributes": {}
       },
       {
+        "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "name": "group_leader",
+        "description": "Gruppenleiter: kann Events und Anwesenheiten verwalten",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "313538da-5813-430e-ab02-16db69fc5746",
+        "attributes": {}
+      },
+      {
         "id": "3d884f2b-5366-479e-81a3-57d947b32927",
         "name": "default-roles-hanmaum",
         "description": "${role_default-roles}",
