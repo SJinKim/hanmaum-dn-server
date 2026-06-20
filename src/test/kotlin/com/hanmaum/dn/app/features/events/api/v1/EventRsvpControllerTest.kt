@@ -95,8 +95,12 @@ class EventRsvpControllerTest {
 
     @Test
     fun `GET events-rsvps-active returns list for authenticated member`() {
+        val announcementId = UUID.randomUUID()
         `when`(eventRsvpService.getActiveRsvps()).thenReturn(
-            listOf(ActiveEventRsvpDto(rsvpId.toString(), "여름 수련회", now.minusHours(1), now.plusHours(2))),
+            listOf(
+                ActiveEventRsvpDto(rsvpId.toString(), "여름 수련회", now.minusHours(1), now.plusHours(2), announcementId),
+                ActiveEventRsvpDto(UUID.randomUUID().toString(), "독립 행사", now.minusHours(1), now.plusHours(2), null),
+            ),
         )
 
         mockMvc
@@ -105,6 +109,8 @@ class EventRsvpControllerTest {
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.data[0].title").value("여름 수련회"))
             .andExpect(jsonPath("$.data[0].publicId").value(rsvpId.toString()))
+            .andExpect(jsonPath("$.data[0].announcementId").value(announcementId.toString()))
+            .andExpect(jsonPath("$.data[1].announcementId").value(org.hamcrest.Matchers.nullValue()))
     }
 
     @Test
