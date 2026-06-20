@@ -284,6 +284,27 @@ class EventRsvpServiceTest {
     }
 
     @Test
+    fun `getActiveRsvps exposes linked announcement public id`() {
+        val announcement = makeAnnouncement()
+        val active = makeRsvp(announcement = announcement)
+        `when`(eventRsvpRepo.findActiveNow(now)).thenReturn(listOf(active))
+
+        val result = service.getActiveRsvps()
+
+        assertEquals(announcement.publicId, result[0].announcementId)
+    }
+
+    @Test
+    fun `getActiveRsvps returns null announcementId when RSVP is standalone`() {
+        val active = makeRsvp(announcement = null)
+        `when`(eventRsvpRepo.findActiveNow(now)).thenReturn(listOf(active))
+
+        val result = service.getActiveRsvps()
+
+        assertNull(result[0].announcementId)
+    }
+
+    @Test
     fun `getActiveRsvps returns empty list when no window is open`() {
         `when`(eventRsvpRepo.findActiveNow(now)).thenReturn(emptyList())
 
