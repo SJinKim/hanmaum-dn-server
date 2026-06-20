@@ -16,6 +16,14 @@ logging:
     root: INFO
 
 app:
+  security:
+    # [AI-GUARD] One issuer per environment, set via APP_SECURITY_KEYCLOAK_PUBLIC_ISSUER.
+    # This must match the public `iss` claim Keycloak puts in the JWT exactly.
+    # Staging: https://auth.graceops.de/realms/hanmaum-dn-st
+    # Prod:    https://auth.graceops.de/realms/hanmaum
+    # Never hardcode. Each environment sets its own env var.
+    allowed-issuers:
+      - "${APP_SECURITY_KEYCLOAK_PUBLIC_ISSUER}"
   pii:
     strict: ${PII_STRICT:true}
     local-plaintext-enabled: false

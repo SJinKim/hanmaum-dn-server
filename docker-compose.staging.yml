@@ -64,6 +64,8 @@ services:
       # hanmaumApp-keycloak is reachable via the caddy-proxy network.
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://hanmaumApp-keycloak:8090/realms/${KEYCLOAK_REALM}/protocol/openid-connect/certs
       KEYCLOAK_AUTH_SERVER_URL: http://hanmaumApp-keycloak:8090
+      # Public Keycloak URL placed in JWT iss claim — must match token issuer exactly.
+      APP_SECURITY_KEYCLOAK_PUBLIC_ISSUER: ${APP_SECURITY_KEYCLOAK_PUBLIC_ISSUER}
     env_file:
       - path: .env.staging
         required: false
