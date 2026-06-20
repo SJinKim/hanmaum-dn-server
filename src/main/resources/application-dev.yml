@@ -25,13 +25,10 @@ spring:
 
 app:
   security:
+    # Comma-separated — @Value List<String> requires a scalar, not a YAML list.
     # [AI-GUARD] Never hardcode realm names here. ${KEYCLOAK_REALM} is read from .env.
-    # Changing these values will break login for other developers or on staging.
     # To use a different realm locally, set KEYCLOAK_REALM in your .env file.
-    allowed-issuers:
-      - "http://localhost:8091/realms/${KEYCLOAK_REALM}"
-      - "http://10.0.2.2:8091/realms/${KEYCLOAK_REALM}"
-      - "http://hanmaumApp-keycloak:8090/realms/${KEYCLOAK_REALM}"
+    allowed-issuers: "http://localhost:8091/realms/${KEYCLOAK_REALM},http://10.0.2.2:8091/realms/${KEYCLOAK_REALM},http://hanmaumApp-keycloak:8090/realms/${KEYCLOAK_REALM}"
   keycloak:
     server-url_docker: ${KEYCLOAK_SERVER_URL_DOCKER}
     realm: ${KEYCLOAK_REALM}
