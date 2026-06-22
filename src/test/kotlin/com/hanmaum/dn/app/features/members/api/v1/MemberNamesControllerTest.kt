@@ -22,7 +22,7 @@ import java.util.UUID
 import kotlin.test.Test
 
 /**
- * Role enforcement for GET /api/v1/members/names (the ministry "회원 추가" picker).
+ * Role enforcement for GET /api/v1/members/names (the ministry "맴버 추가" picker).
  * Imports SecurityConfig so @PreAuthorize is actually evaluated.
  */
 @WebMvcTest(MemberController::class, excludeAutoConfiguration = [OAuth2ResourceServerAutoConfiguration::class])

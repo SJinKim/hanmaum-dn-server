@@ -66,7 +66,7 @@ data class MemberSummaryDto(
 )
 
 /**
- * Minimal member identity for name pickers (e.g. the ministry "회원 추가" dropdown).
+ * Minimal member identity for name pickers (e.g. the ministry "맴버 추가" dropdown).
  * No PII beyond the display name: [discriminator] disambiguates identical names
  * (members sharing a name get an appended marker). Internal id is never exposed.
  */

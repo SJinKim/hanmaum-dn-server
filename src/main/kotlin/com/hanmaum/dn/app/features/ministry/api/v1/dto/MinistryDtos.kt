@@ -112,7 +112,7 @@ data class UpdateMinistryRequest(
 
 /** Binds an existing member to a ministry — body of POST /{publicId}/members. */
 data class AddMinistryMemberRequest(
-    @field:NotNull(message = "회원 ID는 필수입니다.")
+    @field:NotNull(message = "맴버 ID는 필수입니다.")
     val memberId: UUID,
     /**
      * Start of the assignment. Any day is accepted and normalized to the first of that

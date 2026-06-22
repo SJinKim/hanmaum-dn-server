@@ -98,7 +98,7 @@ class MinistryController(
         val added = ministryService.addMember(publicId, request)
         return ResponseEntity
             .status(HttpStatus.CREATED)
-            .body(ApiResponse.success(data = added, message = "회원이 부서에 추가되었습니다."))
+            .body(ApiResponse.success(data = added, message = "맴버가 부서에 추가되었습니다."))
     }
 
     /**

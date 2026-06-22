@@ -60,7 +60,7 @@ class MemberController(
     /**
      * GET /api/v1/members/names
      * Role: ADMIN or MINISTRY_LEADER — minimal name list (publicId, fullName, discriminator)
-     * for the ministry "회원 추가" picker. No PII beyond the display name.
+     * for the ministry "맴버 추가" picker. No PII beyond the display name.
      */
     @GetMapping("/names")
     @PreAuthorize("hasAnyRole('ADMIN', 'MINISTRY_LEADER')")
@@ -130,7 +130,7 @@ class MemberController(
         val created = memberService.createMember(request)
         return ResponseEntity
             .status(HttpStatus.CREATED)
-            .body(ApiResponse.success(data = created, message = "회원이 등록되었습니다."))
+            .body(ApiResponse.success(data = created, message = "맴버가 등록되었습니다."))
     }
 
     /**

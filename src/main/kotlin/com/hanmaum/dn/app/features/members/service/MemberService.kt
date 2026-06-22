@@ -132,7 +132,7 @@ class MemberService(
 
     /**
      * All non-deleted members as minimal name entries (publicId, fullName, discriminator),
-     * sorted by display name. Backs the ministry "회원 추가" picker; intentionally carries no
+     * sorted by display name. Backs the ministry "맴버 추가" picker; intentionally carries no
      * PII beyond the name so it can be exposed to MINISTRY_LEADER as well as ADMIN.
      */
     @Transactional(readOnly = true)
