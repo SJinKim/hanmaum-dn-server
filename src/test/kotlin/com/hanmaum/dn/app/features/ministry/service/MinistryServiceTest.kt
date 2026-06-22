@@ -1,10 +1,14 @@
 package com.hanmaum.dn.app.features.ministry.service
 
+import com.hanmaum.dn.app.features.members.domain.Member
+import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.ministry.api.v1.dto.AddMinistryMemberRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.CreateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryContactRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryScheduleRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.domain.Ministry
+import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
 import com.hanmaum.dn.app.features.ministry.domain.MinistryContact
 import com.hanmaum.dn.app.features.ministry.domain.MinistrySchedule
 import com.hanmaum.dn.app.features.ministry.repository.ActiveMemberView
@@ -26,8 +30,11 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.never
 import org.springframework.web.server.ResponseStatusException
 import java.lang.reflect.Field
+import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZoneId
 import java.util.Optional
 import java.util.UUID
 
@@ -37,11 +44,16 @@ class MinistryServiceTest {
 
     @Mock private lateinit var ministryAssignmentRepository: MinistryAssignmentRepository
 
+    @Mock private lateinit var memberRepository: MemberRepository
+
     private lateinit var service: MinistryService
+
+    // Fixed clock: 2026-06-22 (Berlin) → assignments start on the first of the month.
+    private val clock = Clock.fixed(Instant.parse("2026-06-22T08:00:00Z"), ZoneId.of("Europe/Berlin"))
 
     @BeforeEach
     fun setUp() {
-        service = MinistryService(ministryRepository, ministryAssignmentRepository)
+        service = MinistryService(ministryRepository, ministryAssignmentRepository, memberRepository, clock)
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -61,6 +73,16 @@ class MinistryServiceTest {
             ).also {
                 it.replaceContacts(listOf(MinistryContact(role = "팀장", name = "김민준 집사님")))
             }
+        setId(m, id)
+        return m
+    }
+
+    private fun makeMember(
+        id: Long = 100L,
+        lastName: String = "김",
+        firstName: String = "철수",
+    ): Member {
+        val m = Member(lastName = lastName, firstName = firstName)
         setId(m, id)
         return m
     }
@@ -380,5 +402,76 @@ class MinistryServiceTest {
             .thenReturn(Optional.empty())
 
         assertThrows<EntityNotFoundException> { service.getActiveMembers(id) }
+    }
+
+    // ─── addMember ────────────────────────────────────────────────────────────
+
+    @Test
+    fun `addMember - binds existing member and returns active-member dto`() {
+        val ministry = makeMinistry()
+        val member = makeMember()
+        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId))
+            .thenReturn(Optional.of(ministry))
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
+        `when`(ministryAssignmentRepository.existsActiveAssignment(ministry.id!!, member.id!!))
+            .thenReturn(false)
+        `when`(ministryAssignmentRepository.save(any()))
+            .thenAnswer { it.getArgument<MinistryAssignment>(0) }
+
+        val result = service.addMember(ministry.publicId, AddMinistryMemberRequest(memberId = member.publicId, note = "신입"))
+
+        assertEquals(member.publicId.toString(), result.publicId)
+        assertEquals("김철수", result.fullName)
+        assertEquals("2026-06-01", result.startDate) // first of current month per fixed clock
+        assertEquals("신입", result.note)
+        verify(ministryAssignmentRepository).save(any())
+    }
+
+    @Test
+    fun `addMember - 409 when member already active in this ministry`() {
+        val ministry = makeMinistry()
+        val member = makeMember()
+        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId))
+            .thenReturn(Optional.of(ministry))
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
+        `when`(ministryAssignmentRepository.existsActiveAssignment(ministry.id!!, member.id!!))
+            .thenReturn(true)
+
+        val ex =
+            assertThrows<ResponseStatusException> {
+                service.addMember(ministry.publicId, AddMinistryMemberRequest(memberId = member.publicId))
+            }
+
+        assertEquals(409, ex.statusCode.value())
+        verify(ministryAssignmentRepository, never()).save(any())
+    }
+
+    @Test
+    fun `addMember - 404 when ministry not found`() {
+        val ministryId = UUID.randomUUID()
+        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministryId))
+            .thenReturn(Optional.empty())
+
+        assertThrows<EntityNotFoundException> {
+            service.addMember(ministryId, AddMinistryMemberRequest(memberId = UUID.randomUUID()))
+        }
+        verify(ministryAssignmentRepository, never()).save(any())
+    }
+
+    @Test
+    fun `addMember - 404 when member not found`() {
+        val ministry = makeMinistry()
+        val unknownMemberId = UUID.randomUUID()
+        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId))
+            .thenReturn(Optional.of(ministry))
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(unknownMemberId))
+            .thenReturn(Optional.empty())
+
+        assertThrows<EntityNotFoundException> {
+            service.addMember(ministry.publicId, AddMinistryMemberRequest(memberId = unknownMemberId))
+        }
+        verify(ministryAssignmentRepository, never()).save(any())
     }
 }

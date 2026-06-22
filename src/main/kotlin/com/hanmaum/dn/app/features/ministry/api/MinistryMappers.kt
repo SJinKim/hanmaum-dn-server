@@ -10,6 +10,7 @@ import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryScheduleRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistrySummaryDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.domain.Ministry
+import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
 import com.hanmaum.dn.app.features.ministry.domain.MinistryContact
 import com.hanmaum.dn.app.features.ministry.domain.MinistrySchedule
 import com.hanmaum.dn.app.features.ministry.repository.ActiveMemberView
@@ -101,4 +102,14 @@ fun ActiveMemberView.toDto(): ActiveMinistryMemberDto =
         startDate = this.startDate.toString(),
         note = this.note,
         gender = this.gender?.name,
+    )
+
+/** Maps a freshly created assignment to the same shape the active-members table renders. */
+fun MinistryAssignment.toActiveMemberDto(): ActiveMinistryMemberDto =
+    ActiveMinistryMemberDto(
+        publicId = this.member.publicId.toString(),
+        fullName = this.member.getFullName(),
+        startDate = this.startDate.toString(),
+        note = this.note,
+        gender = this.member.gender?.name,
     )

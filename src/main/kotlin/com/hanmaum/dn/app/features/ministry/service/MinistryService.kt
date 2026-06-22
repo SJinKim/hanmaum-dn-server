@@ -1,15 +1,19 @@
 package com.hanmaum.dn.app.features.ministry.service
 
+import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.ministry.api.applyPatch
+import com.hanmaum.dn.app.features.ministry.api.toActiveMemberDto
 import com.hanmaum.dn.app.features.ministry.api.toDto
 import com.hanmaum.dn.app.features.ministry.api.toEntity
 import com.hanmaum.dn.app.features.ministry.api.toSummaryDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.ActiveMinistryMemberDto
+import com.hanmaum.dn.app.features.ministry.api.v1.dto.AddMinistryMemberRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.CreateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryScheduleRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistrySummaryDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateMinistryRequest
+import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
 import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
 import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
 import jakarta.persistence.EntityNotFoundException
@@ -17,12 +21,16 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
+import java.time.Clock
+import java.time.LocalDate
 import java.util.UUID
 
 @Service
 class MinistryService(
     private val ministryRepository: MinistryRepository,
     private val ministryAssignmentRepository: MinistryAssignmentRepository,
+    private val memberRepository: MemberRepository,
+    private val clock: Clock,
 ) {
     // ─── Ministry CRUD ─────────────────────────────────────────────────────────
 
@@ -113,6 +121,41 @@ class MinistryService(
         return ministryAssignmentRepository
             .findActiveByMinistryPublicId(publicId)
             .map { it.toDto() }
+    }
+
+    /**
+     * Binds an existing member to a ministry (the "맴버 추가" action on the ministry detail page).
+     * Authorized for ADMIN and MINISTRY_LEADER at the controller; no ownership check — any
+     * ministry-leader may add to any ministry. Creates a [MinistryAssignment] starting on the
+     * first of the current month.
+     *
+     * @throws EntityNotFoundException if the ministry or member is missing/soft-deleted
+     * @throws ResponseStatusException 409 if the member is already active in this ministry
+     */
+    @Transactional
+    fun addMember(
+        ministryPublicId: UUID,
+        req: AddMinistryMemberRequest,
+    ): ActiveMinistryMemberDto {
+        val ministry =
+            ministryRepository
+                .findByPublicIdAndDeletedAtIsNull(ministryPublicId)
+                .orElseThrow { EntityNotFoundException("Ministry not found: $ministryPublicId") }
+        val member =
+            memberRepository
+                .findByPublicIdAndDeletedAtIsNull(req.memberId)
+                .orElseThrow { EntityNotFoundException("Member not found: ${req.memberId}") }
+        if (ministryAssignmentRepository.existsActiveAssignment(ministry.id!!, member.id!!)) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "이 맴버는 이미 활동중입니다.")
+        }
+        val assignment =
+            MinistryAssignment(
+                ministry = ministry,
+                member = member,
+                startDate = LocalDate.now(clock).withDayOfMonth(1),
+                note = req.note,
+            )
+        return ministryAssignmentRepository.save(assignment).toActiveMemberDto()
     }
 
     private fun validateScheduleTimes(schedules: List<MinistryScheduleRequest>) {

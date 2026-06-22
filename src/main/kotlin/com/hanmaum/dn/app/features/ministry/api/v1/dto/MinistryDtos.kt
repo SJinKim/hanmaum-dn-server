@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Pattern
 import jakarta.validation.constraints.Size
 import java.time.LocalTime
+import java.util.UUID
 
 // ─── Response DTOs ────────────────────────────────────────────────────────────
 
@@ -106,6 +107,14 @@ data class UpdateMinistryRequest(
     val contacts: List<MinistryContactRequest>? = null,
     val imageUrl: String? = null,
     val isActive: Boolean? = null,
+)
+
+/** Binds an existing member to a ministry — body of POST /{publicId}/members. */
+data class AddMinistryMemberRequest(
+    @field:NotNull(message = "회원 ID는 필수입니다.")
+    val memberId: UUID,
+    @field:Size(max = 500, message = "메모는 최대 500자입니다.")
+    val note: String? = null,
 )
 
 data class MinistryContactRequest(
