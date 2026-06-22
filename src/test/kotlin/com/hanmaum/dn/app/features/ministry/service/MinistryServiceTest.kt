@@ -429,6 +429,28 @@ class MinistryServiceTest {
     }
 
     @Test
+    fun `addMember - normalizes provided startDate to first of that month`() {
+        val ministry = makeMinistry()
+        val member = makeMember()
+        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId))
+            .thenReturn(Optional.of(ministry))
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
+        `when`(ministryAssignmentRepository.existsActiveAssignment(ministry.id!!, member.id!!))
+            .thenReturn(false)
+        `when`(ministryAssignmentRepository.save(any()))
+            .thenAnswer { it.getArgument<MinistryAssignment>(0) }
+
+        val result =
+            service.addMember(
+                ministry.publicId,
+                AddMinistryMemberRequest(memberId = member.publicId, startDate = LocalDate.of(2025, 3, 17)),
+            )
+
+        assertEquals("2025-03-01", result.startDate)
+    }
+
+    @Test
     fun `addMember - 409 when member already active in this ministry`() {
         val ministry = makeMinistry()
         val member = makeMember()

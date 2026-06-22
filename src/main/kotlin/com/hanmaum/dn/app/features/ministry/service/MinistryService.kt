@@ -152,7 +152,7 @@ class MinistryService(
             MinistryAssignment(
                 ministry = ministry,
                 member = member,
-                startDate = LocalDate.now(clock).withDayOfMonth(1),
+                startDate = (req.startDate ?: LocalDate.now(clock)).withDayOfMonth(1),
                 note = req.note,
             )
         return ministryAssignmentRepository.save(assignment).toActiveMemberDto()

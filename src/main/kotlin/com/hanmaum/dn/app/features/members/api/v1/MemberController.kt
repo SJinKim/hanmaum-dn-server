@@ -5,6 +5,7 @@ import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.common.dto.ApiResponse
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
+import com.hanmaum.dn.app.features.members.api.v1.dto.MemberNameDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberSummaryDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.RegisterMemberRequest
@@ -55,6 +56,16 @@ class MemberController(
         val result = memberService.getMembers(search, status, baptism, page, size)
         return ResponseEntity.ok(ApiResponse.success(data = result))
     }
+
+    /**
+     * GET /api/v1/members/names
+     * Role: ADMIN or MINISTRY_LEADER — minimal name list (publicId, fullName, discriminator)
+     * for the ministry "회원 추가" picker. No PII beyond the display name.
+     */
+    @GetMapping("/names")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MINISTRY_LEADER')")
+    fun listMemberNames(): ResponseEntity<ApiResponse<List<MemberNameDto>>> =
+        ResponseEntity.ok(ApiResponse.success(data = memberService.getMemberNames()))
 
     /**
      * GET /api/v1/members/me
