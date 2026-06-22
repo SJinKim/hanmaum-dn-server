@@ -27,6 +27,21 @@ interface MinistryAssignmentRepository :
         @Param("memberId") memberId: Long,
     ): List<MinistryAssignment>
 
+    /** True if the member already has an active (endDate IS NULL) assignment in this ministry. */
+    @Query(
+        """
+        SELECT COUNT(a) > 0 FROM MinistryAssignment a
+        WHERE a.ministry.id = :ministryId
+          AND a.member.id = :memberId
+          AND a.endDate IS NULL
+          AND a.deletedAt IS NULL
+        """,
+    )
+    fun existsActiveAssignment(
+        @Param("ministryId") ministryId: Long,
+        @Param("memberId") memberId: Long,
+    ): Boolean
+
     /**
      * All active assignments (endDate IS NULL) for the given members, projected flat.
      */

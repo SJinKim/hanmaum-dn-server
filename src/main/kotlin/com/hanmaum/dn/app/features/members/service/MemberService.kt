@@ -7,10 +7,12 @@ import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
 import com.hanmaum.dn.app.features.members.api.applyPatch
 import com.hanmaum.dn.app.features.members.api.toDto
 import com.hanmaum.dn.app.features.members.api.toEntity
+import com.hanmaum.dn.app.features.members.api.toNameDto
 import com.hanmaum.dn.app.features.members.api.toResponse
 import com.hanmaum.dn.app.features.members.api.toSummaryDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
+import com.hanmaum.dn.app.features.members.api.v1.dto.MemberNameDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberSummaryDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MinistryHistoryDto
@@ -127,6 +129,18 @@ class MemberService(
             )
         }
     }
+
+    /**
+     * All non-deleted members as minimal name entries (publicId, fullName, discriminator),
+     * sorted by display name. Backs the ministry "맴버 추가" picker; intentionally carries no
+     * PII beyond the name so it can be exposed to MINISTRY_LEADER as well as ADMIN.
+     */
+    @Transactional(readOnly = true)
+    fun getMemberNames(): List<MemberNameDto> =
+        memberRepository
+            .findAllByDeletedAtIsNull()
+            .map { it.toNameDto() }
+            .sortedBy { it.fullName }
 
     @Transactional(readOnly = true)
     fun getMemberByPublicId(publicId: UUID): MemberDto {

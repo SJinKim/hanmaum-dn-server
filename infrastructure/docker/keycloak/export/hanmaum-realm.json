@@ -75,6 +75,15 @@
         "attributes": {}
       },
       {
+        "id": "b2c3d4e5-f6a7-8901-bcde-f23456789012",
+        "name": "ministry_leader",
+        "description": "Sachbereichsleiter: kann bestehende Mitglieder einem Sachbereich hinzufügen",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "313538da-5813-430e-ab02-16db69fc5746",
+        "attributes": {}
+      },
+      {
         "id": "3d884f2b-5366-479e-81a3-57d947b32927",
         "name": "default-roles-hanmaum",
         "description": "${role_default-roles}",

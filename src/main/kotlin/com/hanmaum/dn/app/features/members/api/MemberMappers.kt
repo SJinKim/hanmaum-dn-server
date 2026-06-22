@@ -5,6 +5,7 @@ import com.hanmaum.dn.app.common.domainvalue.Gender
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
+import com.hanmaum.dn.app.features.members.api.v1.dto.MemberNameDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberSummaryDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MinistryHistoryDto
@@ -170,6 +171,14 @@ fun Member.toSummaryDto(
         churchRole = this.churchRole,
         isNextGroupLeader = this.isNextGroupLeader,
         oneOnOneSignupFilled = this.oneOnOneSignupFilled,
+    )
+
+/** Minimal identity projection for name pickers. Decryption happens on entity load. */
+fun Member.toNameDto(): MemberNameDto =
+    MemberNameDto(
+        publicId = this.publicId.toString(),
+        fullName = this.getFullName(),
+        discriminator = this.discriminator,
     )
 
 fun Member.toResponse(): MemberResponse =

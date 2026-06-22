@@ -2,6 +2,7 @@ package com.hanmaum.dn.app.features.ministry.api.v1
 
 import com.hanmaum.dn.app.common.dto.ApiResponse
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.ActiveMinistryMemberDto
+import com.hanmaum.dn.app.features.ministry.api.v1.dto.AddMinistryMemberRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.CreateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistrySummaryDto
@@ -81,6 +82,23 @@ class MinistryController(
     ): ResponseEntity<ApiResponse<List<ActiveMinistryMemberDto>>> {
         val members = ministryService.getActiveMembers(publicId)
         return ResponseEntity.ok(ApiResponse.success(data = members))
+    }
+
+    /**
+     * POST /api/v1/ministries/{publicId}/members
+     * Role: ADMIN or MINISTRY_LEADER — bind an existing member to this ministry.
+     * The "맴버 추가" action on the ministry detail page. Returns the new active-member row.
+     */
+    @PostMapping("/{publicId}/members")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MINISTRY_LEADER')")
+    fun addMember(
+        @PathVariable publicId: UUID,
+        @Valid @RequestBody request: AddMinistryMemberRequest,
+    ): ResponseEntity<ApiResponse<ActiveMinistryMemberDto>> {
+        val added = ministryService.addMember(publicId, request)
+        return ResponseEntity
+            .status(HttpStatus.CREATED)
+            .body(ApiResponse.success(data = added, message = "맴버가 부서에 추가되었습니다."))
     }
 
     /**
