@@ -256,6 +256,51 @@ class EventRsvpServiceTest {
         assertEquals(400, ex.statusCode.value())
     }
 
+    @Test
+    fun `updateRsvp re-links valid EVENT announcement`() {
+        val rsvp = makeRsvp()
+        val announcement = makeAnnouncement()
+        `when`(eventRsvpRepo.findByPublicIdAndDeletedAtIsNull(rsvp.publicId))
+            .thenReturn(Optional.of(rsvp))
+        `when`(announcementRepo.findByPublicIdAndDeleteEntryAtIsNull(announcement.publicId))
+            .thenReturn(Optional.of(announcement))
+
+        val result = service.updateRsvp(rsvp.publicId, UpdateEventRsvpRequest(announcementId = announcement.publicId))
+
+        assertEquals(announcement.publicId.toString(), result.announcementPublicId)
+    }
+
+    @Test
+    fun `updateRsvp rejects non-EVENT announcement on re-link`() {
+        val rsvp = makeRsvp()
+        val noticeAnnouncement = makeAnnouncement(category = AnnouncementCategory.NOTICE)
+        `when`(eventRsvpRepo.findByPublicIdAndDeletedAtIsNull(rsvp.publicId))
+            .thenReturn(Optional.of(rsvp))
+        `when`(announcementRepo.findByPublicIdAndDeleteEntryAtIsNull(noticeAnnouncement.publicId))
+            .thenReturn(Optional.of(noticeAnnouncement))
+
+        val ex =
+            assertThrows<ResponseStatusException> {
+                service.updateRsvp(rsvp.publicId, UpdateEventRsvpRequest(announcementId = noticeAnnouncement.publicId))
+            }
+
+        assertEquals(400, ex.statusCode.value())
+    }
+
+    @Test
+    fun `updateRsvp rejects unknown announcement id on re-link`() {
+        val rsvp = makeRsvp()
+        val unknownId = UUID.randomUUID()
+        `when`(eventRsvpRepo.findByPublicIdAndDeletedAtIsNull(rsvp.publicId))
+            .thenReturn(Optional.of(rsvp))
+        `when`(announcementRepo.findByPublicIdAndDeleteEntryAtIsNull(unknownId))
+            .thenReturn(Optional.empty())
+
+        assertThrows<EntityNotFoundException> {
+            service.updateRsvp(rsvp.publicId, UpdateEventRsvpRequest(announcementId = unknownId))
+        }
+    }
+
     // ─── deactivateRsvp ───────────────────────────────────────────────────────
 
     @Test
