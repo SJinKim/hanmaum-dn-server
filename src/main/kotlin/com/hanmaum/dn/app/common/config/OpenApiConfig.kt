@@ -2,6 +2,8 @@ package com.hanmaum.dn.app.common.config
 
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.info.Info
+import io.swagger.v3.oas.models.media.StringSchema
+import org.springdoc.core.customizers.OpenApiCustomizer
 import org.springdoc.core.models.GroupedOpenApi
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
@@ -38,4 +40,16 @@ class OpenApiConfig(
             .pathsToMatch("/api/v2/**")
             .displayName("Version 2 (Beta)")
             .build()
+
+    // springdoc drops nullable UUID fields (UUID?) in Kotlin when no @field:Not* annotations
+    // are present on the class. Patch the affected schemas explicitly.
+    @Bean
+    fun nullableUuidSchemaPatcher(): OpenApiCustomizer =
+        OpenApiCustomizer { openApi ->
+            val uuidSchema = StringSchema().format("uuid").nullable(true)
+            openApi.components?.schemas?.let { schemas ->
+                schemas["UpdateEventRsvpRequest"]?.addProperty("announcementId", uuidSchema)
+                schemas["ActiveEventRsvpDto"]?.addProperty("announcementId", uuidSchema)
+            }
+        }
 }
