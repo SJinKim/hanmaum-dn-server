@@ -62,4 +62,5 @@ data class UpdateEventRsvpRequest(
     val windowStart: OffsetDateTime? = null,
     val windowEnd: OffsetDateTime? = null,
     val isActive: Boolean? = null,
+    val announcementId: UUID? = null,
 )
