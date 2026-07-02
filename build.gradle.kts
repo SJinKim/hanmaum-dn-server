@@ -72,6 +72,13 @@ dependencies {
     // Falls du Spring Boot 3 nutzt (Jakarta EE), brauchst du oft auch das RESTEasy Backend:
     implementation("org.jboss.resteasy:resteasy-client:6.2.7.Final")
     implementation("org.jboss.resteasy:resteasy-jackson2-provider:6.2.7.Final")
+
+    // S3 object storage (Album 2.0 photo hub)
+    implementation(platform("software.amazon.awssdk:bom:2.29.45"))
+    implementation("software.amazon.awssdk:s3")
+    implementation("net.coobird:thumbnailator:0.4.20")
+    implementation("com.drewnoakes:metadata-extractor:2.19.0")
+    testImplementation("org.testcontainers:minio:1.20.4")
 }
 
 kotlin {
