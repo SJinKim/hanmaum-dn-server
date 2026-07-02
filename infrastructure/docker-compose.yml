@@ -19,6 +19,9 @@ services:
       timeout: 5s
       retries: 5
 
+  # S3-compatible dev storage. Console: http://localhost:9002 (S3 API: 9000).
+  # Credentials: MINIO_ROOT_USER / MINIO_ROOT_PASSWORD from infrastructure/.env locally
+  # (defaults below are dev-only); real S3 creds come from GitHub secrets in CI/prod.
   minio:
     image: minio/minio:RELEASE.2024-12-18T13-15-44Z
     container_name: hanmaumApp-minio
@@ -28,7 +31,7 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-hanmaum-dev-secret}
     ports:
       - "9000:9000"
-      - "9001:9001"
+      - "9002:9001"
     volumes:
       - minio_data:/data
     healthcheck:
