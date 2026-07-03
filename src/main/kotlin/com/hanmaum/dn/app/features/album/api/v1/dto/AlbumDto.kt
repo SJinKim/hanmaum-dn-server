@@ -6,4 +6,6 @@ data class AlbumDto(
     val publicId: UUID,
     val name: String,
     val groupPublicId: UUID?,
+    val photoCount: Long,
+    val coverThumbUrl: String?,
 )

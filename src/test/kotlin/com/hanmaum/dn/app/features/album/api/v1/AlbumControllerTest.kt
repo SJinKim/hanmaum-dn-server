@@ -43,6 +43,8 @@ class AlbumControllerTest {
                     publicId = UUID.fromString("3f2a1b4c-0000-0000-0000-000000000001"),
                     name = "여름수련회",
                     groupPublicId = UUID.fromString("3f2a1b4c-0000-0000-0000-000000000002"),
+                    photoCount = 5L,
+                    coverThumbUrl = "https://signed/cover",
                 ),
             ),
         )
