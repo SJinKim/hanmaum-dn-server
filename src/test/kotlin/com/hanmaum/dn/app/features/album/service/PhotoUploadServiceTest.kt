@@ -114,6 +114,20 @@ class PhotoUploadServiceTest {
     }
 
     @Test
+    fun `presign rejects heic files with 400 since client must transcode to jpeg`() {
+        val member = memberWithGroup()
+        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull("kc-7")).thenReturn(member)
+
+        val heic = PresignUploadRequest(listOf(PresignFile("x.heic", "image/heic", 100L)))
+        assertEquals(
+            400,
+            assertThrows(ResponseStatusException::class.java) { service().presign("kc-7", heic) }
+                .statusCode
+                .value(),
+        )
+    }
+
+    @Test
     fun `confirm activates photo, writes thumb, sets takenAt fallback and album cover`() {
         val member = memberWithGroup()
         val album = Album(name = "소망", group = member.group).also { it.id = 10L }
@@ -163,5 +177,34 @@ class PhotoUploadServiceTest {
         assertEquals(0, activated)
         assertEquals(PhotoStatus.PENDING, missing.status)
         assertEquals(PhotoStatus.PENDING, foreign.status)
+    }
+
+    @Test
+    fun `confirm isolates per-photo failures so one corrupt photo doesn't block the batch`() {
+        val member = memberWithGroup()
+        val album = Album(name = "소망", group = member.group).also { it.id = 10L }
+        val corrupt =
+            AlbumPhoto(album, "albums/${album.publicId}/corrupt.jpg", "image/jpeg", 1L, member)
+        val valid =
+            AlbumPhoto(album, "albums/${album.publicId}/valid.jpg", "image/jpeg", 1L, member)
+
+        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull("kc-7")).thenReturn(member)
+        `when`(photoRepository.findByPublicIdAndDeletedAtIsNull(corrupt.publicId)).thenReturn(corrupt)
+        `when`(photoRepository.findByPublicIdAndDeletedAtIsNull(valid.publicId)).thenReturn(valid)
+        `when`(storage.objectExists(corrupt.originalKey)).thenReturn(true)
+        `when`(storage.objectExists(valid.originalKey)).thenReturn(true)
+        `when`(storage.getObjectBytes(corrupt.originalKey)).thenReturn("not-an-image".toByteArray())
+
+        val image = BufferedImage(1200, 800, BufferedImage.TYPE_INT_RGB)
+        val jpegBytes = ByteArrayOutputStream().also { ImageIO.write(image, "jpg", it) }.toByteArray()
+        `when`(storage.getObjectBytes(valid.originalKey)).thenReturn(jpegBytes)
+
+        val activated =
+            service().confirm("kc-7", ConfirmUploadRequest(listOf(corrupt.publicId, valid.publicId)))
+
+        assertEquals(1, activated)
+        assertEquals(PhotoStatus.PENDING, corrupt.status)
+        assertEquals(null, corrupt.thumbKey)
+        assertEquals(PhotoStatus.ACTIVE, valid.status)
     }
 }

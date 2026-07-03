@@ -41,7 +41,6 @@ class PhotoUploadService(
             mapOf(
                 "image/jpeg" to "jpg",
                 "image/png" to "png",
-                "image/heic" to "heic",
                 "image/webp" to "webp",
             )
     }
@@ -99,17 +98,36 @@ class PhotoUploadService(
         val member = requireMember(requesterKeycloakId)
         var activated = 0
         request.photoIds.forEach { photoId ->
-            val photo = photoRepository.findByPublicIdAndDeletedAtIsNull(photoId) ?: return@forEach
-            if (photo.uploadedBy.id != member.id || photo.status != PhotoStatus.PENDING) return@forEach
+            val photo = photoRepository.findByPublicIdAndDeletedAtIsNull(photoId)
+            if (photo == null) {
+                log.warn("Photo confirm skipped for {}: not found", photoId)
+                return@forEach
+            }
+            if (photo.uploadedBy.id != member.id) {
+                log.warn("Photo confirm skipped for {}: not owned by requester", photoId)
+                return@forEach
+            }
+            if (photo.status != PhotoStatus.PENDING) {
+                log.warn("Photo confirm skipped for {}: status is {}, not PENDING", photoId, photo.status)
+                return@forEach
+            }
             if (!storage.objectExists(photo.originalKey)) return@forEach
 
-            val bytes = storage.getObjectBytes(photo.originalKey)
-            photo.takenAt = extractTakenAt(bytes) ?: Instant.now()
-            photo.thumbKey = "albums/${photo.album.publicId}/thumbs/${photo.publicId}.jpg"
-            storage.putObject(photo.thumbKey!!, buildThumbnail(bytes), "image/jpeg")
-            photo.status = PhotoStatus.ACTIVE
-            photo.album.coverPhoto = photo
-            activated++
+            try {
+                val bytes = storage.getObjectBytes(photo.originalKey)
+                val takenAt = extractTakenAt(bytes) ?: Instant.now()
+                val thumbKey = "albums/${photo.album.publicId}/thumbs/${photo.publicId}.jpg"
+                val thumbBytes = buildThumbnail(bytes)
+                storage.putObject(thumbKey, thumbBytes, "image/jpeg")
+
+                photo.takenAt = takenAt
+                photo.thumbKey = thumbKey
+                photo.status = PhotoStatus.ACTIVE
+                photo.album.coverPhoto = photo
+                activated++
+            } catch (e: Exception) {
+                log.warn("Photo confirm failed for {}: {}", photoId, e.message)
+            }
         }
         return activated
     }
