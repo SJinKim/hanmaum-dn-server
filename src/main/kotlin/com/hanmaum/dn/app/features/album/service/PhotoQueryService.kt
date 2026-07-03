@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.album.service
 
 import com.hanmaum.dn.app.common.storage.S3StorageService
+import com.hanmaum.dn.app.features.album.api.v1.dto.CalendarDayDto
 import com.hanmaum.dn.app.features.album.api.v1.dto.PhotoDto
 import com.hanmaum.dn.app.features.album.api.v1.dto.PhotoPageDto
 import com.hanmaum.dn.app.features.album.domain.AlbumPhoto
@@ -14,6 +15,9 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.ZoneOffset
 import java.util.UUID
 
 @Service
@@ -69,4 +73,38 @@ class PhotoQueryService(
             mine = requesterMemberId != null && photo.uploadedBy.id == requesterMemberId,
             saved = saved,
         )
+
+    @Transactional(readOnly = true)
+    fun getCalendar(month: YearMonth): List<CalendarDayDto> {
+        val from = month.atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant()
+        val to =
+            month
+                .plusMonths(1)
+                .atDay(1)
+                .atStartOfDay(ZoneOffset.UTC)
+                .toInstant()
+        return photoRepository.aggregateCalendarDays(from, to).map { row ->
+            CalendarDayDto(
+                date = row.getDay().toLocalDate(),
+                photoCount = row.getPhotoCount(),
+                coverThumbUrl = row.getCoverThumbKey()?.let { storage.presignGet(it) },
+            )
+        }
+    }
+
+    @Transactional(readOnly = true)
+    fun getPhotosByDate(
+        date: LocalDate,
+        requesterKeycloakId: String,
+    ): List<PhotoDto> {
+        val requesterId = memberRepository.findByKeycloakIdAndDeletedAtIsNull(requesterKeycloakId)?.id
+        val from = date.atStartOfDay(ZoneOffset.UTC).toInstant()
+        val to = date.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant()
+        return photoRepository.findActiveTakenBetween(from, to).map { photo ->
+            val saved =
+                requesterId != null &&
+                    saveRepository.findByMemberIdAndPhotoIdAndDeletedAtIsNull(requesterId, photo.id!!) != null
+            toDto(photo, requesterId, saved)
+        }
+    }
 }
