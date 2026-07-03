@@ -42,8 +42,7 @@ class AlbumControllerTest {
                 AlbumDto(
                     publicId = UUID.fromString("3f2a1b4c-0000-0000-0000-000000000001"),
                     name = "여름수련회",
-                    pcloudCode = "CODE1",
-                    displayOrder = 0,
+                    groupPublicId = UUID.fromString("3f2a1b4c-0000-0000-0000-000000000002"),
                 ),
             ),
         )
@@ -52,8 +51,7 @@ class AlbumControllerTest {
             .perform(get("/api/v1/albums"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$[0].name").value("여름수련회"))
-            .andExpect(jsonPath("$[0].pcloudCode").value("CODE1"))
-            .andExpect(jsonPath("$[0].displayOrder").value(0))
+            .andExpect(jsonPath("$[0].groupPublicId").value("3f2a1b4c-0000-0000-0000-000000000002"))
     }
 
     @Test

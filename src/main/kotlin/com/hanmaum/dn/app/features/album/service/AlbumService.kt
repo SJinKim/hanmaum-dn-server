@@ -13,8 +13,7 @@ class AlbumService(
             AlbumDto(
                 publicId = album.publicId,
                 name = album.name,
-                pcloudCode = album.pcloudCode,
-                displayOrder = album.displayOrder,
+                groupPublicId = album.group?.publicId,
             )
         }
 }

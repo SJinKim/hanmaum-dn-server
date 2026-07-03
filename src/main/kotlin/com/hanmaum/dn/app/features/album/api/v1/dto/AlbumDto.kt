@@ -5,6 +5,5 @@ import java.util.UUID
 data class AlbumDto(
     val publicId: UUID,
     val name: String,
-    val pcloudCode: String,
-    val displayOrder: Int,
+    val groupPublicId: UUID?,
 )
