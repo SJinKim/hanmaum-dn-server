@@ -107,4 +107,22 @@ class PhotoQueryService(
             toDto(photo, requesterId, saved)
         }
     }
+
+    @Transactional(readOnly = true)
+    fun getSavedPhotos(
+        requesterKeycloakId: String,
+        page: Int,
+        size: Int,
+    ): PhotoPageDto {
+        val member =
+            memberRepository.findByKeycloakIdAndDeletedAtIsNull(requesterKeycloakId)
+                ?: throw ResponseStatusException(HttpStatus.FORBIDDEN, "Member not found")
+        val savedPage = saveRepository.findSavedByMember(member.id!!, PageRequest.of(page, size.coerceIn(1, 100)))
+        return PhotoPageDto(
+            items = savedPage.content.map { toDto(it.photo, member.id, saved = true) },
+            page = savedPage.number,
+            totalPages = savedPage.totalPages,
+            totalItems = savedPage.totalElements,
+        )
+    }
 }
