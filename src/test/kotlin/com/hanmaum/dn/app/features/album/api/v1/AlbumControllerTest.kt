@@ -3,6 +3,7 @@ package com.hanmaum.dn.app.features.album.api.v1
 import com.hanmaum.dn.app.common.config.SecurityConfig
 import com.hanmaum.dn.app.features.album.api.v1.dto.AlbumDto
 import com.hanmaum.dn.app.features.album.service.AlbumService
+import com.hanmaum.dn.app.features.album.service.PhotoQueryService
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import org.mockito.Mockito.`when`
 import org.springframework.beans.factory.annotation.Autowired
@@ -35,6 +36,9 @@ class AlbumControllerTest {
 
     @MockitoBean
     private lateinit var albumService: AlbumService
+
+    @MockitoBean
+    private lateinit var photoQueryService: PhotoQueryService
 
     @MockitoBean
     private lateinit var jwtDecoder: JwtDecoder
