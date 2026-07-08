@@ -323,6 +323,26 @@ class MemberMappersTest {
         assertEquals("다니엘조", member.toResponse().groupName)
     }
 
+    @Test
+    fun `toResponse maps division and birthDate`() {
+        val member = memberWithId(7L)
+        member.group = ChurchGroup(name = "다니엘조", division = "2교구")
+        member.birthDate = LocalDate.of(1992, 12, 7)
+
+        val response = member.toResponse()
+
+        assertEquals("2교구", response.division)
+        assertEquals(LocalDate.of(1992, 12, 7), response.birthDate)
+    }
+
+    @Test
+    fun `toResponse maps missing group division and birthDate to null`() {
+        val member = memberWithId(8L)
+        val response = member.toResponse()
+        assertNull(response.division)
+        assertNull(response.birthDate)
+    }
+
     // --- isNextGroupLeader / oneOnOneSignupFilled ---
 
     @Test
