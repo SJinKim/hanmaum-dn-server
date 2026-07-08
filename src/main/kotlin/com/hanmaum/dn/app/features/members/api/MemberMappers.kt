@@ -190,10 +190,12 @@ fun Member.toResponse(): MemberResponse =
         status = this.memberStatus,
         churchRole = this.churchRole,
         groupName = this.group?.name,
+        division = this.group?.division,
         street = this.street,
         houseNumber = this.houseNumber,
         zipCode = this.zipCode,
         city = this.city,
         phoneNumber = this.phoneNumber,
+        birthDate = this.birthDate,
         profileImageUrl = this.profileImageUrl,
     )

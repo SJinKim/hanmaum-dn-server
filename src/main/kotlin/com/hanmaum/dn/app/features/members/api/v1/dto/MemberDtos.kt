@@ -111,11 +111,14 @@ data class MemberResponse(
     val status: MemberStatus,
     val churchRole: String? = null,
     val groupName: String? = null,
+    /** Division of the member's church group (e.g. "2교구"), or null when ungrouped. */
+    val division: String? = null,
     val street: String? = null,
     val houseNumber: String? = null,
     val zipCode: String? = null,
     val city: String? = null,
     val phoneNumber: String? = null,
+    val birthDate: LocalDate? = null,
     val profileImageUrl: String? = null,
 )
 
@@ -206,6 +209,7 @@ data class RegisterMemberRequest(
 data class UpdateMyProfileRequest(
     @field:Size(max = 50)
     val phoneNumber: String? = null,
+    val birthDate: LocalDate? = null,
     val profileImageUrl: String? = null,
     val street: String? = null,
     @field:Size(max = 50)
