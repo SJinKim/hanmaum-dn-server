@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.servlet.NoHandlerFoundException
+import tools.jackson.module.kotlin.KotlinInvalidNullException
 
 @RestControllerAdvice
 class GlobalExceptionHandler {
@@ -48,14 +49,23 @@ class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException::class)
     fun handleMessageNotReadable(e: HttpMessageNotReadableException): ResponseEntity<ErrorResponse> {
         logger.warn("Malformed request body: {}", e.message)
+        val missingField = findKotlinInvalidNull(e)?.kotlinPropertyName
+        val message = if (missingField != null) "$missingField: 필수 항목입니다." else "Malformed or missing request body."
         val response =
             ErrorResponse(
                 status = HttpStatus.BAD_REQUEST.value(),
                 error = "Bad Request",
-                message = "Malformed or missing request body.",
+                message = message,
             )
         return ResponseEntity(response, HttpStatus.BAD_REQUEST)
     }
+
+    private tailrec fun findKotlinInvalidNull(t: Throwable?): KotlinInvalidNullException? =
+        when (t) {
+            null -> null
+            is KotlinInvalidNullException -> t
+            else -> findKotlinInvalidNull(t.cause)
+        }
 
     @ExceptionHandler(AuthorizationDeniedException::class)
     fun handleAuthorizationDenied(e: AuthorizationDeniedException): ResponseEntity<ErrorResponse> {
