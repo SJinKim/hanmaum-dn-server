@@ -20,6 +20,8 @@ data class ActiveEventRsvpDto(
     val title: String,
     val windowStart: OffsetDateTime,
     val windowEnd: OffsetDateTime,
+    /** Public id of the linked EVENT announcement, or null when the RSVP is standalone. */
+    val announcementId: UUID?,
 )
 
 data class EventCheckInResponse(
@@ -60,4 +62,5 @@ data class UpdateEventRsvpRequest(
     val windowStart: OffsetDateTime? = null,
     val windowEnd: OffsetDateTime? = null,
     val isActive: Boolean? = null,
+    val announcementId: UUID? = null,
 )

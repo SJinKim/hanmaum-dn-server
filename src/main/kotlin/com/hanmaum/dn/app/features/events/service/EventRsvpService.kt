@@ -76,6 +76,17 @@ class EventRsvpService(
         req.windowStart?.let { rsvp.windowStart = it }
         req.windowEnd?.let { rsvp.windowEnd = it }
         req.isActive?.let { rsvp.isActive = it }
+        req.announcementId?.let { id ->
+            rsvp.announcement =
+                announcementRepo
+                    .findByPublicIdAndDeleteEntryAtIsNull(id)
+                    .orElseThrow { EntityNotFoundException("Announcement not found: $id") }
+                    .also {
+                        if (it.category != AnnouncementCategory.EVENT) {
+                            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "이벤트 카테고리의 공지만 연결할 수 있습니다.")
+                        }
+                    }
+        }
         return rsvp.toDto()
     }
 

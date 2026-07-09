@@ -23,6 +23,7 @@ fun EventRsvp.toActiveDto(): ActiveEventRsvpDto =
         title = title,
         windowStart = windowStart,
         windowEnd = windowEnd,
+        announcementId = announcement?.publicId,
     )
 
 fun EventRsvpLog.toAttendeeDto(): EventAttendeeDto =

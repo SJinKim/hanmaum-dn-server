@@ -152,6 +152,25 @@ class MemberServiceTest {
         assertEquals(member.firstName, result.firstName)
     }
 
+    // --- getMemberNames ---
+
+    @Test
+    fun `getMemberNames returns minimal name entries sorted by full name`() {
+        val a = memberWithId(1L, lastName = "이", firstName = "영희") // 이영희
+        val b = memberWithId(2L, lastName = "김", firstName = "철수") // 김철수
+        b.discriminator = "B"
+        `when`(memberRepository.findAllByDeletedAtIsNull()).thenReturn(listOf(a, b))
+
+        val result = memberService.getMemberNames()
+
+        assertEquals(2, result.size)
+        assertEquals("김철수", result[0].fullName) // sorted: 김 before 이
+        assertEquals("B", result[0].discriminator)
+        assertEquals(b.publicId.toString(), result[0].publicId)
+        assertEquals("이영희", result[1].fullName)
+        assertNull(result[1].discriminator)
+    }
+
     // --- replaceMemberMinistries ---
 
     @Test
@@ -581,5 +600,30 @@ class MemberServiceTest {
         assertEquals("50667", response.zipCode)
         assertEquals("Köln", response.city)
         assertEquals("+49 123", response.phoneNumber)
+    }
+
+    @Test
+    fun `updateMyProfile updates birthDate and preserves it when omitted`() {
+        val keycloakSub = UUID.randomUUID().toString()
+        val member = memberWithId(1L)
+        member.keycloakId = keycloakSub
+        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(member)
+        `when`(memberRepository.save(member)).thenReturn(member)
+
+        val updated =
+            memberService.updateMyProfile(
+                keycloakSubject = keycloakSub,
+                email = null,
+                request = UpdateMyProfileRequest(birthDate = LocalDate.of(1992, 12, 7)),
+            )
+        assertEquals(LocalDate.of(1992, 12, 7), updated.birthDate)
+
+        val preserved =
+            memberService.updateMyProfile(
+                keycloakSubject = keycloakSub,
+                email = null,
+                request = UpdateMyProfileRequest(phoneNumber = "+49 123"),
+            )
+        assertEquals(LocalDate.of(1992, 12, 7), preserved.birthDate)
     }
 }

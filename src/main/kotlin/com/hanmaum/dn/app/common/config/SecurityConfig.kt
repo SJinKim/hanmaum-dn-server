@@ -32,14 +32,18 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 @EnableMethodSecurity
 class SecurityConfig(
     @Value("\${api.prefix:/api/v1}") private val apiPrefix: String,
+    // JWK URI is resolved per-profile (application-dev.yml / application-prod.yml).
+    // Never hardcode a realm name here — use \${KEYCLOAK_REALM} in the yml files.
+    // [AI-GUARD] Do not change this default or inline a realm name.
     @Value(
-        "\${spring.security.oauth2.resourceserver.jwt.jwk-set-uri:http://hanmaumApp-keycloak:8090/realms/hanmaum/protocol/openid-connect/certs}",
+        "\${spring.security.oauth2.resourceserver.jwt.jwk-set-uri:http://hanmaumApp-keycloak:8090/realms/\${KEYCLOAK_REALM:hanmaum}/protocol/openid-connect/certs}",
     )
     private val jwkSetUri: String,
-    // Public Keycloak URL used to validate the `iss` claim in production tokens.
-    // Default covers local dev. Set APP_SECURITY_KEYCLOAK_PUBLIC_ISSUER in .env for each environment.
-    @Value("\${app.security.keycloak-public-issuer:http://localhost:8091/realms/hanmaum}")
-    private val keycloakPublicIssuer: String,
+    // Allowed JWT issuers are declared in application-dev.yml / application-prod.yml.
+    // Each environment defines its own list via \${KEYCLOAK_REALM} or env vars.
+    // [AI-GUARD] Never add hardcoded realm names or issuer URLs to this list in code.
+    @Value("\${app.security.allowed-issuers}")
+    private val configuredIssuers: List<String>,
     @Value("\${app.cors.allowed-origins:http://localhost:4200,http://localhost}")
     private val allowedOrigins: List<String>,
 ) {
@@ -107,21 +111,12 @@ class SecurityConfig(
         //   - Docker:       env var               → http://hanmaumApp-keycloak:8090/realms/...
         val jwtDecoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build()
 
-        // 2. Liste der erlaubten Aussteller (Issuers)
-        // Das sind alle Namen, unter denen Keycloak erreichbar ist.
-        val allowedIssuers =
-            listOf(
-                "http://10.0.2.2:8091/realms/hanmaum", // Android Emulator
-                "http://localhost:8091/realms/hanmaum", // iOS / Web Localhost
-                "http://hanmaumApp-keycloak:8090/realms/hanmaum", // Docker internal
-                keycloakPublicIssuer, // public Keycloak URL — set via APP_SECURITY_KEYCLOAK_PUBLIC_ISSUER
-            )
-
-        // 3. Eigener Validator: Prüft, ob der Token-Issuer in der Liste ist
+        // Issuers are declared in application-dev.yml / application-prod.yml — never hardcoded.
+        // [AI-GUARD] Do not add inline issuer URLs here; edit the yml files instead.
         val issuerValidator =
             OAuth2TokenValidator<Jwt> { jwt ->
                 val issuerClaim = jwt.getClaimAsString("iss")
-                if (allowedIssuers.contains(issuerClaim)) {
+                if (configuredIssuers.contains(issuerClaim)) {
                     OAuth2TokenValidatorResult.success()
                 } else {
                     OAuth2TokenValidatorResult.failure(

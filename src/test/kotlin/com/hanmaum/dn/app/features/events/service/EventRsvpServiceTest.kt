@@ -256,6 +256,51 @@ class EventRsvpServiceTest {
         assertEquals(400, ex.statusCode.value())
     }
 
+    @Test
+    fun `updateRsvp re-links valid EVENT announcement`() {
+        val rsvp = makeRsvp()
+        val announcement = makeAnnouncement()
+        `when`(eventRsvpRepo.findByPublicIdAndDeletedAtIsNull(rsvp.publicId))
+            .thenReturn(Optional.of(rsvp))
+        `when`(announcementRepo.findByPublicIdAndDeleteEntryAtIsNull(announcement.publicId))
+            .thenReturn(Optional.of(announcement))
+
+        val result = service.updateRsvp(rsvp.publicId, UpdateEventRsvpRequest(announcementId = announcement.publicId))
+
+        assertEquals(announcement.publicId.toString(), result.announcementPublicId)
+    }
+
+    @Test
+    fun `updateRsvp rejects non-EVENT announcement on re-link`() {
+        val rsvp = makeRsvp()
+        val noticeAnnouncement = makeAnnouncement(category = AnnouncementCategory.NOTICE)
+        `when`(eventRsvpRepo.findByPublicIdAndDeletedAtIsNull(rsvp.publicId))
+            .thenReturn(Optional.of(rsvp))
+        `when`(announcementRepo.findByPublicIdAndDeleteEntryAtIsNull(noticeAnnouncement.publicId))
+            .thenReturn(Optional.of(noticeAnnouncement))
+
+        val ex =
+            assertThrows<ResponseStatusException> {
+                service.updateRsvp(rsvp.publicId, UpdateEventRsvpRequest(announcementId = noticeAnnouncement.publicId))
+            }
+
+        assertEquals(400, ex.statusCode.value())
+    }
+
+    @Test
+    fun `updateRsvp rejects unknown announcement id on re-link`() {
+        val rsvp = makeRsvp()
+        val unknownId = UUID.randomUUID()
+        `when`(eventRsvpRepo.findByPublicIdAndDeletedAtIsNull(rsvp.publicId))
+            .thenReturn(Optional.of(rsvp))
+        `when`(announcementRepo.findByPublicIdAndDeleteEntryAtIsNull(unknownId))
+            .thenReturn(Optional.empty())
+
+        assertThrows<EntityNotFoundException> {
+            service.updateRsvp(rsvp.publicId, UpdateEventRsvpRequest(announcementId = unknownId))
+        }
+    }
+
     // ─── deactivateRsvp ───────────────────────────────────────────────────────
 
     @Test
@@ -281,6 +326,27 @@ class EventRsvpServiceTest {
 
         assertEquals(1, result.size)
         assertEquals("열린 행사", result[0].title)
+    }
+
+    @Test
+    fun `getActiveRsvps exposes linked announcement public id`() {
+        val announcement = makeAnnouncement()
+        val active = makeRsvp(announcement = announcement)
+        `when`(eventRsvpRepo.findActiveNow(now)).thenReturn(listOf(active))
+
+        val result = service.getActiveRsvps()
+
+        assertEquals(announcement.publicId, result[0].announcementId)
+    }
+
+    @Test
+    fun `getActiveRsvps returns null announcementId when RSVP is standalone`() {
+        val active = makeRsvp(announcement = null)
+        `when`(eventRsvpRepo.findActiveNow(now)).thenReturn(listOf(active))
+
+        val result = service.getActiveRsvps()
+
+        assertNull(result[0].announcementId)
     }
 
     @Test

@@ -15,7 +15,7 @@ import java.time.OffsetDateTime
 class EventRsvp(
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "announcement_id")
-    val announcement: Announcement? = null,
+    var announcement: Announcement? = null,
     @Column(name = "title", nullable = false, length = 100)
     var title: String,
     @Column(name = "window_start", nullable = false)

@@ -65,6 +65,17 @@ data class MemberSummaryDto(
     val oneOnOneSignupFilled: Boolean = false,
 )
 
+/**
+ * Minimal member identity for name pickers (e.g. the ministry "맴버 추가" dropdown).
+ * No PII beyond the display name: [discriminator] disambiguates identical names
+ * (members sharing a name get an appended marker). Internal id is never exposed.
+ */
+data class MemberNameDto(
+    val publicId: String,
+    val fullName: String,
+    val discriminator: String? = null,
+)
+
 /** A member's training as shown on the grid chip: catalog name + status (IN_PROGRESS | COMPLETED). */
 data class SummaryTrainingDto(
     val name: String,
@@ -100,11 +111,14 @@ data class MemberResponse(
     val status: MemberStatus,
     val churchRole: String? = null,
     val groupName: String? = null,
+    /** Division of the member's church group (e.g. "2교구"), or null when ungrouped. */
+    val division: String? = null,
     val street: String? = null,
     val houseNumber: String? = null,
     val zipCode: String? = null,
     val city: String? = null,
     val phoneNumber: String? = null,
+    val birthDate: LocalDate? = null,
     val profileImageUrl: String? = null,
 )
 
@@ -195,6 +209,7 @@ data class RegisterMemberRequest(
 data class UpdateMyProfileRequest(
     @field:Size(max = 50)
     val phoneNumber: String? = null,
+    val birthDate: LocalDate? = null,
     val profileImageUrl: String? = null,
     val street: String? = null,
     @field:Size(max = 50)

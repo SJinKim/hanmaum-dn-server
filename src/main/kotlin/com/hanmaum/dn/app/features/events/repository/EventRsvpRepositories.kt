@@ -19,6 +19,7 @@ interface EventRsvpRepository : JpaRepository<EventRsvp, Long> {
     @Query(
         """
         SELECT r FROM EventRsvp r
+        LEFT JOIN FETCH r.announcement
         WHERE r.isActive = true
           AND r.windowStart <= :now
           AND r.windowEnd > :now
