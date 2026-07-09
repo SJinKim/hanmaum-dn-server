@@ -601,4 +601,29 @@ class MemberServiceTest {
         assertEquals("Köln", response.city)
         assertEquals("+49 123", response.phoneNumber)
     }
+
+    @Test
+    fun `updateMyProfile updates birthDate and preserves it when omitted`() {
+        val keycloakSub = UUID.randomUUID().toString()
+        val member = memberWithId(1L)
+        member.keycloakId = keycloakSub
+        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(member)
+        `when`(memberRepository.save(member)).thenReturn(member)
+
+        val updated =
+            memberService.updateMyProfile(
+                keycloakSubject = keycloakSub,
+                email = null,
+                request = UpdateMyProfileRequest(birthDate = LocalDate.of(1992, 12, 7)),
+            )
+        assertEquals(LocalDate.of(1992, 12, 7), updated.birthDate)
+
+        val preserved =
+            memberService.updateMyProfile(
+                keycloakSubject = keycloakSub,
+                email = null,
+                request = UpdateMyProfileRequest(phoneNumber = "+49 123"),
+            )
+        assertEquals(LocalDate.of(1992, 12, 7), preserved.birthDate)
+    }
 }
