@@ -1,10 +1,12 @@
 package com.hanmaum.dn.app.features.members.api.v1.dto
 
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
+import com.hanmaum.dn.app.common.serialization.TrimmingStringConverter
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
+import tools.jackson.databind.annotation.JsonDeserialize
 import java.time.Instant
 import java.time.LocalDate
 
@@ -190,6 +192,9 @@ data class RegisterMemberRequest(
     val lastName: String,
     @field:NotBlank
     val password: String,
+    // Trim before validation so a stray leading/trailing space (mobile keyboard, copy-paste)
+    // can't fail @Email or create a mismatched Keycloak username. Password is deliberately not trimmed.
+    @field:JsonDeserialize(converter = TrimmingStringConverter::class)
     @field:NotBlank
     @field:Email(message = "유효한 이메일이어야 합니다.")
     val email: String,
