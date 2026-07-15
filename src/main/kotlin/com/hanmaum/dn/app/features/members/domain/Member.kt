@@ -118,6 +118,8 @@ class Member(
     var piiKeyId: String? = null,
     @Column(name = "delete_entry_at")
     var deleteEntryAt: Instant? = null,
+    @Column(name = "push_enabled", nullable = false)
+    var pushEnabled: Boolean = true,
 ) : BaseEntity() {
     fun getFullName(): String = "$lastName$firstName" // Korean: no space between surname and given name
 

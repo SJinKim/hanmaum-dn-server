@@ -261,6 +261,15 @@ class MemberService(
         emailVerified: Boolean = false,
     ): MemberResponse = resolveAndLinkMember(keycloakSubject, email, emailVerified).toResponse()
 
+    /**
+     * Resolve the calling member from JWT claims for the notifications feature.
+     */
+    @Transactional
+    fun resolveMember(
+        keycloakSubject: String,
+        email: String?,
+    ): Member = resolveAndLinkMember(keycloakSubject, email, false)
+
     @Transactional
     fun updateMyProfile(
         keycloakSubject: String,

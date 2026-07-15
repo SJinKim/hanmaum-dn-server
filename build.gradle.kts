@@ -72,6 +72,9 @@ dependencies {
     // Falls du Spring Boot 3 nutzt (Jakarta EE), brauchst du oft auch das RESTEasy Backend:
     implementation("org.jboss.resteasy:resteasy-client:6.2.7.Final")
     implementation("org.jboss.resteasy:resteasy-jackson2-provider:6.2.7.Final")
+
+    // Firebase Admin SDK for push notifications
+    implementation("com.google.firebase:firebase-admin:9.4.3")
 }
 
 kotlin {
