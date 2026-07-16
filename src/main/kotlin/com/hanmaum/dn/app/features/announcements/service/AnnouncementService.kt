@@ -7,6 +7,7 @@ import com.hanmaum.dn.app.features.announcements.api.v1.dto.UpdateAnnouncementRe
 import com.hanmaum.dn.app.features.announcements.domain.Announcement
 import com.hanmaum.dn.app.features.announcements.repository.AnnouncementRepository
 import jakarta.persistence.EntityNotFoundException
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
@@ -17,6 +18,7 @@ import java.util.UUID
 @Service
 class AnnouncementService(
     private val announcementRepository: AnnouncementRepository,
+    private val eventPublisher: ApplicationEventPublisher,
 ) {
     // für die App (nur aktive)
     fun getActiveAnnouncements(): List<Announcement> =
@@ -29,7 +31,13 @@ class AnnouncementService(
 
     // for Admin Dashboard (create)
     @Transactional
-    fun createAnnouncement(req: CreateAnnouncementRequest): Announcement = announcementRepository.save(req.toEntity())
+    fun createAnnouncement(req: CreateAnnouncementRequest): Announcement {
+        val saved = announcementRepository.save(req.toEntity())
+        if (saved.startAt <= OffsetDateTime.now()) {
+            eventPublisher.publishEvent(AnnouncementCreatedEvent(saved.publicId, saved.title))
+        }
+        return saved
+    }
 
     @Transactional
     fun updateAnnouncement(
