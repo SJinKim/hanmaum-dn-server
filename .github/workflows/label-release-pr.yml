@@ -1,0 +1,103 @@
+name: Label release PR
+
+on:
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  label:
+    name: Label from Conventional Commit title
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Ensure release labels exist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          while IFS='|' read -r name color description; do
+            gh label create "$name" \
+              --color "$color" \
+              --description "$description" \
+              --force
+          done <<'LABELS'
+          release:breaking|b60205|Incompatible API or behavior change
+          release:security|d93f0b|Security-related change
+          release:feature|0e8a16|New backward-compatible functionality
+          release:fix|d73a4a|Backward-compatible bug or performance fix
+          release:dependencies|0366d6|Dependency update
+          release:documentation|0075ca|Documentation change
+          release:other|5319e7|Other user-visible change
+          release:skip|ededed|Exclude from generated release notes
+          release:auto-skip|ededed|Marks release:skip labels managed from the PR title
+          LABELS
+
+      - name: Reconcile generated release label
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+
+          managed_labels=(
+            release:breaking
+            release:feature
+            release:fix
+            release:dependencies
+            release:documentation
+            release:other
+          )
+          breaking_pattern='^[[:alnum:]-]+(\([^)]*\))?!:'
+          feature_pattern='^feat(\([^)]*\))?:'
+          fix_pattern='^(fix|perf)(\([^)]*\))?:'
+          dependency_pattern='^(build|chore)\(deps\):'
+          documentation_pattern='^docs(\([^)]*\))?:'
+          internal_pattern='^(build|chore|ci|refactor|style|test)(\([^)]*\))?:'
+
+          current_labels=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name')
+          for label in "${managed_labels[@]}"; do
+            if grep -Fxq "$label" <<<"$current_labels"; then
+              gh pr edit "$PR_NUMBER" --remove-label "$label"
+            fi
+          done
+
+          if grep -Fxq "release:auto-skip" <<<"$current_labels"; then
+            gh pr edit "$PR_NUMBER" --remove-label "release:auto-skip"
+            if grep -Fxq "release:skip" <<<"$current_labels"; then
+              gh pr edit "$PR_NUMBER" --remove-label "release:skip"
+            fi
+          fi
+
+          if [[ "$PR_TITLE" =~ $breaking_pattern ]]; then
+            label=release:breaking
+          elif [[ "$PR_TITLE" =~ $feature_pattern ]]; then
+            label=release:feature
+          elif [[ "$PR_TITLE" =~ $fix_pattern ]]; then
+            label=release:fix
+          elif [[ "$PR_TITLE" =~ $dependency_pattern ]]; then
+            label=release:dependencies
+          elif [[ "$PR_TITLE" =~ $documentation_pattern ]]; then
+            label=release:documentation
+          elif [[ "$PR_TITLE" =~ $internal_pattern ]]; then
+            label=release:skip
+          else
+            label=release:other
+          fi
+
+          if [[ "$label" == "release:skip" ]]; then
+            gh pr edit "$PR_NUMBER" \
+              --add-label "release:auto-skip" \
+              --add-label "release:skip"
+          else
+            gh pr edit "$PR_NUMBER" --add-label "$label"
+          fi

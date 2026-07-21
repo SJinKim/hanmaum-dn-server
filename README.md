@@ -188,6 +188,27 @@ The Dockerfile uses this same approach in its build stage — the Docker image i
 
 ---
 
+## 8. Automated releases
+
+Successful automatic staging deployments publish `ST-Release vX.Y.Z-st.N`
+prereleases. Successful approved production deployments publish
+`PROD-Release vX.Y.Z` as the latest stable release. The first release line is
+`v0.1.0`; later versions are calculated from Conventional Commits:
+
+- `type(scope)!:` or `BREAKING CHANGE:` increments `X` (major).
+- `feat(scope):` increments `Y` (minor).
+- `fix(scope):`, `perf(scope):`, or other deployable changes increment `Z` (patch).
+
+GitHub-generated notes are grouped using the labels configured in
+`.github/release.yml`. PR labels are derived from Conventional Commit titles.
+Apply `release:security` manually when relevant or `release:skip` to omit a PR.
+The immutable `release-notes-baseline` tag anchors the first changelog at the
+repository root and is not a release version.
+Published GitHub Releases are the authoritative release history;
+`CHANGELOG.md` is not modified by CI.
+
+---
+
 ## Troubleshooting
 
 **Port already in use** — another process is on 8080, 8091, or 5433. Either stop it or change the port mapping in `infrastructure/docker-compose.yml`.

@@ -1,0 +1,144 @@
+name: Publish release
+
+on:
+  workflow_call:
+    inputs:
+      channel:
+        description: Release channel (staging or production)
+        required: true
+        type: string
+      target_sha:
+        description: Successfully deployed commit SHA
+        required: true
+        type: string
+
+jobs:
+  publish:
+    name: Publish ${{ inputs.channel }} release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out deployed revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.target_sha }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Compute release version
+        id: version
+        run: scripts/release/compute-version.sh "${{ inputs.channel }}" "${{ inputs.target_sha }}" >>"$GITHUB_OUTPUT"
+
+      - name: Resolve release notes comparison tag
+        id: comparison
+        if: steps.version.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PREVIOUS_TAG: ${{ steps.version.outputs.previous_tag }}
+          TARGET_SHA: ${{ inputs.target_sha }}
+        run: |
+          if [ -n "$PREVIOUS_TAG" ]; then
+            echo "previous_tag=$PREVIOUS_TAG" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # GitHub requires a tag (not a commit SHA) as the explicit comparison
+          # boundary. Keep one immutable, non-version baseline for first releases
+          # so prerelease tags cannot be selected accidentally by auto-detection.
+          baseline_tag=release-notes-baseline
+          root_sha=$(git rev-list --max-parents=0 "$TARGET_SHA" | tail -1)
+          remote_sha=$(
+            gh api "repos/{owner}/{repo}/git/ref/tags/$baseline_tag" \
+              --jq '.object.sha' 2>/dev/null || true
+          )
+
+          if [ -z "$remote_sha" ]; then
+            jq -n \
+              --arg ref "refs/tags/$baseline_tag" \
+              --arg sha "$root_sha" \
+              '{ref: $ref, sha: $sha}' |
+              gh api --method POST "repos/{owner}/{repo}/git/refs" --input - >/dev/null
+          elif [ "$remote_sha" != "$root_sha" ]; then
+            echo "$baseline_tag must remain on repository root $root_sha (found $remote_sha)." >&2
+            exit 1
+          fi
+
+          echo "previous_tag=$baseline_tag" >>"$GITHUB_OUTPUT"
+
+      - name: Generate release notes
+        if: steps.version.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          TARGET_SHA: ${{ inputs.target_sha }}
+          PREVIOUS_TAG: ${{ steps.comparison.outputs.previous_tag }}
+        run: |
+          jq -n \
+            --arg tag "$RELEASE_TAG" \
+            --arg target "$TARGET_SHA" \
+            --arg previous "$PREVIOUS_TAG" \
+            '{
+              tag_name: $tag,
+              target_commitish: $target,
+              previous_tag_name: $previous,
+              configuration_file_path: ".github/release.yml"
+            }' \
+            >release-notes-request.json
+
+          gh api \
+            --method POST \
+            "repos/{owner}/{repo}/releases/generate-notes" \
+            --input release-notes-request.json \
+            >release-notes.json
+
+      - name: Publish GitHub release
+        if: steps.version.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CHANNEL: ${{ inputs.channel }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          TARGET_SHA: ${{ inputs.target_sha }}
+        run: |
+          if [ "$CHANNEL" = "staging" ]; then
+            title="ST-Release v${RELEASE_VERSION}"
+            prerelease=true
+            make_latest=false
+          else
+            title="PROD-Release v${RELEASE_VERSION}"
+            prerelease=false
+            make_latest=true
+          fi
+
+          jq -n \
+            --slurpfile notes release-notes.json \
+            --arg tag "$RELEASE_TAG" \
+            --arg target "$TARGET_SHA" \
+            --arg title "$title" \
+            --argjson prerelease "$prerelease" \
+            --arg latest "$make_latest" \
+            '{
+              tag_name: $tag,
+              target_commitish: $target,
+              name: $title,
+              body: $notes[0].body,
+              draft: false,
+              prerelease: $prerelease,
+              make_latest: $latest
+            }' \
+            >release-request.json
+
+          gh api \
+            --method POST \
+            "repos/{owner}/{repo}/releases" \
+            --input release-request.json
+
+      - name: Report existing release
+        if: steps.version.outputs.skip == 'true'
+        run: echo "${{ steps.version.outputs.tag }} already targets the deployed commit; nothing to publish."
