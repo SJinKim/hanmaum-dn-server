@@ -55,7 +55,9 @@ class SecurityConfig(
             .cors(Customizer.withDefaults())
             .authorizeHttpRequests { auth ->
                 auth
-                    .requestMatchers("/actuator/health", "/actuator/info")
+                    // Prometheus reaches this only through the private observability network.
+                    // Caddy blocks every public /actuator/* path except health.
+                    .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus")
                     .permitAll()
                     .requestMatchers("/v3/api-docs/**", "/v3/api-docs.yaml", "/swagger-ui/**", "/swagger-ui.html")
                     .permitAll()

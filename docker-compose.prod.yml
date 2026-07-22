@@ -19,6 +19,12 @@
 #   ssh -L 5433:127.0.0.1:5433 <server>
 #   psql -h localhost -p 5433 -U <DB_HANMAUM_DN_USER> -d <DB_HANMAUM_DN_NAME>
 
+x-log-rotation: &log-rotation
+  driver: local
+  options:
+    max-size: "20m"
+    max-file: "3"
+
 services:
   hanmaumApp-db:
     image: postgres:16-alpine
@@ -65,6 +71,13 @@ services:
       KC_PROXY_HEADERS: xforwarded
       KC_CACHE: "local"
       KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      KC_LOG_CONSOLE_OUTPUT: json
+      KC_LOG_CONSOLE_JSON_FORMAT: ecs
+    labels:
+      observability.logs.enabled: "true"
+      observability.service: keycloak
+      observability.environment: shared
     volumes:
       - ./infrastructure/docker/keycloak/export:/opt/keycloak/data/import
     healthcheck:
@@ -87,6 +100,8 @@ services:
     networks:
       - prod-internal
       - caddy-proxy
+      - observability
+    logging: *log-rotation
 
   backend:
     image: ${BACKEND_IMAGE:-ghcr.io/sjinkim/hanmaum-dn-server:latest}
@@ -103,6 +118,10 @@ services:
       KEYCLOAK_AUTH_SERVER_URL: http://hanmaumApp-keycloak:8090
     env_file:
       - .env
+    labels:
+      observability.logs.enabled: "true"
+      observability.service: dn-server
+      observability.environment: production
     volumes:
       - ${PII_KEYRING_FILE:-./secrets/prod-pii-keyring.properties}:/run/secrets/hanmaum-pii-keyring.properties:ro
     healthcheck:
@@ -123,11 +142,15 @@ services:
     networks:
       - prod-internal
       - caddy-proxy
+      - observability
+    logging: *log-rotation
 
 networks:
   prod-internal:
     driver: bridge
   caddy-proxy:
+    external: true
+  observability:
     external: true
 
 volumes:

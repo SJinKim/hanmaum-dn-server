@@ -121,8 +121,14 @@ jobs:
 
             # Ensure the shared proxy network exists (idempotent)
             docker network create caddy-proxy 2>/dev/null || true
+            docker network create observability 2>/dev/null || true
 
             cd /opt/hanmaum-dn-server
+
+            # The observability repository owns optional Caddy routes. Create
+            # the bind source before Docker starts Caddy so it is not created
+            # as a root-owned directory by the daemon.
+            mkdir -p /opt/hanmaum-service-observability/caddy/generated
 
             # Offsite backup is prepared 1-2 weeks before real production launch.
             # It remains optional during pre-production development, then becomes
@@ -146,6 +152,8 @@ jobs:
               --project-name hanmaum-caddy \
               -f docker-compose.caddy.yml \
               up -d
+            docker exec hanmaum-caddy \
+              caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
 
             # Deploy prod stack
             export BACKEND_IMAGE

@@ -12,6 +12,12 @@
 #   docker compose --env-file .env --env-file .env.staging \
 #     --project-name hanmaum-caddy -f docker-compose.caddy.yml up -d
 
+x-log-rotation: &log-rotation
+  driver: local
+  options:
+    max-size: "20m"
+    max-file: "3"
+
 services:
   caddy:
     image: caddy:2-alpine
@@ -26,12 +32,20 @@ services:
       API_DOMAIN: ${API_DOMAIN}
       AUTH_DOMAIN: ${AUTH_DOMAIN}
       STAGING_API_DOMAIN: ${STAGING_API_DOMAIN}
+    labels:
+      observability.logs.enabled: "true"
+      observability.service: caddy
+      observability.environment: shared
     volumes:
       - ./infrastructure/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Extra routes are owned by infrastructure repositories. The default
+      # points to the sibling hanmaum-service-observability checkout on local/server.
+      - ${CADDY_EXTRA_CONFIG_DIR:-../hanmaum-service-observability/caddy/generated}:/etc/caddy/conf.d:ro
       - caddy_data:/data
       - caddy_config:/config
     networks:
       - caddy-proxy
+    logging: *log-rotation
 
 networks:
   caddy-proxy:
