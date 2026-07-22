@@ -1,5 +1,7 @@
 package com.hanmaum.dn.app.common.cleanup
 
+import com.hanmaum.dn.app.common.observability.OperationOutcome
+import com.hanmaum.dn.app.common.observability.OperationalMetrics
 import com.hanmaum.dn.app.features.announcements.repository.AnnouncementRepository
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
 import com.hanmaum.dn.app.features.members.service.MemberPurgeService
@@ -15,6 +17,7 @@ import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.eq
 import java.time.Instant
 import kotlin.test.assertFailsWith
 
@@ -28,6 +31,8 @@ class CleanupServiceTest {
 
     @Mock private lateinit var memberPurgeService: MemberPurgeService
 
+    @Mock private lateinit var operationalMetrics: OperationalMetrics
+
     @InjectMocks
     private lateinit var cleanupService: CleanupService
 
@@ -40,6 +45,8 @@ class CleanupServiceTest {
         `when`(memberPurgeService.purgeExpired(any())).thenReturn(0)
 
         cleanupService.purgeExpiredSoftDeletedEntries()
+
+        verify(operationalMetrics).recordBackgroundJob(eq("cleanup"), eq(OperationOutcome.SUCCESS), any())
 
         val after = Instant.now()
         val captor = argumentCaptor<Instant>()
@@ -74,6 +81,8 @@ class CleanupServiceTest {
         assertFailsWith<IllegalStateException> {
             cleanupService.purgeExpiredSoftDeletedEntries()
         }
+
+        verify(operationalMetrics).recordBackgroundJob(eq("cleanup"), eq(OperationOutcome.FAILURE), any())
 
         verify(announcementRepository).hardDeleteExpired(any())
         verify(attendanceLogRepository).hardDeleteExpired(any())

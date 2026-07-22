@@ -1,6 +1,8 @@
 package com.hanmaum.dn.app.features.members.service
 
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
+import com.hanmaum.dn.app.common.observability.ExternalCallOutcome
+import com.hanmaum.dn.app.common.observability.OperationalMetrics
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
@@ -19,6 +21,7 @@ import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
 import com.hanmaum.dn.app.features.training.repository.TrainingRepository
 import com.hanmaum.dn.app.features.training.repository.UserTrainingRepository
 import jakarta.persistence.EntityNotFoundException
+import jakarta.ws.rs.ProcessingException
 import jakarta.ws.rs.core.Response
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -38,6 +41,7 @@ import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.eq
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
 import org.springframework.web.server.ResponseStatusException
@@ -62,6 +66,8 @@ class MemberServiceTest {
 
     @Mock private lateinit var keycloak: Keycloak
 
+    @Mock private lateinit var operationalMetrics: OperationalMetrics
+
     @Mock private lateinit var realmResource: RealmResource
 
     @Mock private lateinit var usersResource: UsersResource
@@ -81,6 +87,7 @@ class MemberServiceTest {
                 ministryAssignmentRepository,
                 ministryRepository,
                 keycloak,
+                operationalMetrics,
                 "test-realm",
             )
     }
@@ -452,9 +459,25 @@ class MemberServiceTest {
         `when`(memberRepository.findSimilarNames(req.firstName, req.lastName)).thenReturn(emptyList())
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
         setupKeycloakMock(statusCode = 409)
-        `when`(kcResponse.readEntity(String::class.java)).thenReturn("Conflict")
 
         assertThrows<RuntimeException> { memberService.registerMember(req) }
+        verify(operationalMetrics)
+            .recordExternalCall(eq("keycloak"), eq("create_user"), eq(ExternalCallOutcome.CLIENT_ERROR), any())
+    }
+
+    @Test
+    fun `registerMember records Keycloak transport failures`() {
+        val req = registerReq()
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
+        `when`(memberRepository.findSimilarNames(req.firstName, req.lastName)).thenReturn(emptyList())
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+        `when`(keycloak.realm("test-realm")).thenReturn(realmResource)
+        `when`(realmResource.users()).thenReturn(usersResource)
+        `when`(usersResource.create(any<UserRepresentation>())).thenThrow(ProcessingException("timeout"))
+
+        assertThrows<RuntimeException> { memberService.registerMember(req) }
+        verify(operationalMetrics)
+            .recordExternalCall(eq("keycloak"), eq("create_user"), eq(ExternalCallOutcome.TRANSPORT_ERROR), any())
     }
 
     @Test

@@ -1,9 +1,14 @@
 package com.hanmaum.dn.app.common.pii
 
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.slf4j.LoggerFactory
 import java.util.Base64
 import javax.crypto.spec.SecretKeySpec
 
@@ -53,6 +58,26 @@ class PiiCryptoServiceTest {
         assertThrows(IllegalStateException::class.java) {
             service.decrypt(parts.joinToString("$"), "members.email")
         }
+    }
+
+    @Test
+    fun `decryption failure emits the stable alert signal without plaintext`() {
+        val encrypted = service.encrypt("alert-secret", "members.email")!!
+        val logger = LoggerFactory.getLogger(PiiCryptoService::class.java) as Logger
+        val appender = ListAppender<ILoggingEvent>().apply { start() }
+        logger.addAppender(appender)
+
+        try {
+            assertThrows(IllegalStateException::class.java) {
+                service.decrypt(encrypted, "members.first_name")
+            }
+        } finally {
+            logger.detachAppender(appender)
+            appender.stop()
+        }
+
+        assertTrue(appender.list.any { it.formattedMessage == "PII decryption failed" })
+        assertTrue(appender.list.none { it.formattedMessage.contains("alert-secret") })
     }
 
     @Test

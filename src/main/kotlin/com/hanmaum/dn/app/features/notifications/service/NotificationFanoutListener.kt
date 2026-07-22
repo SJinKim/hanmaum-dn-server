@@ -1,6 +1,8 @@
 package com.hanmaum.dn.app.features.notifications.service
 
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
+import com.hanmaum.dn.app.common.observability.OperationOutcome
+import com.hanmaum.dn.app.common.observability.OperationalMetrics
 import com.hanmaum.dn.app.features.announcements.service.AnnouncementCreatedEvent
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.notifications.domain.AppNotification
@@ -24,6 +26,7 @@ class NotificationFanoutListener(
     private val notificationRepository: AppNotificationRepository,
     private val deviceTokenRepository: DeviceTokenRepository,
     private val pushSender: PushSender,
+    private val operationalMetrics: OperationalMetrics,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -31,9 +34,16 @@ class NotificationFanoutListener(
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     fun onAnnouncementCreated(event: AnnouncementCreatedEvent) {
+        val startedAt = System.nanoTime()
         try {
             val members = memberRepository.findAllByMemberStatusAndDeletedAtIsNull(MemberStatus.ACTIVE)
-            if (members.isEmpty()) return
+            if (members.isEmpty()) {
+                operationalMetrics.recordNotificationFanout(
+                    OperationOutcome.SUCCESS,
+                    System.nanoTime() - startedAt,
+                )
+                return
+            }
 
             val rows =
                 members.map { member ->
@@ -69,8 +79,31 @@ class NotificationFanoutListener(
                 deadTokens += pushSender.send(tokens, PUSH_TITLE, event.announcementTitle, data, badge)
             }
             if (deadTokens.isNotEmpty()) deviceTokenRepository.deleteAllByTokenIn(deadTokens)
-        } catch (e: Exception) {
-            log.error("notification fan-out failed for announcement {}", event.announcementPublicId, e)
+            operationalMetrics.recordNotificationFanout(
+                OperationOutcome.SUCCESS,
+                System.nanoTime() - startedAt,
+            )
+            log
+                .atInfo()
+                .addKeyValue("event.action", "notification.fanout")
+                .addKeyValue("event.outcome", "success")
+                .addKeyValue("member_count", members.size)
+                .addKeyValue("push_recipient_count", pushMembers.size)
+                .addKeyValue("invalid_token_count", deadTokens.size)
+                .log("Notification fan-out completed")
+        } catch (e: RuntimeException) {
+            operationalMetrics.recordNotificationFanout(
+                OperationOutcome.FAILURE,
+                System.nanoTime() - startedAt,
+            )
+            log
+                .atError()
+                .addKeyValue("event.action", "notification.fanout")
+                .addKeyValue("event.outcome", "failure")
+                .addKeyValue("error.type", e::class.simpleName ?: "RuntimeException")
+                .addKeyValue("announcement.public_id", event.announcementPublicId)
+                .log("Notification fan-out failed; exception is rethrown to the async handler")
+            throw e
         }
     }
 }
