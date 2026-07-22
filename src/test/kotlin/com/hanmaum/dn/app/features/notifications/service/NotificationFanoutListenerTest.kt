@@ -1,6 +1,8 @@
 package com.hanmaum.dn.app.features.notifications.service
 
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
+import com.hanmaum.dn.app.common.observability.OperationOutcome
+import com.hanmaum.dn.app.common.observability.OperationalMetrics
 import com.hanmaum.dn.app.features.announcements.service.AnnouncementCreatedEvent
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
@@ -10,6 +12,7 @@ import com.hanmaum.dn.app.features.notifications.domain.DeviceToken
 import com.hanmaum.dn.app.features.notifications.repository.AppNotificationRepository
 import com.hanmaum.dn.app.features.notifications.repository.DeviceTokenRepository
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.InjectMocks
@@ -32,6 +35,8 @@ class NotificationFanoutListenerTest {
     @Mock private lateinit var deviceTokenRepository: DeviceTokenRepository
 
     @Mock private lateinit var pushSender: PushSender
+
+    @Mock private lateinit var operationalMetrics: OperationalMetrics
 
     @InjectMocks private lateinit var listener: NotificationFanoutListener
 
@@ -65,6 +70,7 @@ class NotificationFanoutListenerTest {
         assertEquals("새로운 소식이 있습니다!", rows.firstValue[0].title)
         assertEquals("여름 수련회", rows.firstValue[0].body)
         verify(pushSender).send(eq(listOf("tok1")), any(), any(), any(), eq(3))
+        verify(operationalMetrics).recordNotificationFanout(eq(OperationOutcome.SUCCESS), any())
     }
 
     @Test
@@ -80,5 +86,20 @@ class NotificationFanoutListenerTest {
         listener.onAnnouncementCreated(AnnouncementCreatedEvent(UUID.randomUUID(), "t"))
 
         verify(deviceTokenRepository).deleteAllByTokenIn(eq(listOf("dead")))
+    }
+
+    @Test
+    fun `records and rethrows fanout failures`() {
+        val failure = IllegalStateException("database unavailable")
+        `when`(memberRepository.findAllByMemberStatusAndDeletedAtIsNull(MemberStatus.ACTIVE))
+            .thenThrow(failure)
+
+        val thrown =
+            assertThrows(IllegalStateException::class.java) {
+                listener.onAnnouncementCreated(AnnouncementCreatedEvent(UUID.randomUUID(), "t"))
+            }
+
+        assertEquals(failure, thrown)
+        verify(operationalMetrics).recordNotificationFanout(eq(OperationOutcome.FAILURE), any())
     }
 }

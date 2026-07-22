@@ -1,5 +1,7 @@
 package com.hanmaum.dn.app.common.cleanup
 
+import com.hanmaum.dn.app.common.observability.OperationOutcome
+import com.hanmaum.dn.app.common.observability.OperationalMetrics
 import com.hanmaum.dn.app.features.announcements.repository.AnnouncementRepository
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
 import com.hanmaum.dn.app.features.members.service.MemberPurgeService
@@ -16,11 +18,13 @@ class CleanupService(
     private val announcementRepository: AnnouncementRepository,
     private val attendanceLogRepository: AttendanceLogRepository,
     private val memberPurgeService: MemberPurgeService,
+    private val operationalMetrics: OperationalMetrics,
 ) {
     private val log = LoggerFactory.getLogger(CleanupService::class.java)
 
     @Scheduled(cron = "\${app.cleanup.cron:0 0 2 * * *}")
     fun purgeExpiredSoftDeletedEntries() {
+        val startedAt = System.nanoTime()
         val now = Instant.now()
         val failures = mutableListOf<RuntimeException>()
         log.info("Cleanup job started cutoff={}", now)
@@ -40,6 +44,11 @@ class CleanupService(
         }
 
         if (failures.isNotEmpty()) {
+            operationalMetrics.recordBackgroundJob(
+                job = "cleanup",
+                outcome = OperationOutcome.FAILURE,
+                elapsedNanos = System.nanoTime() - startedAt,
+            )
             val exception =
                 IllegalStateException(
                     "Cleanup job completed with ${failures.size} failure(s).",
@@ -49,7 +58,13 @@ class CleanupService(
             throw exception
         }
 
-        log.info("Cleanup job finished failures=0")
+        val elapsedNanos = System.nanoTime() - startedAt
+        operationalMetrics.recordBackgroundJob(
+            job = "cleanup",
+            outcome = OperationOutcome.SUCCESS,
+            elapsedNanos = elapsedNanos,
+        )
+        log.info("Cleanup job finished failures=0 durationMs={}", elapsedNanos / 1_000_000)
     }
 
     private fun purge(

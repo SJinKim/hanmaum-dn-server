@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.common.pii
 
+import org.slf4j.LoggerFactory
 import java.security.GeneralSecurityException
 import java.security.SecureRandom
 import java.text.Normalizer
@@ -62,10 +63,16 @@ class PiiCryptoService(
         }
 
         val parts = storedValue.split(SEPARATOR)
-        check(parts.size == ENVELOPE_PARTS) { "Invalid encrypted PII envelope." }
+        if (parts.size != ENVELOPE_PARTS) {
+            logDecryptionFailure("malformed_envelope", context, null)
+            error("Invalid encrypted PII envelope.")
+        }
         val key =
             keyring.encryptionKeys[parts[1]]
-                ?: error("Encrypted PII references unavailable key '${parts[1]}'.")
+                ?: run {
+                    logDecryptionFailure("missing_key", context, parts[1])
+                    error("Encrypted PII references unavailable key '${parts[1]}'.")
+                }
 
         return try {
             val nonce = decoder.decode(parts[2])
@@ -75,12 +82,30 @@ class PiiCryptoService(
             cipher.updateAAD(context.toByteArray(Charsets.UTF_8))
             cipher.doFinal(ciphertext).toString(Charsets.UTF_8)
         } catch (exception: AEADBadTagException) {
+            logDecryptionFailure("authentication_failed", context, parts[1])
             throw IllegalStateException("Encrypted PII failed authentication.", exception)
         } catch (exception: GeneralSecurityException) {
+            logDecryptionFailure("crypto_error", context, parts[1])
             throw IllegalStateException("Encrypted PII could not be decrypted.", exception)
         } catch (exception: IllegalArgumentException) {
+            logDecryptionFailure("malformed_envelope", context, parts[1])
             throw IllegalStateException("Encrypted PII envelope is malformed.", exception)
         }
+    }
+
+    private fun logDecryptionFailure(
+        errorType: String,
+        context: String,
+        keyId: String?,
+    ) {
+        log
+            .atError()
+            .addKeyValue("event.action", "pii.decrypt")
+            .addKeyValue("event.outcome", "failure")
+            .addKeyValue("error.type", errorType)
+            .addKeyValue("crypto.context", context)
+            .addKeyValue("key.id", keyId ?: "unknown")
+            .log("PII decryption failed")
     }
 
     fun lookupHash(value: String?): String? {
@@ -108,6 +133,7 @@ class PiiCryptoService(
             .replace(WHITESPACE, " ")
 
     private companion object {
+        val log = LoggerFactory.getLogger(PiiCryptoService::class.java)
         const val PREFIX = "ENC1"
         const val SEPARATOR = "$"
         const val ENVELOPE_PARTS = 4
