@@ -172,6 +172,22 @@ docker inspect --format='{{.State.Health.Status}}' hanmaumApp-keycloak
 
 ---
 
+## Shared observability
+
+Grafana, Prometheus, Loki, Alloy, host metrics, and shared dashboards live in
+the separate `hanmaum-service-observability` repository. This repository only exposes
+the DN server integration:
+
+- `/actuator/prometheus` on the private `observability` Docker network
+- Keycloak metrics on its private management port `9000`
+- structured Docker logs with stable service/environment labels
+- a generic Caddy import mount for routes owned by infrastructure repositories
+
+Prometheus/Loki ports are never published, and Caddy continues to block public
+access to `/actuator/prometheus`.
+
+---
+
 ## 7. Build a production JAR
 
 ```bash

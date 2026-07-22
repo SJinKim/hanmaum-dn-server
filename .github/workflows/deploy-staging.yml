@@ -149,8 +149,21 @@ jobs:
 
             # Ensure the shared proxy network exists (idempotent)
             docker network create caddy-proxy 2>/dev/null || true
+            docker network create observability 2>/dev/null || true
 
             cd /opt/hanmaum-dn-server
+
+            # Refresh shared Caddy as staging may be the first deployment after
+            # an infrastructure route change.
+            mkdir -p /opt/hanmaum-service-observability/caddy/generated
+            docker compose \
+              --env-file .env \
+              --env-file .env.staging \
+              --project-name hanmaum-caddy \
+              -f docker-compose.caddy.yml \
+              up -d
+            docker exec hanmaum-caddy \
+              caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
 
             # Deploy staging stack
             export BACKEND_IMAGE_STAGING

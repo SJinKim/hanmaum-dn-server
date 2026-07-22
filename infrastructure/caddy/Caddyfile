@@ -1,30 +1,34 @@
 {
-    email {$ACME_EMAIL}
+	email {$ACME_EMAIL}
 }
+
+# Extra routes (for example Grafana) are rendered and owned by their respective
+# infrastructure repositories, not by the DN application repository.
+import /etc/caddy/conf.d/*.caddy
 
 # Production — Backend API
 {$API_DOMAIN} {
-    @internal_actuator {
-        path /actuator/*
-        not path /actuator/health
-    }
-    respond @internal_actuator "Unauthorized" 403
+	@internal_actuator {
+		path /actuator/*
+		not path /actuator/health
+	}
+	respond @internal_actuator "Unauthorized" 403
 
-    reverse_proxy hanmaumApp-backend:8080
+	reverse_proxy hanmaumApp-backend:8080
 }
 
 # Keycloak — shared by prod and staging (separate realms)
 {$AUTH_DOMAIN} {
-    reverse_proxy hanmaumApp-keycloak:8090
+	reverse_proxy hanmaumApp-keycloak:8090
 }
 
 # Staging — Backend API
 {$STAGING_API_DOMAIN} {
-    @internal_actuator {
-        path /actuator/*
-        not path /actuator/health
-    }
-    respond @internal_actuator "Unauthorized" 403
+	@internal_actuator {
+		path /actuator/*
+		not path /actuator/health
+	}
+	respond @internal_actuator "Unauthorized" 403
 
-    reverse_proxy hanmaumApp-backend-staging:8080
+	reverse_proxy hanmaumApp-backend-staging:8080
 }

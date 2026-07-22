@@ -14,6 +14,12 @@ spring:
   profiles:
     active: dev
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+
 app:
   pii:
     strict: ${PII_STRICT:false}
