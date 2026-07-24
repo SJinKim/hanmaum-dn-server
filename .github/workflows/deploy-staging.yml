@@ -12,6 +12,7 @@ name: Deploy — Staging
 #   mkdir -p /opt/hanmaum-dn-server
 #   docker network create caddy-proxy
 #   # Create /opt/hanmaum-dn-server/.env.staging with real values
+#   # Create the postgres-exporter credential files documented in README.md
 
 on:
   push:
@@ -51,6 +52,23 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate staging Compose
+        run: >-
+          docker compose
+          --project-name hanmaum-staging
+          -f docker-compose.staging.yml
+          config -q
+        env:
+          DB_HANMAUM_DN_NAME: hanmaum_staging
+          DB_HANMAUM_DN_USER: app
+          DB_HANMAUM_DN_SECRET: ci-placeholder
+          DB_HANMAUM_DN_URL: jdbc:postgresql://hanmaumApp-db-staging:5432
+          KEYCLOAK_REALM: hanmaum-st
+          KEYCLOAK_BACKEND_CLIENT_ID: dn-backend-admin
+          KEYCLOAK_BACKEND_CLIENT_SECRET: ci-placeholder
+          STAGING_API_DOMAIN: api.staging.example.com
+          APP_SECURITY_KEYCLOAK_PUBLIC_ISSUER: https://auth.example.com/realms/hanmaum-st
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -167,16 +185,24 @@ jobs:
 
             # Deploy staging stack
             export BACKEND_IMAGE_STAGING
+            test -f secrets/staging-postgres-exporter-user \
+              || { echo "Missing staging postgres_exporter username file"; exit 1; }
+            test -f secrets/staging-postgres-exporter-password \
+              || { echo "Missing staging postgres_exporter password file"; exit 1; }
             docker compose \
               --project-name hanmaum-staging \
               --env-file .env.staging \
               -f docker-compose.staging.yml \
-              pull backend-staging
+              pull backend-staging postgres-exporter-staging
             docker compose \
               --project-name hanmaum-staging \
               --env-file .env.staging \
               -f docker-compose.staging.yml \
               up -d --no-build --remove-orphans
+
+            docker inspect --format='{{.State.Running}}' hanmaum-postgres-exporter-staging \
+              | grep -q true \
+              || { echo "Staging postgres_exporter is not running"; exit 1; }
 
             # Remove images older than 7 days
             docker image prune -f --filter "until=168h"
@@ -194,6 +220,11 @@ jobs:
             done
             docker inspect --format='{{.State.Health.Status}}' hanmaumApp-backend-staging | grep -q 'healthy' \
               || { echo "Staging backend health check failed"; exit 1; }
+
+            docker exec hanmaumApp-backend-staging \
+              curl -fsS http://hanmaum-postgres-exporter-staging:9187/metrics \
+              | grep -Eq '^pg_up 1(\.0)?$' \
+              || { echo "Staging postgres_exporter cannot monitor PostgreSQL"; exit 1; }
 
             # External smoke test — validates Caddy routing + TLS end-to-end
             set -a && source .env.staging && set +a
