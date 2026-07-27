@@ -120,6 +120,57 @@ class NotificationControllerTest {
     }
 
     @Test
+    fun `DELETE notification removes own notification`() {
+        val notificationId = UUID.randomUUID()
+
+        mockMvc
+            .perform(
+                delete("/api/v1/me/notifications/$notificationId")
+                    .with(
+                        jwt().jwt {
+                            it.subject("kc-001")
+                            it.claim("email", "user@example.com")
+                        },
+                    ),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.success").value(true))
+    }
+
+    @Test
+    fun `DELETE notification for foreign notification throws NoSuchElementException`() {
+        val notificationId = UUID.randomUUID()
+        doThrow(NoSuchElementException("notification not found"))
+            .`when`(notificationService)
+            .deleteNotification("kc-001", "user@example.com", notificationId)
+
+        mockMvc
+            .perform(
+                delete("/api/v1/me/notifications/$notificationId")
+                    .with(
+                        jwt().jwt {
+                            it.subject("kc-001")
+                            it.claim("email", "user@example.com")
+                        },
+                    ),
+            ).andExpect(status().isNotFound)
+    }
+
+    @Test
+    fun `DELETE notifications clears all notifications for caller`() {
+        mockMvc
+            .perform(
+                delete("/api/v1/me/notifications")
+                    .with(
+                        jwt().jwt {
+                            it.subject("kc-001")
+                            it.claim("email", "user@example.com")
+                        },
+                    ),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.success").value(true))
+    }
+
+    @Test
     fun `PUT device-tokens registers device token with platform binding`() {
         mockMvc
             .perform(

@@ -78,6 +78,23 @@ class NotificationController(
         return ResponseEntity.ok(ApiResponse.success())
     }
 
+    @DeleteMapping("/notifications/{publicId}")
+    fun deleteNotification(
+        @AuthenticationPrincipal jwt: Jwt,
+        @PathVariable publicId: UUID,
+    ): ResponseEntity<ApiResponse<Unit>> {
+        notificationService.deleteNotification(jwt.subject, jwt.email, publicId)
+        return ResponseEntity.ok(ApiResponse.success())
+    }
+
+    @DeleteMapping("/notifications")
+    fun deleteAllNotifications(
+        @AuthenticationPrincipal jwt: Jwt,
+    ): ResponseEntity<ApiResponse<Unit>> {
+        notificationService.deleteAll(jwt.subject, jwt.email)
+        return ResponseEntity.ok(ApiResponse.success())
+    }
+
     @PutMapping("/device-tokens")
     fun registerDeviceToken(
         @AuthenticationPrincipal jwt: Jwt,
