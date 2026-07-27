@@ -128,4 +128,33 @@ class NotificationServiceTest {
 
         verify(notificationRepository).markAllSeen(eq(1L), any())
     }
+
+    @Test
+    fun `deleteNotification removes own notification`() {
+        `when`(memberService.resolveMember("sub", null)).thenReturn(member())
+        val id = UUID.randomUUID()
+        `when`(notificationRepository.deleteByPublicIdAndMemberId(id, 1L)).thenReturn(1)
+
+        service.deleteNotification("sub", null, id)
+
+        verify(notificationRepository).deleteByPublicIdAndMemberId(id, 1L)
+    }
+
+    @Test
+    fun `deleteNotification throws when nothing was deleted`() {
+        `when`(memberService.resolveMember("sub", null)).thenReturn(member())
+        val id = UUID.randomUUID()
+        `when`(notificationRepository.deleteByPublicIdAndMemberId(id, 1L)).thenReturn(0)
+
+        assertThrows(NoSuchElementException::class.java) { service.deleteNotification("sub", null, id) }
+    }
+
+    @Test
+    fun `deleteAll delegates to bulk delete for caller`() {
+        `when`(memberService.resolveMember("sub", null)).thenReturn(member())
+
+        service.deleteAll("sub", null)
+
+        verify(notificationRepository).deleteAllByMemberId(1L)
+    }
 }

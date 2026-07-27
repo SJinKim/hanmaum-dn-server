@@ -40,4 +40,17 @@ interface AppNotificationRepository : JpaRepository<AppNotification, Long> {
         @Param("memberId") memberId: Long,
         @Param("now") now: Instant,
     ): Int
+
+    @Modifying
+    @Query("delete from AppNotification n where n.publicId = :publicId and n.member.id = :memberId")
+    fun deleteByPublicIdAndMemberId(
+        @Param("publicId") publicId: UUID,
+        @Param("memberId") memberId: Long,
+    ): Int
+
+    @Modifying
+    @Query("delete from AppNotification n where n.member.id = :memberId")
+    fun deleteAllByMemberId(
+        @Param("memberId") memberId: Long,
+    ): Int
 }

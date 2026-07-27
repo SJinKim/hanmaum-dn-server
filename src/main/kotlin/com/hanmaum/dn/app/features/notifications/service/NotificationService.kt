@@ -76,6 +76,25 @@ class NotificationService(
     }
 
     @Transactional
+    fun deleteNotification(
+        keycloakSubject: String,
+        email: String?,
+        publicId: UUID,
+    ) {
+        val member = caller(keycloakSubject, email)
+        val removed = notificationRepository.deleteByPublicIdAndMemberId(publicId, member.id!!)
+        if (removed == 0) throw NoSuchElementException("notification not found")
+    }
+
+    @Transactional
+    fun deleteAll(
+        keycloakSubject: String,
+        email: String?,
+    ) {
+        notificationRepository.deleteAllByMemberId(caller(keycloakSubject, email).id!!)
+    }
+
+    @Transactional
     fun registerDeviceToken(
         keycloakSubject: String,
         email: String?,
