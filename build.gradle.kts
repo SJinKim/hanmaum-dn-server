@@ -6,6 +6,7 @@ plugins {
     id("io.spring.dependency-management") version "1.1.7"
     id("org.jlleitschuh.gradle.ktlint") version "14.0.1"
     id("org.springdoc.openapi-gradle-plugin") version "1.9.0"
+    id("dev.zacsweers.redacted") version "1.15.1"
 }
 
 group = "com.hanmaum.dn"
