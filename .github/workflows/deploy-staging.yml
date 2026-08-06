@@ -1,6 +1,8 @@
 name: Deploy — Staging
 
-# Triggers: automatic on push to dev, or manual dispatch from any ref.
+# Manual trigger only. main is NEVER auto-deployed on push.
+# Staging mirrors production's "build once, promote" discipline: it is only
+# ever deployable from main HEAD, never from arbitrary feature branches.
 #
 # Required GitHub secrets (Environment: staging):
 #   SERVER_HOST      — same Hetzner server as production
@@ -14,8 +16,6 @@ name: Deploy — Staging
 #   # Create /opt/hanmaum-dn-server/.env.staging with real values
 
 on:
-  push:
-    branches: [dev]
   workflow_dispatch:
 
 concurrency:
@@ -27,10 +27,26 @@ env:
   DEPLOY_DIR: /opt/hanmaum-dn-server
 
 jobs:
+  # ── Guard ────────────────────────────────────────────────────────────────────
+  guard:
+    name: Verify branch is main
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+
+    steps:
+      - name: Reject non-main deploys
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "Staging deploys must be triggered from main (got: ${{ github.ref }})"
+          exit 1
+
   # ── Tests ───────────────────────────────────────────────────────────────────
-  # dev branch has no separate CI workflow, so we gate here.
+  # Re-validates the exact commit being deployed. main currently has no
+  # GitHub-native required status checks, so this is a safety net even
+  # though ci.yml already ran on merge.
   test:
     name: Test
+    needs: guard
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
