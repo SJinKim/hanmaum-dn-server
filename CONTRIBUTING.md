@@ -4,23 +4,24 @@ This repo is part of a three-repo project. Read `CLAUDE.md` before touching code
 
 ## Team size
 
-Up to 3 developers. Every change goes through PR review — no direct pushes to `dev` or `main`.
+Up to 3 developers. Every change goes through PR review — no direct pushes to `main`.
 
 ## Branching
 
-- `main` — production. Protected. Only release PRs land here.
-- `dev` — integration branch. All feature work merges here first.
-- `feature/<short-name>` — always branched from `dev`, PR back to `dev`.
-- `hotfix/<short-name>` — only branch allowed to fork from `main`.
+Trunk-based: only `main` exists. All feature work forks from `main` and PRs directly back into `main`.
+
+- `main` — trunk. Protected. All feature and release work lands here via PR.
+- `<type>/HDN-<id>-<slug>` — always branched from `main`, PR back to `main`.
+- `hotfix/<short-name>` — same source as everything else (`main`).
 
 Before starting work:
 
 ```bash
-git checkout dev && git pull origin dev
-git checkout -b feature/<short-name>
+git checkout main && git pull origin main
+git checkout -b <type>/HDN-<id>-<slug>
 ```
 
-Never start work on `main`. Never commit directly to `dev`.
+Never start work on `main`. Never commit directly to `main`.
 
 ## Pull requests
 
@@ -30,7 +31,7 @@ Never start work on `main`. Never commit directly to `dev`.
 - Link the MVP.md row or issue.
 - Run `/pr-review` before opening the PR — paste the PASS/FAIL output in the description.
 - Require at least one approval before merge. The author does not merge their own PR.
-- Rebase on `dev` before merging — no merge commits.
+- Rebase on `main` before merging — no merge commits.
 
 ## Commit convention
 
@@ -59,7 +60,7 @@ This project uses Claude Code. To keep all three developers' Claude behavior con
 
 ### Editing `CLAUDE.md` or `.claude/commands/`
 
-These files change how everyone's Claude behaves. **PR review is required** — no solo edits that land directly on `dev`. Treat them like code.
+These files change how everyone's Claude behaves. **PR review is required** — no solo edits that land directly on `main`. Treat them like code.
 
 ### Personal vs. team commands
 
