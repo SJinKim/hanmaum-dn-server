@@ -9,11 +9,13 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.InjectMocks
 import org.mockito.Mock
+import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
+import org.springframework.context.ApplicationEventPublisher
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 
@@ -21,6 +23,9 @@ import java.time.ZoneOffset
 class AnnouncementServiceTest {
     @Mock
     private lateinit var announcementRepository: AnnouncementRepository
+
+    @Mock
+    private lateinit var eventPublisher: ApplicationEventPublisher
 
     @InjectMocks
     private lateinit var announcementService: AnnouncementService
@@ -139,5 +144,53 @@ class AnnouncementServiceTest {
         org.junit.jupiter.api.assertThrows<IllegalArgumentException> {
             announcementService.createAnnouncement(req)
         }
+    }
+
+    @Test
+    fun `createAnnouncement publishes event when startAt is in the past`() {
+        val startAt = OffsetDateTime.now().minusDays(1)
+        val req =
+            CreateAnnouncementRequest(
+                title = "지난 공지",
+                body = "내용",
+                startAt = startAt,
+                category = AnnouncementCategory.NOTICE.name,
+            )
+        val saved =
+            Announcement(
+                category = AnnouncementCategory.NOTICE,
+                title = req.title,
+                body = req.body,
+                startAt = startAt,
+            )
+        `when`(announcementRepository.save(any<Announcement>())).thenReturn(saved)
+
+        announcementService.createAnnouncement(req)
+
+        verify(eventPublisher).publishEvent(AnnouncementCreatedEvent(saved.publicId, saved.title))
+    }
+
+    @Test
+    fun `createAnnouncement does not publish event when startAt is in the future`() {
+        val startAt = OffsetDateTime.now().plusDays(1)
+        val req =
+            CreateAnnouncementRequest(
+                title = "미래 공지",
+                body = "내용",
+                startAt = startAt,
+                category = AnnouncementCategory.NOTICE.name,
+            )
+        val saved =
+            Announcement(
+                category = AnnouncementCategory.NOTICE,
+                title = req.title,
+                body = req.body,
+                startAt = startAt,
+            )
+        `when`(announcementRepository.save(any<Announcement>())).thenReturn(saved)
+
+        announcementService.createAnnouncement(req)
+
+        verify(eventPublisher, never()).publishEvent(any<AnnouncementCreatedEvent>())
     }
 }

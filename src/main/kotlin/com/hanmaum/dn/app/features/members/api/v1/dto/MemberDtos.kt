@@ -1,10 +1,14 @@
 package com.hanmaum.dn.app.features.members.api.v1.dto
 
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
+import com.hanmaum.dn.app.common.serialization.TrimmingStringConverter
+import dev.zacsweers.redacted.annotations.Redacted
+import dev.zacsweers.redacted.annotations.Unredacted
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
+import tools.jackson.databind.annotation.JsonDeserialize
 import java.time.Instant
 import java.time.LocalDate
 
@@ -14,8 +18,9 @@ import java.time.LocalDate
  * Full member detail. publicId (UUID string) is the external identifier.
  * Internal Long `id` is NEVER exposed in any response.
  */
+@Redacted
 data class MemberDto(
-    val publicId: String,
+    @Unredacted val publicId: String,
     val lastName: String,
     val firstName: String,
     val discriminator: String? = null,
@@ -29,40 +34,41 @@ data class MemberDto(
     val zipCode: String? = null,
     val city: String? = null,
     val registrationDate: LocalDate? = null,
-    val memberStatus: String,
+    @Unredacted val memberStatus: String,
     val churchRole: String? = null,
     /** publicId of the member's church group, or null. Used to pre-select the group on edit. */
-    val groupPublicId: String? = null,
-    val groupName: String? = null,
+    @Unredacted val groupPublicId: String? = null,
+    @Unredacted val groupName: String? = null,
     val profileImageUrl: String? = null,
     /** Full training history, ordered by training sort order. */
-    val trainings: List<UserTrainingDto> = emptyList(),
+    @Unredacted val trainings: List<UserTrainingDto> = emptyList(),
     /** Full ministry history, most recent registration period first. */
-    val ministries: List<MinistryHistoryDto> = emptyList(),
-    val isNextGroupLeader: Boolean = false,
-    val oneOnOneSignupFilled: Boolean = false,
+    @Unredacted val ministries: List<MinistryHistoryDto> = emptyList(),
+    @Unredacted val isNextGroupLeader: Boolean = false,
+    @Unredacted val oneOnOneSignupFilled: Boolean = false,
 )
 
 /** Lightweight DTO used in the paginated list endpoint. */
+@Redacted
 data class MemberSummaryDto(
-    val publicId: String,
+    @Unredacted val publicId: String,
     val lastName: String,
     val firstName: String,
     val email: String? = null,
-    val memberStatus: String,
+    @Unredacted val memberStatus: String,
     val baptism: String? = null,
-    val groupPublicId: String? = null,
-    val groupName: String? = null,
-    val updatedAt: Instant? = null,
+    @Unredacted val groupPublicId: String? = null,
+    @Unredacted val groupName: String? = null,
+    @Unredacted val updatedAt: Instant? = null,
     /** Name of the member's latest completed training (highest sort order), or null. */
-    val latestTraining: String? = null,
+    @Unredacted val latestTraining: String? = null,
     /** All of the member's trainings, ordered by progression — rendered as chips in the grid. */
-    val trainings: List<SummaryTrainingDto> = emptyList(),
+    @Unredacted val trainings: List<SummaryTrainingDto> = emptyList(),
     /** Names of the member's currently-active ministry assignments (end_date IS NULL), sorted. */
-    val activeMinistries: List<String> = emptyList(),
+    @Unredacted val activeMinistries: List<String> = emptyList(),
     val churchRole: String? = null,
-    val isNextGroupLeader: Boolean = false,
-    val oneOnOneSignupFilled: Boolean = false,
+    @Unredacted val isNextGroupLeader: Boolean = false,
+    @Unredacted val oneOnOneSignupFilled: Boolean = false,
 )
 
 /**
@@ -103,16 +109,17 @@ data class MinistryHistoryDto(
  * Own-profile response — used by GET /me.
  * publicId only — internal id is never returned.
  */
+@Redacted
 data class MemberResponse(
-    val publicId: String,
+    @Unredacted val publicId: String,
     val firstName: String,
     val lastName: String,
     val email: String? = null,
-    val status: MemberStatus,
+    @Unredacted val status: MemberStatus,
     val churchRole: String? = null,
-    val groupName: String? = null,
+    @Unredacted val groupName: String? = null,
     /** Division of the member's church group (e.g. "2교구"), or null when ungrouped. */
-    val division: String? = null,
+    @Unredacted val division: String? = null,
     val street: String? = null,
     val houseNumber: String? = null,
     val zipCode: String? = null,
@@ -124,6 +131,7 @@ data class MemberResponse(
 
 // ─── Request DTOs ─────────────────────────────────────────────────────────────
 
+@Redacted
 data class CreateMemberRequest(
     @field:NotBlank(message = "성은 필수입니다.")
     val lastName: String,
@@ -146,7 +154,7 @@ data class CreateMemberRequest(
     /** Church position/title (직분), not the app access role. */
     val churchRole: String? = null,
     /** publicId of the church group to assign; null leaves the member ungrouped. */
-    val groupPublicId: String? = null,
+    @Unredacted val groupPublicId: String? = null,
     val profileImageUrl: String? = null,
 )
 
@@ -154,6 +162,7 @@ data class CreateMemberRequest(
  * PATCH semantics — every field is optional. Only non-null fields are applied.
  * Status transition rule: ACTIVE ↔ INACTIVE only. DELETED is terminal (use DELETE endpoint).
  */
+@Redacted
 data class UpdateMemberRequest(
     val lastName: String? = null,
     val firstName: String? = null,
@@ -171,18 +180,19 @@ data class UpdateMemberRequest(
     val zipCode: String? = null,
     val city: String? = null,
     val registrationDate: LocalDate? = null,
-    val memberStatus: String? = null,
+    @Unredacted val memberStatus: String? = null,
     val churchRole: String? = null,
     /**
      * publicId of the church group to assign. Null/absent leaves the current group
      * unchanged; a blank string ("") clears it (leaves the member ungrouped).
      */
-    val groupPublicId: String? = null,
+    @Unredacted val groupPublicId: String? = null,
     val profileImageUrl: String? = null,
-    val isNextGroupLeader: Boolean? = null,
-    val oneOnOneSignupFilled: Boolean? = null,
+    @Unredacted val isNextGroupLeader: Boolean? = null,
+    @Unredacted val oneOnOneSignupFilled: Boolean? = null,
 )
 
+@Redacted
 data class RegisterMemberRequest(
     @field:NotBlank(message = "이름은 필수입니다.")
     val firstName: String,
@@ -190,6 +200,9 @@ data class RegisterMemberRequest(
     val lastName: String,
     @field:NotBlank
     val password: String,
+    // Trim before validation so a stray leading/trailing space (mobile keyboard, copy-paste)
+    // can't fail @Email or create a mismatched Keycloak username. Password is deliberately not trimmed.
+    @field:JsonDeserialize(converter = TrimmingStringConverter::class)
     @field:NotBlank
     @field:Email(message = "유효한 이메일이어야 합니다.")
     val email: String,
@@ -206,6 +219,7 @@ data class RegisterMemberRequest(
 )
 
 /** PATCH /me — member can update their own contact, profile image, and address. */
+@Redacted
 data class UpdateMyProfileRequest(
     @field:Size(max = 50)
     val phoneNumber: String? = null,

@@ -172,6 +172,51 @@ docker inspect --format='{{.State.Health.Status}}' hanmaumApp-keycloak
 
 ---
 
+## Shared observability
+
+Grafana, Prometheus, Loki, Alloy, host metrics, and shared dashboards live in
+the separate `hanmaum-service-observability` repository. This repository only exposes
+the DN server integration:
+
+- `/actuator/prometheus` on the private `observability` Docker network
+- Keycloak metrics on its private management port `9000`
+- staging PostgreSQL metrics through a least-privileged `postgres_exporter`
+- structured Docker logs with stable service/environment labels
+- a generic Caddy import mount for routes owned by infrastructure repositories
+
+Prometheus/Loki ports are never published, and Caddy continues to block public
+access to `/actuator/prometheus`.
+
+### Staging PostgreSQL exporter credentials
+
+The staging exporter reads its dedicated monitoring username and password from
+server-local files. Create them once before deploying the updated staging
+Compose stack:
+
+```bash
+sudo install -d -m 700 /opt/hanmaum-dn-server/secrets
+
+printf '%s' 'YOUR_MONITORING_USERNAME' \
+  | sudo tee /opt/hanmaum-dn-server/secrets/staging-postgres-exporter-user >/dev/null
+
+read -rsp 'postgres_exporter password: ' POSTGRES_EXPORTER_PASSWORD
+printf '%s' "$POSTGRES_EXPORTER_PASSWORD" \
+  | sudo tee /opt/hanmaum-dn-server/secrets/staging-postgres-exporter-password >/dev/null
+unset POSTGRES_EXPORTER_PASSWORD
+
+sudo chown 65534:65534 \
+  /opt/hanmaum-dn-server/secrets/staging-postgres-exporter-user \
+  /opt/hanmaum-dn-server/secrets/staging-postgres-exporter-password
+sudo chmod 400 \
+  /opt/hanmaum-dn-server/secrets/staging-postgres-exporter-user \
+  /opt/hanmaum-dn-server/secrets/staging-postgres-exporter-password
+```
+
+The exporter publishes port `9187` only inside the shared `observability`
+network. Do not add a host port or Hetzner firewall rule.
+
+---
+
 ## 7. Build a production JAR
 
 ```bash

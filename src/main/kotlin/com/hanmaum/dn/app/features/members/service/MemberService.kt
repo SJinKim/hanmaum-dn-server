@@ -3,6 +3,8 @@ package com.hanmaum.dn.app.features.members.service
 import com.hanmaum.dn.app.common.domainvalue.Baptism
 import com.hanmaum.dn.app.common.domainvalue.Gender
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
+import com.hanmaum.dn.app.common.observability.ExternalCallOutcome
+import com.hanmaum.dn.app.common.observability.OperationalMetrics
 import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
 import com.hanmaum.dn.app.features.members.api.applyPatch
 import com.hanmaum.dn.app.features.members.api.toDto
@@ -59,6 +61,7 @@ class MemberService(
     private val ministryAssignmentRepository: MinistryAssignmentRepository,
     private val ministryRepository: MinistryRepository,
     private val keycloak: Keycloak,
+    private val operationalMetrics: OperationalMetrics,
     @Value("\${app.keycloak.realm:hanmaum}") private val realm: String,
     @Value("\${app.member-retention.days:30}") private val memberRetentionDays: Long = 30,
 ) {
@@ -261,6 +264,15 @@ class MemberService(
         emailVerified: Boolean = false,
     ): MemberResponse = resolveAndLinkMember(keycloakSubject, email, emailVerified).toResponse()
 
+    /**
+     * Resolve the calling member from JWT claims for the notifications feature.
+     */
+    @Transactional
+    fun resolveMember(
+        keycloakSubject: String,
+        email: String?,
+    ): Member = resolveAndLinkMember(keycloakSubject, email, false)
+
     @Transactional
     fun updateMyProfile(
         keycloakSubject: String,
@@ -355,16 +367,7 @@ class MemberService(
      */
     @Transactional
     fun registerMember(req: RegisterMemberRequest): Member {
-        log.info(
-            "Register member started realm={} firstNameLength={} lastNameLength={} cityPresent={} zipCodePresent={}",
-            realm,
-            req.firstName.length,
-            req.lastName.length,
-            req.city?.isNotBlank() == true,
-            req.zipCode?.isNotBlank() == true,
-        )
         if (memberRepository.findByEmailAndDeletedAtIsNull(req.email) != null) {
-            log.warn("Register member rejected duplicate email")
             throw ResponseStatusException(HttpStatus.CONFLICT, "이미 가입된 이메일입니다.")
         }
 
@@ -409,12 +412,6 @@ class MemberService(
             )
 
         val savedMember = memberRepository.save(newMember)
-        log.info(
-            "Register member saved pending DB record memberId={} discriminatorAssigned={}",
-            savedMember.id,
-            discriminator != null,
-        )
-
         // Create Keycloak user and store keycloakId back on the member record
         val keycloakUser =
             UserRepresentation().apply {
@@ -434,57 +431,97 @@ class MemberService(
                     )
             }
 
-        log.info("Creating Keycloak user realm={}", realm)
+        val keycloakCallStartedAt = System.nanoTime()
         val kcResponse =
             try {
                 keycloak.realm(realm).users().create(keycloakUser)
             } catch (e: ProcessingException) {
-                log.error(
-                    "Keycloak user creation transport failure realm={} exceptionType={} message={}",
-                    realm,
-                    e::class.qualifiedName,
-                    e.message?.redactEmail(),
-                )
+                recordKeycloakCall(ExternalCallOutcome.TRANSPORT_ERROR, keycloakCallStartedAt)
+                log
+                    .atError()
+                    .setCause(e)
+                    .addKeyValue("event.action", "keycloak.user.create")
+                    .addKeyValue("event.outcome", "failure")
+                    .addKeyValue("dependency.name", "keycloak")
+                    .addKeyValue("error.type", "transport")
+                    .addKeyValue("realm", realm)
+                    .log("Keycloak user creation failed")
                 throw RuntimeException("Keycloak user creation transport failure", e)
             } catch (e: RuntimeException) {
-                log.error(
-                    "Keycloak user creation runtime failure realm={} exceptionType={} message={}",
-                    realm,
-                    e::class.qualifiedName,
-                    e.message?.redactEmail(),
-                )
+                recordKeycloakCall(ExternalCallOutcome.UNEXPECTED_ERROR, keycloakCallStartedAt)
+                log
+                    .atError()
+                    .setCause(e)
+                    .addKeyValue("event.action", "keycloak.user.create")
+                    .addKeyValue("event.outcome", "failure")
+                    .addKeyValue("dependency.name", "keycloak")
+                    .addKeyValue("error.type", "unexpected")
+                    .addKeyValue("realm", realm)
+                    .log("Keycloak user creation failed")
                 throw e
             }
-        log.info("Keycloak user creation response realm={} status={}", realm, kcResponse.status)
-        if (kcResponse.status != 201) {
-            val body = kcResponse.readEntity(String::class.java).orEmpty()
-            log.error(
-                "Keycloak user creation rejected realm={} status={} body={}",
-                realm,
-                kcResponse.status,
-                body.redactEmail().take(500),
-            )
-            throw RuntimeException("Keycloak user creation failed (HTTP ${kcResponse.status})")
-        }
-
         val keycloakId =
-            kcResponse.location
-                ?.path
-                ?.substringAfterLast("/")
-                .orEmpty()
+            kcResponse.use { response ->
+                if (response.status != 201) {
+                    val outcome =
+                        when (response.status) {
+                            in 400..499 -> ExternalCallOutcome.CLIENT_ERROR
+                            in 500..599 -> ExternalCallOutcome.SERVER_ERROR
+                            else -> ExternalCallOutcome.INVALID_RESPONSE
+                        }
+                    recordKeycloakCall(outcome, keycloakCallStartedAt)
+                    log
+                        .atError()
+                        .addKeyValue("event.action", "keycloak.user.create")
+                        .addKeyValue("event.outcome", "failure")
+                        .addKeyValue("dependency.name", "keycloak")
+                        .addKeyValue("http.response.status_code", response.status)
+                        .addKeyValue("realm", realm)
+                        .log("Keycloak user creation was rejected")
+                    throw RuntimeException("Keycloak user creation failed (HTTP ${response.status})")
+                }
+
+                response.location
+                    ?.path
+                    ?.substringAfterLast("/")
+                    .orEmpty()
+            }
         if (keycloakId.isNotBlank()) {
+            recordKeycloakCall(ExternalCallOutcome.SUCCESS, keycloakCallStartedAt)
             savedMember.keycloakId = keycloakId
             memberRepository.save(savedMember)
-            log.info("Register member linked Keycloak user memberId={}", savedMember.id)
         } else {
-            log.warn("Keycloak user created without location header memberId={}", savedMember.id)
+            recordKeycloakCall(ExternalCallOutcome.INVALID_RESPONSE, keycloakCallStartedAt)
+            log
+                .atError()
+                .addKeyValue("event.action", "keycloak.user.create")
+                .addKeyValue("event.outcome", "failure")
+                .addKeyValue("dependency.name", "keycloak")
+                .addKeyValue("error.type", "missing_location")
+                .addKeyValue("realm", realm)
+                .log("Keycloak user creation returned an invalid response")
         }
 
-        log.info("Register member completed memberId={}", savedMember.id)
+        log
+            .atInfo()
+            .addKeyValue("event.action", "member.register")
+            .addKeyValue("event.outcome", "success")
+            .addKeyValue("keycloak.linked", keycloakId.isNotBlank())
+            .log("Member registration completed")
         return savedMember
     }
 
-    private fun String.redactEmail(): String = replace(Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"), "<redacted-email>")
+    private fun recordKeycloakCall(
+        outcome: ExternalCallOutcome,
+        startedAt: Long,
+    ) {
+        operationalMetrics.recordExternalCall(
+            dependency = "keycloak",
+            operation = "create_user",
+            outcome = outcome,
+            elapsedNanos = System.nanoTime() - startedAt,
+        )
+    }
 
     private fun resolveAndLinkMember(
         keycloakSubject: String,

@@ -118,6 +118,8 @@ class Member(
     var piiKeyId: String? = null,
     @Column(name = "delete_entry_at")
     var deleteEntryAt: Instant? = null,
+    @Column(name = "push_enabled", nullable = false)
+    var pushEnabled: Boolean = true,
 ) : BaseEntity() {
     fun getFullName(): String = "$lastName$firstName" // Korean: no space between surname and given name
 
@@ -128,4 +130,10 @@ class Member(
         keycloakLookupHash = PiiCryptoContext.lookupHash(keycloakId)
         piiKeyId = PiiCryptoContext.storageKeyId()
     }
+
+    // Hand-written, not generated: this is a plain JPA entity (not a data class), and a
+    // generated toString() would either miss new fields or, if it touched the lazy `group`
+    // association, risk a LazyInitializationException outside a Hibernate session. Only
+    // non-PII fields are listed here on purpose — add new ones explicitly, never blanket.
+    override fun toString(): String = "Member(id=$id, publicId=$publicId, memberStatus=$memberStatus)"
 }

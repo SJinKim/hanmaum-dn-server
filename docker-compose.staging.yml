@@ -13,6 +13,9 @@
 #   BACKEND_IMAGE_STAGING          — set by CI: ghcr.io/sjinkim/hanmaum-dn-server:sha-<short>
 #   STAGING_API_DOMAIN             — public staging API hostname, e.g. api.staging.graceops.de
 #   APP_SECURITY_KEYCLOAK_PUBLIC_ISSUER — https://auth.graceops.de/realms/<staging-realm>
+# Server-local monitoring credentials (never commit these files):
+#   ./secrets/staging-postgres-exporter-user
+#   ./secrets/staging-postgres-exporter-password
 #
 # Usage:
 #   docker compose --project-name hanmaum-staging \
@@ -22,6 +25,12 @@
 # SSH tunnel access from a workstation:
 #   ssh -L 5435:127.0.0.1:5435 <server>
 #   psql -h localhost -p 5435 -U <DB_HANMAUM_DN_USER> -d <DB_HANMAUM_DN_NAME>
+
+x-log-rotation: &log-rotation
+  driver: local
+  options:
+    max-size: "20m"
+    max-file: "3"
 
 services:
   hanmaumApp-db-staging:
@@ -49,6 +58,38 @@ services:
     networks:
       - staging-internal
 
+  postgres-exporter-staging:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.19.1
+    container_name: hanmaum-postgres-exporter-staging
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_URI: "hanmaumApp-db-staging:5432/${DB_HANMAUM_DN_NAME}?sslmode=disable"
+      DATA_SOURCE_USER_FILE: /run/secrets/postgres-exporter-user
+      DATA_SOURCE_PASS_FILE: /run/secrets/postgres-exporter-password
+    volumes:
+      - ./secrets/staging-postgres-exporter-user:/run/secrets/postgres-exporter-user:ro
+      - ./secrets/staging-postgres-exporter-password:/run/secrets/postgres-exporter-password:ro
+    labels:
+      observability.logs.enabled: "true"
+      observability.service: postgres-exporter
+      observability.environment: staging
+    depends_on:
+      hanmaumApp-db-staging:
+        condition: service_healthy
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+    networks:
+      - staging-internal
+      - observability
+    logging: *log-rotation
+
   backend-staging:
     image: ${BACKEND_IMAGE_STAGING:-ghcr.io/sjinkim/hanmaum-dn-server:staging}
     container_name: hanmaumApp-backend-staging
@@ -69,6 +110,10 @@ services:
     env_file:
       - path: .env.staging
         required: false
+    labels:
+      observability.logs.enabled: "true"
+      observability.service: dn-server
+      observability.environment: staging
     volumes:
       - ${PII_KEYRING_FILE:-./secrets/staging-pii-keyring.properties}:/run/secrets/hanmaum-pii-keyring.properties:ro
     healthcheck:
@@ -87,11 +132,15 @@ services:
     networks:
       - staging-internal
       - caddy-proxy
+      - observability
+    logging: *log-rotation
 
 networks:
   staging-internal:
     driver: bridge
   caddy-proxy:
+    external: true
+  observability:
     external: true
 
 volumes:

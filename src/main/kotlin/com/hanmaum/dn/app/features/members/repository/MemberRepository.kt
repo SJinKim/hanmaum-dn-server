@@ -24,6 +24,8 @@ interface MemberRepository :
 
     fun findAllByDeletedAtIsNull(): List<Member>
 
+    fun findAllByMemberStatusAndDeletedAtIsNull(memberStatus: MemberStatus): List<Member>
+
     fun countByDeletedAtIsNull(): Long
 
     fun findAllByDeleteEntryAtLessThanEqualAndDeletedAtIsNotNull(deleteEntryAt: Instant): List<Member>

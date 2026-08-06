@@ -6,6 +6,7 @@ plugins {
     id("io.spring.dependency-management") version "1.1.7"
     id("org.jlleitschuh.gradle.ktlint") version "14.0.1"
     id("org.springdoc.openapi-gradle-plugin") version "1.9.0"
+    id("dev.zacsweers.redacted") version "1.15.1"
 }
 
 group = "com.hanmaum.dn"
@@ -38,6 +39,7 @@ dependencies {
     implementation("tools.jackson.module:jackson-module-kotlin")
 
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("io.micrometer:micrometer-registry-prometheus")
 
     // Auth & Utils
     implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
@@ -72,6 +74,9 @@ dependencies {
     // Falls du Spring Boot 3 nutzt (Jakarta EE), brauchst du oft auch das RESTEasy Backend:
     implementation("org.jboss.resteasy:resteasy-client:6.2.7.Final")
     implementation("org.jboss.resteasy:resteasy-jackson2-provider:6.2.7.Final")
+
+    // Firebase Admin SDK for push notifications
+    implementation("com.google.firebase:firebase-admin:9.4.3")
 }
 
 kotlin {
