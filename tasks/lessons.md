@@ -10,8 +10,8 @@
 <!-- Claude appends here after each correction -->
 
 ### Deploy order: staging before production
-- **Mistake**: Pushing directly to the production-targeting branch without going through staging first.
-- **Rule**: Always push to the `dev` branch first. Staging (st / `dn-admin-dashboard.st.graceops.de`) must deploy and be verified before promoting to production (`dn-admin-dashboard.graceops.de`). Never skip the staging step.
+- **Mistake**: Promoting to production without verifying staging first. (Originally phrased as "push to `dev` first" — the `dev` branch was retired in #104, but the staging-before-prod requirement stands.)
+- **Rule**: Deploys run as manual `workflow_dispatch` on `main` only. Merge the feature branch to `main`, run the staging pipeline, and verify `dn-admin-dashboard.st.graceops.de` before running the production pipeline for `dn-admin-dashboard.graceops.de`. Never skip the staging step.
 
 ### Respect repository scope
 - **Mistake**: Interpreted a server change as an end-to-end request and modified the mobile repository without being asked.
