@@ -261,6 +261,49 @@ class MemberMappersTest {
     }
 
     @Test
+    fun `toDto derives isGroupLeader from the tenure start date`() {
+        val member = Member(lastName = "박", firstName = "준호", memberStatus = MemberStatus.ACTIVE)
+
+        val leading = member.toDto(groupLeaderSince = LocalDate.of(2026, 1, 15))
+        assertEquals(true, leading.isGroupLeader)
+        assertEquals(LocalDate.of(2026, 1, 15), leading.groupLeaderSince)
+
+        val notLeading = member.toDto()
+        assertEquals(false, notLeading.isGroupLeader)
+        assertNull(notLeading.groupLeaderSince)
+    }
+
+    @Test
+    fun `toDto keeps isGroupLeader independent of isNextGroupLeader`() {
+        val member =
+            Member(
+                lastName = "박",
+                firstName = "준호",
+                memberStatus = MemberStatus.ACTIVE,
+                isNextGroupLeader = true,
+            )
+
+        val dto = member.toDto()
+
+        // Separate concepts: a designated next leader is not a current leader.
+        assertEquals(true, dto.isNextGroupLeader)
+        assertEquals(false, dto.isGroupLeader)
+    }
+
+    @Test
+    fun `toSummaryDto derives isGroupLeader from the tenure start date`() {
+        val member = Member(lastName = "박", firstName = "준호", memberStatus = MemberStatus.ACTIVE)
+
+        val leading = member.toSummaryDto(groupLeaderSince = LocalDate.of(2026, 1, 15))
+        assertEquals(true, leading.isGroupLeader)
+        assertEquals(LocalDate.of(2026, 1, 15), leading.groupLeaderSince)
+
+        val notLeading = member.toSummaryDto()
+        assertEquals(false, notLeading.isGroupLeader)
+        assertNull(notLeading.groupLeaderSince)
+    }
+
+    @Test
     fun `toDto maps gender null to null`() {
         val member = Member(lastName = "김", firstName = "철수", memberStatus = MemberStatus.ACTIVE, gender = null)
         assertNull(member.toDto().gender)

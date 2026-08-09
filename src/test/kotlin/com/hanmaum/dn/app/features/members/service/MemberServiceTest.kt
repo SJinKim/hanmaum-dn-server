@@ -4,7 +4,10 @@ import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.common.observability.ExternalCallOutcome
 import com.hanmaum.dn.app.common.observability.OperationalMetrics
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
+import com.hanmaum.dn.app.features.groups.domain.GroupLeader
 import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
+import com.hanmaum.dn.app.features.groups.repository.GroupLeaderRepository
+import com.hanmaum.dn.app.features.groups.repository.MemberLeadershipView
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberMinistryItem
 import com.hanmaum.dn.app.features.members.api.v1.dto.RegisterMemberRequest
@@ -56,6 +59,8 @@ class MemberServiceTest {
 
     @Mock private lateinit var churchGroupRepository: ChurchGroupRepository
 
+    @Mock private lateinit var groupLeaderRepository: GroupLeaderRepository
+
     @Mock private lateinit var userTrainingRepository: UserTrainingRepository
 
     @Mock private lateinit var trainingRepository: TrainingRepository
@@ -82,6 +87,7 @@ class MemberServiceTest {
             MemberService(
                 memberRepository,
                 churchGroupRepository,
+                groupLeaderRepository,
                 userTrainingRepository,
                 trainingRepository,
                 ministryAssignmentRepository,
@@ -247,6 +253,53 @@ class MemberServiceTest {
         assertEquals(listOf("미디어팀", "찬양팀"), summary.activeMinistries)
     }
 
+    @Test
+    fun `getMembers flags only the members holding a current group leadership`() {
+        val leader = memberWithId(1L)
+        val plain = memberWithId(2L)
+        `when`(memberRepository.findActiveMembers(anyOrNull(), anyOrNull(), anyOrNull(), any<Pageable>()))
+            .thenReturn(PageImpl(listOf(leader, plain)))
+        `when`(groupLeaderRepository.findActiveByMemberIds(listOf(1L, 2L)))
+            .thenReturn(listOf(MemberLeadershipView(1L, LocalDate.of(2026, 1, 15))))
+
+        val result = memberService.getMembers(null, null, null, 0, 20)
+
+        val leaderSummary = result.content[0]
+        assertEquals(true, leaderSummary.isGroupLeader)
+        assertEquals(LocalDate.of(2026, 1, 15), leaderSummary.groupLeaderSince)
+
+        val plainSummary = result.content[1]
+        assertEquals(false, plainSummary.isGroupLeader)
+        assertNull(plainSummary.groupLeaderSince)
+    }
+
+    @Test
+    fun `getMemberByPublicId exposes the current group leadership on the detail dto`() {
+        val member = memberWithId(1L)
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
+        `when`(groupLeaderRepository.findActiveByMemberIds(listOf(1L)))
+            .thenReturn(listOf(MemberLeadershipView(1L, LocalDate.of(2026, 1, 15))))
+
+        val result = memberService.getMemberByPublicId(member.publicId)
+
+        assertEquals(true, result.isGroupLeader)
+        assertEquals(LocalDate.of(2026, 1, 15), result.groupLeaderSince)
+    }
+
+    @Test
+    fun `getMemberByPublicId reports no leadership when the member leads nothing`() {
+        val member = memberWithId(1L)
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
+        `when`(groupLeaderRepository.findActiveByMemberIds(listOf(1L))).thenReturn(emptyList())
+
+        val result = memberService.getMemberByPublicId(member.publicId)
+
+        assertEquals(false, result.isGroupLeader)
+        assertNull(result.groupLeaderSince)
+    }
+
     // --- createMember ---
 
     @Test
@@ -323,6 +376,69 @@ class MemberServiceTest {
         val result = memberService.updateMember(member.publicId, req)
 
         assertEquals("새 그룹", result.groupName)
+    }
+
+    @Test
+    fun `updateMember ends the leadership when a leader is moved to another group`() {
+        val oldGroup = group(1L, "구 그룹")
+        val newGroup = group(2L, "새 그룹")
+        val member = memberWithId(10L)
+        member.group = oldGroup
+        val leadership = GroupLeader(group = oldGroup, member = member, startDate = LocalDate.of(2026, 1, 15))
+        val req = UpdateMemberRequest(lastName = "김", firstName = "철수", groupPublicId = newGroup.publicId.toString())
+
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
+        `when`(churchGroupRepository.findByPublicIdAndDeletedAtIsNull(newGroup.publicId)).thenReturn(Optional.of(newGroup))
+        `when`(groupLeaderRepository.findActiveByGroupId(1L)).thenReturn(leadership)
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+
+        memberService.updateMember(member.publicId, req)
+
+        // A leader is by definition part of their group — leaving it ends the tenure,
+        // otherwise the old group keeps a leader who is no longer a member of it.
+        assertEquals(LocalDate.now(), leadership.endDate)
+        verify(groupLeaderRepository).save(leadership)
+    }
+
+    @Test
+    fun `updateMember ends the leadership when a leader is ungrouped`() {
+        val grp = group(1L, "기존 그룹")
+        val member = memberWithId(10L)
+        member.group = grp
+        val leadership = GroupLeader(group = grp, member = member, startDate = LocalDate.of(2026, 1, 15))
+        val req = UpdateMemberRequest(lastName = "김", firstName = "철수", groupPublicId = "")
+
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
+        `when`(groupLeaderRepository.findActiveByGroupId(1L)).thenReturn(leadership)
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+
+        memberService.updateMember(member.publicId, req)
+
+        assertEquals(LocalDate.now(), leadership.endDate)
+    }
+
+    @Test
+    fun `updateMember leaves another member's leadership untouched on a group move`() {
+        val oldGroup = group(1L, "구 그룹")
+        val newGroup = group(2L, "새 그룹")
+        val mover = memberWithId(10L)
+        mover.group = oldGroup
+        val someoneElse = memberWithId(11L, firstName = "영희", lastName = "이")
+        val leadership = GroupLeader(group = oldGroup, member = someoneElse, startDate = LocalDate.of(2026, 1, 15))
+        val req = UpdateMemberRequest(lastName = "김", firstName = "철수", groupPublicId = newGroup.publicId.toString())
+
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(mover.publicId)).thenReturn(Optional.of(mover))
+        `when`(churchGroupRepository.findByPublicIdAndDeletedAtIsNull(newGroup.publicId)).thenReturn(Optional.of(newGroup))
+        `when`(groupLeaderRepository.findActiveByGroupId(1L)).thenReturn(leadership)
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+
+        memberService.updateMember(mover.publicId, req)
+
+        // The group's actual leader did not move — their tenure must survive.
+        assertNull(leadership.endDate)
+        verify(groupLeaderRepository, never()).save(any<GroupLeader>())
     }
 
     @Test
