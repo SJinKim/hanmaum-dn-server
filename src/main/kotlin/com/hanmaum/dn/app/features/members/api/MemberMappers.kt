@@ -13,6 +13,7 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.SummaryTrainingDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UserTrainingDto
 import com.hanmaum.dn.app.features.members.domain.Member
+import java.time.LocalDate
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
 
@@ -119,6 +120,7 @@ fun Member.applyPatch(request: UpdateMemberRequest) {
 fun Member.toDto(
     trainings: List<UserTrainingDto> = emptyList(),
     ministries: List<MinistryHistoryDto> = emptyList(),
+    groupLeaderSince: LocalDate? = null,
 ): MemberDto =
     MemberDto(
         publicId = this.publicId.toString(),
@@ -144,16 +146,19 @@ fun Member.toDto(
         ministries = ministries,
         isNextGroupLeader = this.isNextGroupLeader,
         oneOnOneSignupFilled = this.oneOnOneSignupFilled,
+        isGroupLeader = groupLeaderSince != null,
+        groupLeaderSince = groupLeaderSince,
     )
 
 /**
- * Lightweight list DTO. [latestTraining] / [trainings] / [activeMinistries] are derived per page
- * by the service (batched, no N+1) and passed in here.
+ * Lightweight list DTO. [latestTraining] / [trainings] / [activeMinistries] / [groupLeaderSince]
+ * are derived per page by the service (batched, no N+1) and passed in here.
  */
 fun Member.toSummaryDto(
     latestTraining: String? = null,
     trainings: List<SummaryTrainingDto> = emptyList(),
     activeMinistries: List<String> = emptyList(),
+    groupLeaderSince: LocalDate? = null,
 ): MemberSummaryDto =
     MemberSummaryDto(
         publicId = this.publicId.toString(),
@@ -171,6 +176,8 @@ fun Member.toSummaryDto(
         churchRole = this.churchRole,
         isNextGroupLeader = this.isNextGroupLeader,
         oneOnOneSignupFilled = this.oneOnOneSignupFilled,
+        isGroupLeader = groupLeaderSince != null,
+        groupLeaderSince = groupLeaderSince,
     )
 
 /** Minimal identity projection for name pickers. Decryption happens on entity load. */

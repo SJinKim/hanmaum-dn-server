@@ -68,6 +68,9 @@ class MemberPurgeServiceTest {
         verify(jdbcTemplate).update(eq("DELETE FROM meeting_attendances WHERE member_id = ?"), eq(42L))
         verify(jdbcTemplate, never()).update(eq("DELETE FROM attendance_logs WHERE member_id = ?"), eq(42L))
         verify(jdbcTemplate).update(eq("DELETE FROM ministry_registrations WHERE member_id = ?"), eq(42L))
+        // group_leaders.member_id is an FK without ON DELETE CASCADE — skipping this delete
+        // makes the member row deletion below fail with a constraint violation.
+        verify(jdbcTemplate).update(eq("DELETE FROM group_leaders WHERE member_id = ?"), eq(42L))
         verify(jdbcTemplate).update(eq("DELETE FROM user_training WHERE user_id = ?"), eq(42L))
         verify(jdbcTemplate).update(
             eq("DELETE FROM family_relationships WHERE member_id = ? OR related_member_id = ?"),

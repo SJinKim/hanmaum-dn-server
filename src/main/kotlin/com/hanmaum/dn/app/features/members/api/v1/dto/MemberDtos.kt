@@ -46,6 +46,10 @@ data class MemberDto(
     @Unredacted val ministries: List<MinistryHistoryDto> = emptyList(),
     @Unredacted val isNextGroupLeader: Boolean = false,
     @Unredacted val oneOnOneSignupFilled: Boolean = false,
+    /** True while the member currently leads their church group. Unrelated to [isNextGroupLeader]. */
+    @Unredacted val isGroupLeader: Boolean = false,
+    /** Day the member took over as group leader. Null exactly when [isGroupLeader] is false. */
+    @Unredacted val groupLeaderSince: LocalDate? = null,
 )
 
 /** Lightweight DTO used in the paginated list endpoint. */
@@ -69,6 +73,10 @@ data class MemberSummaryDto(
     val churchRole: String? = null,
     @Unredacted val isNextGroupLeader: Boolean = false,
     @Unredacted val oneOnOneSignupFilled: Boolean = false,
+    /** True while the member currently leads their church group. Unrelated to [isNextGroupLeader]. */
+    @Unredacted val isGroupLeader: Boolean = false,
+    /** Day the member took over as group leader. Null exactly when [isGroupLeader] is false. */
+    @Unredacted val groupLeaderSince: LocalDate? = null,
 )
 
 /**

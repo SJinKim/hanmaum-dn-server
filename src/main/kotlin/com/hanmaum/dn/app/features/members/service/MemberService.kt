@@ -6,6 +6,7 @@ import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.common.observability.ExternalCallOutcome
 import com.hanmaum.dn.app.common.observability.OperationalMetrics
 import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
+import com.hanmaum.dn.app.features.groups.repository.GroupLeaderRepository
 import com.hanmaum.dn.app.features.members.api.applyPatch
 import com.hanmaum.dn.app.features.members.api.toDto
 import com.hanmaum.dn.app.features.members.api.toEntity
@@ -56,6 +57,7 @@ import java.util.UUID
 class MemberService(
     private val memberRepository: MemberRepository,
     private val churchGroupRepository: ChurchGroupRepository,
+    private val groupLeaderRepository: GroupLeaderRepository,
     private val userTrainingRepository: UserTrainingRepository,
     private val trainingRepository: TrainingRepository,
     private val ministryAssignmentRepository: MinistryAssignmentRepository,
@@ -95,6 +97,7 @@ class MemberService(
         //  - all trainings (with status) per member = grid chips, ordered by progression
         //  - latest completed training               = highest sort_order among COMPLETED chips
         //  - active ministries                       = ministry names where end_date IS NULL
+        //  - current group leadership                = tenure start where end_date IS NULL
         val memberIds = members.content.mapNotNull { it.id }
         val trainingsByMember: Map<Long, List<SummaryTrainingDto>> =
             if (memberIds.isEmpty()) {
@@ -123,12 +126,21 @@ class MemberService(
                     .groupBy { it.memberId }
                     .mapValues { (_, rows) -> rows.map { it.ministryName }.sorted() }
             }
+        val leaderSinceByMember: Map<Long, LocalDate> =
+            if (memberIds.isEmpty()) {
+                emptyMap()
+            } else {
+                groupLeaderRepository
+                    .findActiveByMemberIds(memberIds)
+                    .associate { it.memberId to it.startDate }
+            }
 
         return members.map {
             it.toSummaryDto(
                 latestTraining = it.id?.let(latestTrainingByMember::get),
                 trainings = it.id?.let(trainingsByMember::get).orEmpty(),
                 activeMinistries = it.id?.let(activeMinistriesByMember::get).orEmpty(),
+                groupLeaderSince = it.id?.let(leaderSinceByMember::get),
             )
         }
     }
@@ -154,8 +166,18 @@ class MemberService(
         val memberId = member.id!!
         val trainings = userTrainingRepository.findByMemberId(memberId).map { it.toDto() }
         val ministries = ministryAssignmentRepository.findByMemberId(memberId).map { it.toHistoryDto() }
-        return member.toDto(trainings, ministries)
+        return member.toDto(trainings, ministries, groupLeaderSince(memberId))
     }
+
+    /**
+     * Start of the member's current group-leader tenure, or null when they lead no group.
+     * Reuses the batched query with a single id — one lookup either way.
+     */
+    private fun groupLeaderSince(memberId: Long): LocalDate? =
+        groupLeaderRepository
+            .findActiveByMemberIds(listOf(memberId))
+            .firstOrNull()
+            ?.startDate
 
     /**
      * Replaces a member's entire training set (PUT semantics). Existing rows are
@@ -199,7 +221,7 @@ class MemberService(
 
         val trainings = rows.map { it.toDto() }
         val ministries = ministryAssignmentRepository.findByMemberId(memberId).map { it.toHistoryDto() }
-        return member.toDto(trainings, ministries)
+        return member.toDto(trainings, ministries, groupLeaderSince(memberId))
     }
 
     /**
@@ -241,7 +263,7 @@ class MemberService(
         // Re-read both lists from the DB so the returned detail reflects persisted state.
         val trainings = userTrainingRepository.findByMemberId(memberId).map { it.toDto() }
         val ministries = ministryAssignmentRepository.findByMemberId(memberId).map { it.toHistoryDto() }
-        return member.toDto(trainings, ministries)
+        return member.toDto(trainings, ministries, groupLeaderSince(memberId))
     }
 
     private fun MinistryAssignment.toHistoryDto(): MinistryHistoryDto =
@@ -328,6 +350,7 @@ class MemberService(
         }
         member.applyPatch(request)
 
+        val previousGroupId = member.group?.id
         request.groupPublicId?.let { gpid ->
             member.group =
                 if (gpid.isBlank()) {
@@ -344,7 +367,31 @@ class MemberService(
                     }
                 }
         }
+        endLeadershipIfMovedOutOfGroup(member, previousGroupId)
+
         return memberRepository.save(member).toDto()
+    }
+
+    /**
+     * Closes an active group-leader tenure when the member is moved to another group or
+     * ungrouped: a leader is by definition part of the group they lead, so leaving the group
+     * ends the tenure. Without this, the member would keep leading a group they are no longer in.
+     */
+    private fun endLeadershipIfMovedOutOfGroup(
+        member: Member,
+        previousGroupId: Long?,
+    ) {
+        if (previousGroupId == null || previousGroupId == member.group?.id) return
+        val leadership = groupLeaderRepository.findActiveByGroupId(previousGroupId) ?: return
+        if (leadership.member.id != member.id) return
+
+        leadership.endDate = LocalDate.now()
+        groupLeaderRepository.save(leadership)
+        log.info(
+            "Ended group leadership after group change memberId={} groupId={}",
+            member.id,
+            previousGroupId,
+        )
     }
 
     /**
