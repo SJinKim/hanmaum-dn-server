@@ -12,7 +12,7 @@ name: Deploy — Staging
 #
 # One-time server setup (no git clone needed — CI pushes all files):
 #   mkdir -p /opt/hanmaum-dn-server
-#   docker network create caddy-proxy
+#   # Shared edge is installed separately from the graceops-edge repository.
 #   # Create /opt/hanmaum-dn-server/.env.staging with real values
 #   # Create the postgres-exporter credential files documented in README.md
 
@@ -163,7 +163,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "docker-compose.staging.yml,docker-compose.caddy.yml,infrastructure"
+          source: "docker-compose.staging.yml,infrastructure"
           target: ${{ env.DEPLOY_DIR }}
 
       - name: Deploy via SSH
@@ -181,23 +181,16 @@ jobs:
 
             echo "$GHCR_TOKEN" | docker login ghcr.io -u sjinkim --password-stdin
 
-            # Ensure the shared proxy network exists (idempotent)
-            docker network create caddy-proxy 2>/dev/null || true
+            # Application deploys consume the shared edge contract but never
+            # create, recreate, or reload Caddy.
+            docker network inspect caddy-proxy > /dev/null
+            docker inspect --format='{{.State.Running}}' hanmaum-caddy | grep -q true
+            EDGE_OWNER=$(docker inspect --format='{{index .Config.Labels "graceops.edge.owner"}}' hanmaum-caddy)
+            test -z "$EDGE_OWNER" -o "$EDGE_OWNER" = "graceops-edge" \
+              || { echo "Unexpected shared edge owner: $EDGE_OWNER"; exit 1; }
             docker network create observability 2>/dev/null || true
 
             cd /opt/hanmaum-dn-server
-
-            # Refresh shared Caddy as staging may be the first deployment after
-            # an infrastructure route change.
-            mkdir -p /opt/hanmaum-service-observability/caddy/generated
-            docker compose \
-              --env-file .env \
-              --env-file .env.staging \
-              --project-name hanmaum-caddy \
-              -f docker-compose.caddy.yml \
-              up -d
-            docker exec hanmaum-caddy \
-              caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
 
             # Deploy staging stack
             export BACKEND_IMAGE_STAGING
