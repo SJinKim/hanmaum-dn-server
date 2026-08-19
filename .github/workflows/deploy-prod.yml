@@ -10,7 +10,7 @@ name: Deploy — Production
 #
 # One-time server setup (no git clone needed — CI pushes all files):
 #   mkdir -p /opt/hanmaum-dn-server
-#   docker network create caddy-proxy
+#   # Shared edge is installed separately from the graceops-edge repository.
 #   # Create /opt/hanmaum-dn-server/.env and .env.staging with real values
 #
 # Go to Settings → Environments → production and add required reviewers
@@ -101,7 +101,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "docker-compose.prod.yml,docker-compose.caddy.yml,docker-compose.staging.yml,infrastructure"
+          source: "docker-compose.prod.yml,docker-compose.staging.yml,infrastructure"
           target: ${{ env.DEPLOY_DIR }}
 
       - name: Deploy via SSH
@@ -119,16 +119,16 @@ jobs:
 
             echo "$GHCR_TOKEN" | docker login ghcr.io -u sjinkim --password-stdin
 
-            # Ensure the shared proxy network exists (idempotent)
-            docker network create caddy-proxy 2>/dev/null || true
+            # Application deploys consume the shared edge contract but never
+            # create, recreate, or reload Caddy.
+            docker network inspect caddy-proxy > /dev/null
+            docker inspect --format='{{.State.Running}}' hanmaum-caddy | grep -q true
+            EDGE_OWNER=$(docker inspect --format='{{index .Config.Labels "graceops.edge.owner"}}' hanmaum-caddy)
+            test -z "$EDGE_OWNER" -o "$EDGE_OWNER" = "graceops-edge" \
+              || { echo "Unexpected shared edge owner: $EDGE_OWNER"; exit 1; }
             docker network create observability 2>/dev/null || true
 
             cd /opt/hanmaum-dn-server
-
-            # The observability repository owns optional Caddy routes. Create
-            # the bind source before Docker starts Caddy so it is not created
-            # as a root-owned directory by the daemon.
-            mkdir -p /opt/hanmaum-service-observability/caddy/generated
 
             # Offsite backup is prepared 1-2 weeks before real production launch.
             # It remains optional during pre-production development, then becomes
@@ -144,16 +144,6 @@ jobs:
             else
               echo "::warning::Offsite backup gate is not active. Complete PRODUCTION_READINESS.md 1-2 weeks before launch."
             fi
-
-            # Caddy handles routing for both prod and staging — refresh first
-            docker compose \
-              --env-file .env \
-              --env-file .env.staging \
-              --project-name hanmaum-caddy \
-              -f docker-compose.caddy.yml \
-              up -d
-            docker exec hanmaum-caddy \
-              caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
 
             # Deploy prod stack
             export BACKEND_IMAGE

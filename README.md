@@ -182,10 +182,16 @@ the DN server integration:
 - Keycloak metrics on its private management port `9000`
 - staging PostgreSQL metrics through a least-privileged `postgres_exporter`
 - structured Docker logs with stable service/environment labels
-- a generic Caddy import mount for routes owned by infrastructure repositories
+- attachment of public services to the externally managed `caddy-proxy` network
 
-Prometheus/Loki ports are never published, and Caddy continues to block public
-access to `/actuator/prometheus`.
+The shared Caddy runtime and all public routes are owned by the separate
+`graceops-edge` repository. DN deployment workflows only assert that the
+shared proxy is available; they never create, recreate, or reload it. The
+legacy `docker-compose.caddy.yml` and `infrastructure/caddy/Caddyfile` remain
+temporarily as reviewed rollback assets for the ownership migration.
+
+Prometheus/Loki ports are never published, and the central edge continues to
+block public access to `/actuator/prometheus`.
 
 ### Staging PostgreSQL exporter credentials
 

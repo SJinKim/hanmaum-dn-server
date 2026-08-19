@@ -48,6 +48,9 @@ jobs:
       - name: Lint
         run: ./gradlew ktlintCheck --no-daemon
 
+      - name: Verify shared edge ownership contract
+        run: ./scripts/test-shared-edge-ownership.sh
+
       - name: Compile
         run: ./gradlew compileKotlin compileTestKotlin --no-daemon
 
