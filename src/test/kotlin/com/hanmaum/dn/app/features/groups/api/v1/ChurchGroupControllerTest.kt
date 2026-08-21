@@ -20,6 +20,7 @@ import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequ
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
@@ -138,5 +139,25 @@ class ChurchGroupControllerTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(AssignGroupLeaderRequest(memberPublicId.toString()))),
             ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `DELETE leader returns 200 and a vacant group for admin`() {
+        `when`(churchGroupService.clearLeader(eq(groupPublicId)))
+            .thenReturn(ChurchGroupSummaryDto(groupPublicId.toString(), "1구역", "다니엘조"))
+
+        mockMvc
+            .perform(delete("/api/v1/church-groups/$groupPublicId/leader").with(admin()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.publicId").value(groupPublicId.toString()))
+            .andExpect(jsonPath("$.data.leaderPublicId").doesNotExist())
+            .andExpect(jsonPath("$.message").value("그룹 리더가 해제되었습니다."))
+    }
+
+    @Test
+    fun `DELETE leader returns 403 for a plain member`() {
+        mockMvc
+            .perform(delete("/api/v1/church-groups/$groupPublicId/leader").with(jwt()))
+            .andExpect(status().isForbidden)
     }
 }

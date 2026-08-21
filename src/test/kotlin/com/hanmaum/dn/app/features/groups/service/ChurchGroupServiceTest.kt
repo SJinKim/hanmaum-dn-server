@@ -24,8 +24,10 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
 import org.springframework.http.HttpStatus
 import org.springframework.web.server.ResponseStatusException
+import jakarta.persistence.EntityNotFoundException
 import java.time.LocalDate
 import java.util.Optional
+import java.util.UUID
 
 @ExtendWith(MockitoExtension::class)
 class ChurchGroupServiceTest {
@@ -282,5 +284,48 @@ class ChurchGroupServiceTest {
             }
 
         assertEquals(HttpStatus.BAD_REQUEST, ex.statusCode)
+    }
+
+    // ─── clearLeader ──────────────────────────────────────────────────────────
+
+    @Test
+    fun `clearLeader closes the sitting tenure and returns a vacant summary`() {
+        val g = group(id = 1L)
+        val m = member(id = 7L, group = g, lastName = "박", firstName = "민수")
+        val sitting = leader(g, m, LocalDate.of(2026, 1, 15))
+        `when`(churchGroupRepository.findByPublicIdAndDeletedAtIsNull(g.publicId)).thenReturn(Optional.of(g))
+        `when`(groupLeaderRepository.findActiveByGroupId(1L)).thenReturn(sitting)
+        `when`(groupLeaderRepository.save(any<GroupLeader>())).thenAnswer { it.arguments[0] }
+
+        val result = service.clearLeader(g.publicId)
+
+        assertEquals(LocalDate.now(), sitting.endDate)
+        verify(groupLeaderRepository).save(sitting)
+        assertNull(result.leaderPublicId)
+        assertNull(result.leaderName)
+        assertNull(result.leaderSince)
+        assertEquals(g.publicId.toString(), result.publicId)
+    }
+
+    @Test
+    fun `clearLeader is a no-op when the group has no sitting leader`() {
+        val g = group(id = 1L)
+        `when`(churchGroupRepository.findByPublicIdAndDeletedAtIsNull(g.publicId)).thenReturn(Optional.of(g))
+        `when`(groupLeaderRepository.findActiveByGroupId(1L)).thenReturn(null)
+
+        val result = service.clearLeader(g.publicId)
+
+        assertNull(result.leaderPublicId)
+        verify(groupLeaderRepository, never()).save(any<GroupLeader>())
+    }
+
+    @Test
+    fun `clearLeader throws when the group is missing`() {
+        val missing = UUID.randomUUID()
+        `when`(churchGroupRepository.findByPublicIdAndDeletedAtIsNull(missing)).thenReturn(Optional.empty())
+
+        assertThrows<EntityNotFoundException> { service.clearLeader(missing) }
+
+        verify(groupLeaderRepository, never()).save(any<GroupLeader>())
     }
 }
