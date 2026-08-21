@@ -112,6 +112,37 @@ class ChurchGroupService(
         return group.toSummaryDto(assigned)
     }
 
+    /**
+     * Ends the group's current leader tenure, if any. Past tenures are retained.
+     *
+     * Idempotent: a group that already has no sitting leader returns the vacant
+     * summary without writing a row, so a client retry or a double-uncheck cannot 404.
+     *
+     * @throws EntityNotFoundException if the group does not exist
+     */
+    @Transactional
+    fun clearLeader(groupPublicId: UUID): ChurchGroupSummaryDto {
+        val group =
+            churchGroupRepository
+                .findByPublicIdAndDeletedAtIsNull(groupPublicId)
+                .orElseThrow { EntityNotFoundException("Church group not found: $groupPublicId") }
+
+        val current = group.id?.let(groupLeaderRepository::findActiveByGroupId)
+        if (current == null) {
+            log.info("Group leader already vacant groupId={}", group.id)
+            return group.toSummaryDto(null)
+        }
+
+        current.endDate = LocalDate.now()
+        groupLeaderRepository.save(current)
+        log.info(
+            "Cleared group leader groupId={} memberId={}",
+            group.id,
+            current.member.id,
+        )
+        return group.toSummaryDto(null)
+    }
+
     private fun ChurchGroup.toSummaryDto(leader: GroupLeader?): ChurchGroupSummaryDto =
         ChurchGroupSummaryDto(
             publicId = this.publicId.toString(),

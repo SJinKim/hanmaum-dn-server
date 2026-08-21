@@ -7,6 +7,7 @@ import com.hanmaum.dn.app.features.groups.service.ChurchGroupService
 import jakarta.validation.Valid
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PutMapping
@@ -47,5 +48,21 @@ class ChurchGroupController(
     ): ResponseEntity<ApiResponse<ChurchGroupSummaryDto>> {
         val updated = churchGroupService.assignLeader(publicId, request)
         return ResponseEntity.ok(ApiResponse.success(data = updated, message = "그룹 리더가 지정되었습니다."))
+    }
+
+    /**
+     * DELETE /api/v1/church-groups/{publicId}/leader
+     * Role: ADMIN — ends the group's current leader tenure, leaving the group without a 순장.
+     *
+     * Past tenures are retained. A group that already has no sitting leader is a no-op 200
+     * so retries and double-unchecks cannot 404.
+     */
+    @DeleteMapping("/{publicId}/leader")
+    @PreAuthorize("hasRole('ADMIN')")
+    fun clearLeader(
+        @PathVariable publicId: UUID,
+    ): ResponseEntity<ApiResponse<ChurchGroupSummaryDto>> {
+        val updated = churchGroupService.clearLeader(publicId)
+        return ResponseEntity.ok(ApiResponse.success(data = updated, message = "그룹 리더가 해제되었습니다."))
     }
 }
