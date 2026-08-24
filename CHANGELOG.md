@@ -25,6 +25,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Members: restyled list — role/status filter dropdowns, PENDING amber banner, separate Approve/Edit columns, fit-content status badges, `updatedAt` Last Active column
 - Members: restyled detail page — two-column card layout, avatar initials, role + status badges, section headings
 - Members: restyled edit/create page — design token styling, section headings, styled action buttons
+- HDN-YY: Member graduation tracked as a reversible event in `member_graduations` — a member may hold many historical graduations but at most one open, with an audit trail of who marked whom, when, and why (`MARRIAGE`/`RELOCATION`/`AGE_OUT`/`OTHER`)
+- HDN-YY: Graduating snapshots the member's current status and sets them `INACTIVE`, which removes app access through the existing `MemberStatusInterceptor`; reinstating restores the snapshot rather than assuming `ACTIVE`
+- HDN-YY: `graduated` / `graduatedOn` on the member detail and list responses, derived from the open graduation row rather than a stored column so the two can never disagree — the list batches one extra query per page
+- HDN-YY: 양육 마스터 Excel import withdrawn — no member data is taken from the workbook (the training catalog and cohorts remain as seeded static data)
 
 ## [Unreleased]
 

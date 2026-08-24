@@ -26,6 +26,7 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.SummaryTrainingDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMyProfileRequest
 import com.hanmaum.dn.app.features.members.domain.Member
+import com.hanmaum.dn.app.features.members.repository.MemberGraduationRepository
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
 import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
@@ -58,6 +59,7 @@ class MemberService(
     private val memberRepository: MemberRepository,
     private val churchGroupRepository: ChurchGroupRepository,
     private val groupLeaderRepository: GroupLeaderRepository,
+    private val memberGraduationRepository: MemberGraduationRepository,
     private val userTrainingRepository: UserTrainingRepository,
     private val trainingRepository: TrainingRepository,
     private val ministryAssignmentRepository: MinistryAssignmentRepository,
@@ -134,6 +136,14 @@ class MemberService(
                     .findActiveByMemberIds(memberIds)
                     .associate { it.memberId to it.startDate }
             }
+        val graduatedOnByMember: Map<Long, LocalDate> =
+            if (memberIds.isEmpty()) {
+                emptyMap()
+            } else {
+                memberGraduationRepository
+                    .findOpenByMemberIds(memberIds)
+                    .associate { it.memberId to it.graduatedOn }
+            }
 
         return members.map {
             it.toSummaryDto(
@@ -141,6 +151,7 @@ class MemberService(
                 trainings = it.id?.let(trainingsByMember::get).orEmpty(),
                 activeMinistries = it.id?.let(activeMinistriesByMember::get).orEmpty(),
                 groupLeaderSince = it.id?.let(leaderSinceByMember::get),
+                graduatedOn = it.id?.let(graduatedOnByMember::get),
             )
         }
     }
@@ -166,7 +177,7 @@ class MemberService(
         val memberId = member.id!!
         val trainings = userTrainingRepository.findByMemberId(memberId).map { it.toDto() }
         val ministries = ministryAssignmentRepository.findByMemberId(memberId).map { it.toHistoryDto() }
-        return member.toDto(trainings, ministries, groupLeaderSince(memberId))
+        return member.toDto(trainings, ministries, groupLeaderSince(memberId), graduatedOn(memberId))
     }
 
     /**
@@ -178,6 +189,16 @@ class MemberService(
             .findActiveByMemberIds(listOf(memberId))
             .firstOrNull()
             ?.startDate
+
+    /**
+     * Day the member left the community, or null. Reuses the batched query with a single
+     * id — one lookup either way, and one place where "graduated" is decided.
+     */
+    private fun graduatedOn(memberId: Long): LocalDate? =
+        memberGraduationRepository
+            .findOpenByMemberIds(listOf(memberId))
+            .firstOrNull()
+            ?.graduatedOn
 
     /**
      * Replaces a member's entire training set (PUT semantics). Existing rows are
@@ -221,7 +242,7 @@ class MemberService(
 
         val trainings = rows.map { it.toDto() }
         val ministries = ministryAssignmentRepository.findByMemberId(memberId).map { it.toHistoryDto() }
-        return member.toDto(trainings, ministries, groupLeaderSince(memberId))
+        return member.toDto(trainings, ministries, groupLeaderSince(memberId), graduatedOn(memberId))
     }
 
     /**
@@ -263,7 +284,7 @@ class MemberService(
         // Re-read both lists from the DB so the returned detail reflects persisted state.
         val trainings = userTrainingRepository.findByMemberId(memberId).map { it.toDto() }
         val ministries = ministryAssignmentRepository.findByMemberId(memberId).map { it.toHistoryDto() }
-        return member.toDto(trainings, ministries, groupLeaderSince(memberId))
+        return member.toDto(trainings, ministries, groupLeaderSince(memberId), graduatedOn(memberId))
     }
 
     private fun MinistryAssignment.toHistoryDto(): MinistryHistoryDto =

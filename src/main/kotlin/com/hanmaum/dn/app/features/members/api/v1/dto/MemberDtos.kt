@@ -50,6 +50,10 @@ data class MemberDto(
     @Unredacted val isGroupLeader: Boolean = false,
     /** Day the member took over as group leader. Null exactly when [isGroupLeader] is false. */
     @Unredacted val groupLeaderSince: LocalDate? = null,
+    /** True while the member has an open graduation. The dashboard renders this as a tag. */
+    @Unredacted val graduated: Boolean = false,
+    /** Day the member left the community. Null exactly when [graduated] is false. */
+    @Unredacted val graduatedOn: LocalDate? = null,
 )
 
 /** Lightweight DTO used in the paginated list endpoint. */
@@ -77,6 +81,10 @@ data class MemberSummaryDto(
     @Unredacted val isGroupLeader: Boolean = false,
     /** Day the member took over as group leader. Null exactly when [isGroupLeader] is false. */
     @Unredacted val groupLeaderSince: LocalDate? = null,
+    /** True while the member has an open graduation. The dashboard renders this as a tag. */
+    @Unredacted val graduated: Boolean = false,
+    /** Day the member left the community. Null exactly when [graduated] is false. */
+    @Unredacted val graduatedOn: LocalDate? = null,
 )
 
 /**
