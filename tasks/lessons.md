@@ -112,3 +112,39 @@
 ### Keep reusable observability infrastructure in its own repository
 - **Mistake**: Added Grafana, Loki, Alloy, dashboards, and their deployment lifecycle directly to the DN server repository even though the monitoring platform must later serve multiple independent services.
 - **Rule**: Put shared observability infrastructure in a dedicated repository. Application repositories should contain only the minimal integration needed to expose or label their own logs and metrics.
+
+### A data file teaches two separable things; don't import what it already taught
+- **Mistake**: Treated the 양육 마스터 workbook as one feature. It carried two unrelated
+  things: *which courses and cohorts exist* (already extracted into static seed
+  migrations, frozen, never read at runtime) and *who attended what* (436 participation
+  records). Because they were bundled, dropping the person data looked like it would cost
+  the catalog too, and an entire Apache POI pipeline was nearly kept alive for data that
+  was already committed as SQL.
+- **Rule**: When a source file feeds a feature, separate what it *taught* the schema from
+  what it *supplies* at runtime. Anything already frozen into a seed migration needs no
+  importer. Ask which half a change actually removes before assuming the whole pipeline is
+  load-bearing.
+
+### Copy test conventions from surviving code, never from code being deleted
+- **Mistake**: Wrote plan test code using `@WithMockUser`, copied from
+  `TrainingImportAdminControllerTest` — a file the same plan deleted. No surviving web
+  slice test in this repo uses it; all nine use `SecurityMockMvcRequestPostProcessors.jwt()`.
+  `@WithMockUser` never reaches the resource-server chain here, so role tests returned 401
+  instead of 403 — they would have "passed" while proving nothing about authorisation.
+- **Rule**: When writing new tests, grep the convention across tests that will still exist
+  afterwards. A pattern found only in a file you are deleting is not evidence of a
+  convention. For `@WebMvcTest` slices here: `.jwt().authorities(SimpleGrantedAuthority(...))`,
+  and import `SecurityConfig` whenever the controller takes `@AuthenticationPrincipal Jwt`
+  (its argument resolver only exists under `@EnableWebSecurity`, otherwise the request 500s).
+
+### Repair Flyway surgically; the local dev DB holds real work
+- **Mistake risk**: Deleting already-applied migrations invites `make reset`, which is
+  `docker compose down -v` — it would have destroyed 34 members built up by hand in the
+  local dev DB, and the volume is shared by every worktree.
+- **Rule**: Repair instead of reset. Drop the objects the deleted migrations created,
+  `DELETE` their `flyway_schema_history` rows, and `UPDATE` the checksum of any migration
+  edited in place. Flyway's checksum is CRC32 over the file's lines with line terminators
+  stripped — **validate the implementation against two or three unmodified migrations
+  first**; if those match the stored values, the recomputed one is trustworthy. Apply to
+  both the dev DB (`hanmaumApp-db`, 5433) and the test DB (`infrastructure-test-db-1`, 5434).
+
