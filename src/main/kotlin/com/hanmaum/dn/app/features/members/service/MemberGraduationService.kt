@@ -118,13 +118,15 @@ class MemberGraduationService(
         graduation: MemberGraduation,
         memberId: Long,
     ): MemberStatus =
-        runCatching { MemberStatus.valueOf(graduation.previousMemberStatus) }
-            .getOrElse {
+        // Matched by name rather than valueOf-in-a-try: runCatching would swallow every
+        // Throwable, and the only failure worth handling here is a snapshot naming a status
+        // that no longer exists in the enum.
+        MemberStatus.entries.firstOrNull { it.name == graduation.previousMemberStatus }
+            ?: MemberStatus.ACTIVE.also {
                 log.warn(
                     "Unknown previous status on graduation, restoring active memberId={} value={}",
                     memberId,
                     graduation.previousMemberStatus,
                 )
-                MemberStatus.ACTIVE
             }
 }
