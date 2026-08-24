@@ -100,3 +100,7 @@ class EncryptedMentorNameConverter : EncryptedStringConverter("user_training.men
 // Admin-written notes about a member's participation; may name a mentor or another member.
 @Converter
 class EncryptedUserTrainingNoteConverter : EncryptedStringConverter("user_training.note")
+
+// Graduation notes are written by an admin and may name a spouse or another member.
+@Converter
+class EncryptedGraduationNoteConverter : EncryptedStringConverter("member_graduations.note")
