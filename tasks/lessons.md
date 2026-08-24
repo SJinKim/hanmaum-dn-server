@@ -53,6 +53,62 @@
 - **Mistake**: Defined `app.security.allowed-issuers` as a YAML list (`- item`) and injected it via `@Value("\${app.security.allowed-issuers}")` targeting `List<String>`. Spring stores YAML lists as indexed properties (`[0]`, `[1]`), leaving the scalar unresolvable — startup crash, staging down.
 - **Rule**: `@Value` with `List<String>` requires a comma-separated scalar string. Use `allowed-issuers: "a,b,c"` in YAML, not the list syntax. For multi-value properties use `@ConfigurationProperties` if a list is needed. Always add the property to `application-test.yml` so the Spring context test fails fast locally instead of in staging.
 
+### Never group or compare encrypted columns in SQL
+- **Mistake**: Wrote a deduplication script that grouped `temp_members` by
+  `(first_name, last_name, source_file)`. It reported 31 duplicates against local
+  plaintext data — and would have merged genuinely different people who share a name.
+  Worse, the columns are encrypted with AES-GCM under a random nonce, so the same name
+  produces different ciphertext on every write: in staging or production the grouping
+  silently matches nothing.
+- **Rule**: Encrypted columns (`members.*`, `temp_members.*`) may only be tested for
+  NULL / NOT NULL in SQL. Any equality, grouping, ordering or LIKE must go through a
+  deterministic lookup hash (`email_lookup_hash`, `keycloak_lookup_hash`,
+  `identity_lookup_hash`) — that is what those columns exist for. If no hash covers the
+  case, do the comparison in the application after decryption, or add a hash column.
+
+### 양육 마스터 import: measured figures (2026-08-16)
+- 13 sheets: 12 person-per-row sheets totalling **405** rows, plus the 역대제자반 matrix
+  with **84** name cells (18 rows × 8 cohort columns).
+- After cross-sheet deduplication (matrix folded into the dated sheets by name+course):
+  **436 records**, **211 distinct people**, **39 without a birth date**.
+- Those 39 can never be matched automatically and stay in the admin queue under
+  `NEEDS_BIRTHDATE` until someone supplies a birth date — that is the size of the manual
+  workload, and the reason the queue separates that status from `AMBIGUOUS`.
+- 8 cohorts exist: LEGACY 1기 plus POWER 1기–7기 (2019, 2020, 2023, 2024, 2025, 2026).
+
+### Running the full test suite locally needs .env plus a PII override
+- **Mistake**: Ran `./gradlew test -PincludeIntegration` with only the test-DB variables
+  exported and reported a failure; then with the full `.env` and got a *different* set of
+  failures. Neither environment runs the whole suite.
+- **Rule**: The suite has two incompatible groups. `AppApplicationTests` boots the default
+  (dev) profile and needs the complete `.env` including the Keycloak variables, while every
+  `@ActiveProfiles("test")` IT is rejected by `PiiCryptoConfiguration` when local plaintext
+  PII is on. Run the whole suite with:
+  `set -a; . ./.env; set +a; export PII_LOCAL_PLAINTEXT_ENABLED=false; ./gradlew test -PincludeIntegration`
+  Integration tests are excluded without `-PincludeIntegration`. Never conclude a test
+  failure is caused by a code change before checking whether it is this environment split —
+  a missing `${...}` placeholder in the failure message is the tell.
+
+### A state attribute and the class that leads to it are two different things
+- **Mistake**: Saw that `members.baptism` already existed and recommended dropping the
+  세례입교 sheet from the training catalog as "duplicate member state". It is not
+  duplicate: 세례입교 (Baptism & Church Membership Class) is a course newcomers attend
+  in order to be baptised; `members.baptism` records whether the sacrament happened.
+- **Rule**: Before collapsing a proposed entity into an existing column because the
+  names overlap, ask what the church actually does with it. A qualification, the
+  course that grants it, and the record that it happened are separate facts and may
+  all need to exist. Overlapping vocabulary is not evidence of redundant modelling.
+
+### Verify plan claims against the source file, not just the schema
+- **Mistake**: Would have implemented a training-import plan whose cohort unique key
+  (`training_id, label`) silently split one real cohort into two, because two sheets
+  spell the same cohort `파워3기` and `청년파워제자반 3기 (2020)`.
+- **Rule**: When a plan describes data that lives in an external file (Excel, CSV,
+  export), probe the file's real structure before accepting the plan's schema — sheet
+  list, header positions, per-column fill rates, value formats, and overlaps between
+  sheets. Read it structurally (unzip + parse XML) so no PII is printed. Row counts and
+  column headers routinely contradict the plan's assumptions.
+
 ### Keep reusable observability infrastructure in its own repository
 - **Mistake**: Added Grafana, Loki, Alloy, dashboards, and their deployment lifecycle directly to the DN server repository even though the monitoring platform must later serve multiple independent services.
 - **Rule**: Put shared observability infrastructure in a dedicated repository. Application repositories should contain only the minimal integration needed to expose or label their own logs and metrics.

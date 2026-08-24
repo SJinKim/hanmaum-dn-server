@@ -98,3 +98,15 @@ DEPLOYMENT.md
 CLAUDE.local.md
 dev-log.md
 dev-log-*.md
+
+# Personal working notes / task lists — never tracked
+.claude/TODO*.md
+.claude/todo*.md
+
+# --- Source data exports (contain PII, never commit) ---
+# Member spreadsheets carry names, birth dates and contact data.
+*.xlsx
+*.xls
+*.csv
+# Exception: anonymised test fixtures (see .claude/TODO.md Phase 0.4) carry no PII.
+!src/test/resources/fixtures/*.csv
