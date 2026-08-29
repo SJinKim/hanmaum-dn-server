@@ -5,6 +5,8 @@ import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.members.domain.Member
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
 import jakarta.persistence.FetchType
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
@@ -28,5 +30,12 @@ class EventRsvpLog(
     @JoinColumn(name = "group_id_at_rsvp")
     val groupAtRsvp: ChurchGroup? = null,
     @Column(name = "checked_in_at", nullable = false)
-    val checkedInAt: Instant,
+    var checkedInAt: Instant,
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 16)
+    var status: RsvpStatus = RsvpStatus.GOING,
+    @Column(name = "reminder_count", nullable = false)
+    var reminderCount: Int = 0,
+    @Column(name = "last_reminded_at")
+    var lastRemindedAt: Instant? = null,
 ) : BaseEntity()

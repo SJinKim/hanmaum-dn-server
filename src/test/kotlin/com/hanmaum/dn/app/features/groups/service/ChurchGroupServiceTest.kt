@@ -8,6 +8,7 @@ import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
 import com.hanmaum.dn.app.features.groups.repository.GroupLeaderRepository
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import jakarta.persistence.EntityNotFoundException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertSame
@@ -24,7 +25,6 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
 import org.springframework.http.HttpStatus
 import org.springframework.web.server.ResponseStatusException
-import jakarta.persistence.EntityNotFoundException
 import java.time.LocalDate
 import java.util.Optional
 import java.util.UUID

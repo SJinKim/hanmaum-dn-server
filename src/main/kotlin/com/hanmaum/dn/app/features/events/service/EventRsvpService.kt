@@ -5,13 +5,16 @@ import com.hanmaum.dn.app.features.announcements.repository.AnnouncementReposito
 import com.hanmaum.dn.app.features.events.api.toActiveDto
 import com.hanmaum.dn.app.features.events.api.toAttendeeDto
 import com.hanmaum.dn.app.features.events.api.toDto
+import com.hanmaum.dn.app.features.events.api.toResponseDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.ActiveEventRsvpDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.CreateEventRsvpRequest
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventAttendeesResponse
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventCheckInResponse
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpDto
+import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpResponseDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.UpdateEventRsvpRequest
 import com.hanmaum.dn.app.features.events.domain.EventRsvp
+import com.hanmaum.dn.app.features.events.domain.RsvpStatus
 import com.hanmaum.dn.app.features.events.repository.EventRsvpLogRepository
 import com.hanmaum.dn.app.features.events.repository.EventRsvpRepository
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
@@ -100,7 +103,18 @@ class EventRsvpService(
     }
 
     @Transactional(readOnly = true)
-    fun getActiveRsvps(): List<ActiveEventRsvpDto> = eventRsvpRepo.findActiveNow(OffsetDateTime.now(clock)).map { it.toActiveDto() }
+    fun getActiveRsvps(keycloakSub: String): List<ActiveEventRsvpDto> {
+        val member = findMember(keycloakSub)
+        val rsvps = eventRsvpRepo.findActiveNow(OffsetDateTime.now(clock))
+        if (rsvps.isEmpty()) {
+            return emptyList()
+        }
+        val responsesByRsvpId =
+            eventRsvpLogRepo
+                .findAllByEventRsvpIdInAndMemberIdAndDeletedAtIsNull(rsvps.map { it.id!! }, member.id!!)
+                .associateBy { it.eventRsvp.id!! }
+        return rsvps.map { it.toActiveDto(responsesByRsvpId[it.id!!]) }
+    }
 
     @Transactional(readOnly = true)
     fun listAllRsvps(): List<EventRsvpDto> = eventRsvpRepo.findAllNotDeleted().map { it.toDto() }
@@ -110,36 +124,41 @@ class EventRsvpService(
         publicId: UUID,
         keycloakSub: String,
     ): EventCheckInResponse {
-        val member =
-            memberRepo.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)
-                ?: throw EntityNotFoundException("Member not found for subject: $keycloakSub")
+        val response = setResponse(publicId, keycloakSub, RsvpStatus.GOING)
+        return EventCheckInResponse(
+            eventPublicId = response.eventPublicId,
+            eventTitle = response.eventTitle,
+            checkedInAt = response.respondedAt,
+        )
+    }
+
+    @Transactional
+    fun setResponse(
+        publicId: UUID,
+        keycloakSub: String,
+        status: RsvpStatus,
+    ): EventRsvpResponseDto {
+        val member = findMember(keycloakSub)
         val rsvp =
             eventRsvpRepo
                 .findByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow { EntityNotFoundException("EventRsvp not found: $publicId") }
-        if (!rsvp.isActive) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "비활성화된 RSVP입니다.")
-        }
+        validateResponseWindow(rsvp)
         val now = OffsetDateTime.now(clock)
-        if (now.isBefore(rsvp.windowStart) || !now.isBefore(rsvp.windowEnd)) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "현재 RSVP 신청 기간이 아닙니다.")
-        }
-        val inserted =
-            eventRsvpLogRepo.insertIfAbsent(
+        val affectedRows =
+            eventRsvpLogRepo.upsertResponse(
                 publicId = UUID.randomUUID(),
                 eventRsvpId = rsvp.id!!,
                 memberId = member.id!!,
                 groupId = member.group?.id,
-                checkedInAt = now.toInstant(),
+                respondedAt = now,
+                status = status.name,
             )
-        if (inserted == 0) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "이미 RSVP 신청했습니다.")
-        }
-        return EventCheckInResponse(
-            eventPublicId = rsvp.publicId.toString(),
-            eventTitle = rsvp.title,
-            checkedInAt = now,
-        )
+        check(affectedRows == 1) { "RSVP response upsert affected an unexpected number of rows: $affectedRows" }
+        return eventRsvpLogRepo
+            .findByEventRsvpIdAndMemberIdAndDeletedAtIsNull(rsvp.id!!, member.id!!)
+            ?.toResponseDto()
+            ?: throw IllegalStateException("RSVP response is missing after a successful upsert")
     }
 
     @Transactional(readOnly = true)
@@ -153,7 +172,24 @@ class EventRsvpService(
             eventPublicId = rsvp.publicId.toString(),
             eventTitle = rsvp.title,
             totalCount = logs.size,
+            goingCount = logs.count { it.status == RsvpStatus.GOING },
+            notGoingCount = logs.count { it.status == RsvpStatus.NOT_GOING },
+            maybeCount = logs.count { it.status == RsvpStatus.MAYBE },
             attendees = logs.map { it.toAttendeeDto() },
         )
+    }
+
+    private fun findMember(keycloakSub: String) =
+        memberRepo.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)
+            ?: throw EntityNotFoundException("Member not found for authenticated subject")
+
+    private fun validateResponseWindow(rsvp: EventRsvp) {
+        if (!rsvp.isActive) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "비활성화된 RSVP입니다.")
+        }
+        val now = OffsetDateTime.now(clock)
+        if (now.isBefore(rsvp.windowStart) || !now.isBefore(rsvp.windowEnd)) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "현재 RSVP 신청 기간이 아닙니다.")
+        }
     }
 }
