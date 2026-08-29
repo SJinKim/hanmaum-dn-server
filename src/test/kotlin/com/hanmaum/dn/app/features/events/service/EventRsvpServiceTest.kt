@@ -7,6 +7,7 @@ import com.hanmaum.dn.app.features.events.api.v1.dto.CreateEventRsvpRequest
 import com.hanmaum.dn.app.features.events.api.v1.dto.UpdateEventRsvpRequest
 import com.hanmaum.dn.app.features.events.domain.EventRsvp
 import com.hanmaum.dn.app.features.events.domain.EventRsvpLog
+import com.hanmaum.dn.app.features.events.domain.RsvpStatus
 import com.hanmaum.dn.app.features.events.repository.EventRsvpLogRepository
 import com.hanmaum.dn.app.features.events.repository.EventRsvpRepository
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
@@ -113,6 +114,22 @@ class EventRsvpServiceTest {
         setField(m, Member::class.java, "keycloakId", keycloakId)
         return m
     }
+
+    private fun makeLog(
+        rsvp: EventRsvp,
+        member: Member,
+        group: ChurchGroup? = member.group,
+        status: RsvpStatus = RsvpStatus.GOING,
+        respondedAt: Instant = fixedInstant,
+        reminderCount: Int = 0,
+    ) = EventRsvpLog(
+        eventRsvp = rsvp,
+        member = member,
+        groupAtRsvp = group,
+        checkedInAt = respondedAt,
+        status = status,
+        reminderCount = reminderCount,
+    )
 
     private fun setId(
         entity: Any,
@@ -319,10 +336,12 @@ class EventRsvpServiceTest {
 
     @Test
     fun `getActiveRsvps returns only events with open window`() {
+        val member = makeMember()
         val active = makeRsvp(title = "열린 행사")
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
         `when`(eventRsvpRepo.findActiveNow(now)).thenReturn(listOf(active))
 
-        val result = service.getActiveRsvps()
+        val result = service.getActiveRsvps("kc-001")
 
         assertEquals(1, result.size)
         assertEquals("열린 행사", result[0].title)
@@ -330,32 +349,70 @@ class EventRsvpServiceTest {
 
     @Test
     fun `getActiveRsvps exposes linked announcement public id`() {
+        val member = makeMember()
         val announcement = makeAnnouncement()
         val active = makeRsvp(announcement = announcement)
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
         `when`(eventRsvpRepo.findActiveNow(now)).thenReturn(listOf(active))
 
-        val result = service.getActiveRsvps()
+        val result = service.getActiveRsvps("kc-001")
 
         assertEquals(announcement.publicId, result[0].announcementId)
     }
 
     @Test
     fun `getActiveRsvps returns null announcementId when RSVP is standalone`() {
+        val member = makeMember()
         val active = makeRsvp(announcement = null)
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
         `when`(eventRsvpRepo.findActiveNow(now)).thenReturn(listOf(active))
 
-        val result = service.getActiveRsvps()
+        val result = service.getActiveRsvps("kc-001")
 
         assertNull(result[0].announcementId)
     }
 
     @Test
     fun `getActiveRsvps returns empty list when no window is open`() {
+        val member = makeMember()
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
         `when`(eventRsvpRepo.findActiveNow(now)).thenReturn(emptyList())
 
-        val result = service.getActiveRsvps()
+        val result = service.getActiveRsvps("kc-001")
 
         assertEquals(0, result.size)
+        verify(eventRsvpLogRepo, never()).findAllByEventRsvpIdInAndMemberIdAndDeletedAtIsNull(any(), any())
+    }
+
+    @Test
+    fun `getActiveRsvps returns null status and response time when member has not responded`() {
+        val member = makeMember()
+        val active = makeRsvp()
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
+        `when`(eventRsvpRepo.findActiveNow(now)).thenReturn(listOf(active))
+        `when`(eventRsvpLogRepo.findAllByEventRsvpIdInAndMemberIdAndDeletedAtIsNull(listOf(1L), 1L))
+            .thenReturn(emptyList())
+
+        val result = service.getActiveRsvps("kc-001").single()
+
+        assertNull(result.myStatus)
+        assertNull(result.respondedAt)
+    }
+
+    @Test
+    fun `getActiveRsvps returns each explicit response status`() {
+        val member = makeMember()
+        val rsvps = RsvpStatus.entries.mapIndexed { index, _ -> makeRsvp(id = index + 1L) }
+        val logs = rsvps.zip(RsvpStatus.entries).map { (rsvp, status) -> makeLog(rsvp, member, status = status) }
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
+        `when`(eventRsvpRepo.findActiveNow(now)).thenReturn(rsvps)
+        `when`(eventRsvpLogRepo.findAllByEventRsvpIdInAndMemberIdAndDeletedAtIsNull(listOf(1L, 2L, 3L), 1L))
+            .thenReturn(logs)
+
+        val result = service.getActiveRsvps("kc-001")
+
+        assertEquals(RsvpStatus.entries, result.map { it.myStatus })
+        result.forEach { assertEquals(fixedInstant, it.respondedAt?.toInstant()) }
     }
 
     // ─── checkIn ──────────────────────────────────────────────────────────────
@@ -365,28 +422,32 @@ class EventRsvpServiceTest {
         val group = makeGroup()
         val member = makeMember(group = group)
         val rsvp = makeRsvp()
+        val log = makeLog(rsvp, member, group)
         `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
         `when`(eventRsvpRepo.findByPublicIdAndDeletedAtIsNull(rsvp.publicId)).thenReturn(Optional.of(rsvp))
-        `when`(eventRsvpLogRepo.insertIfAbsent(any(), eq(1L), eq(1L), eq(7L), any())).thenReturn(1)
+        `when`(eventRsvpLogRepo.upsertResponse(any(), eq(1L), eq(1L), eq(7L), eq(now), eq("GOING"))).thenReturn(1)
+        `when`(eventRsvpLogRepo.findByEventRsvpIdAndMemberIdAndDeletedAtIsNull(1L, 1L)).thenReturn(log)
 
         val result = service.checkIn(rsvp.publicId, "kc-001")
 
         assertEquals(rsvp.publicId.toString(), result.eventPublicId)
         assertEquals("여름 수련회", result.eventTitle)
-        verify(eventRsvpLogRepo).insertIfAbsent(any(), eq(1L), eq(1L), eq(7L), any())
+        verify(eventRsvpLogRepo).upsertResponse(any(), eq(1L), eq(1L), eq(7L), eq(now), eq("GOING"))
     }
 
     @Test
     fun `checkIn captures null group when member has no group`() {
         val member = makeMember()
         val rsvp = makeRsvp()
+        val log = makeLog(rsvp, member)
         `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
         `when`(eventRsvpRepo.findByPublicIdAndDeletedAtIsNull(rsvp.publicId)).thenReturn(Optional.of(rsvp))
-        `when`(eventRsvpLogRepo.insertIfAbsent(any(), eq(1L), eq(1L), eq(null), any())).thenReturn(1)
+        `when`(eventRsvpLogRepo.upsertResponse(any(), eq(1L), eq(1L), eq(null), eq(now), eq("GOING"))).thenReturn(1)
+        `when`(eventRsvpLogRepo.findByEventRsvpIdAndMemberIdAndDeletedAtIsNull(1L, 1L)).thenReturn(log)
 
         service.checkIn(rsvp.publicId, "kc-001")
 
-        verify(eventRsvpLogRepo).insertIfAbsent(any(), eq(1L), eq(1L), eq(null), any())
+        verify(eventRsvpLogRepo).upsertResponse(any(), eq(1L), eq(1L), eq(null), eq(now), eq("GOING"))
     }
 
     @Test
@@ -399,7 +460,7 @@ class EventRsvpServiceTest {
         val ex = assertThrows<ResponseStatusException> { service.checkIn(rsvp.publicId, "kc-001") }
 
         assertEquals(400, ex.statusCode.value())
-        verify(eventRsvpLogRepo, never()).insertIfAbsent(any(), any(), any(), any(), any())
+        verify(eventRsvpLogRepo, never()).upsertResponse(any(), any(), any(), any(), any(), any())
     }
 
     @Test
@@ -412,7 +473,7 @@ class EventRsvpServiceTest {
         val ex = assertThrows<ResponseStatusException> { service.checkIn(rsvp.publicId, "kc-001") }
 
         assertEquals(400, ex.statusCode.value())
-        verify(eventRsvpLogRepo, never()).insertIfAbsent(any(), any(), any(), any(), any())
+        verify(eventRsvpLogRepo, never()).upsertResponse(any(), any(), any(), any(), any(), any())
     }
 
     @Test
@@ -425,20 +486,23 @@ class EventRsvpServiceTest {
         val ex = assertThrows<ResponseStatusException> { service.checkIn(rsvp.publicId, "kc-001") }
 
         assertEquals(400, ex.statusCode.value())
-        verify(eventRsvpLogRepo, never()).insertIfAbsent(any(), any(), any(), any(), any())
+        verify(eventRsvpLogRepo, never()).upsertResponse(any(), any(), any(), any(), any(), any())
     }
 
     @Test
-    fun `checkIn returns 409 when member has already RSVPed`() {
+    fun `checkIn is idempotent when member is already going`() {
         val member = makeMember()
         val rsvp = makeRsvp()
+        val log = makeLog(rsvp, member)
         `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
         `when`(eventRsvpRepo.findByPublicIdAndDeletedAtIsNull(rsvp.publicId)).thenReturn(Optional.of(rsvp))
-        `when`(eventRsvpLogRepo.insertIfAbsent(any(), eq(1L), eq(1L), eq(null), any())).thenReturn(0)
+        `when`(eventRsvpLogRepo.upsertResponse(any(), eq(1L), eq(1L), eq(null), eq(now), eq("GOING"))).thenReturn(1)
+        `when`(eventRsvpLogRepo.findByEventRsvpIdAndMemberIdAndDeletedAtIsNull(1L, 1L)).thenReturn(log)
 
-        val ex = assertThrows<ResponseStatusException> { service.checkIn(rsvp.publicId, "kc-001") }
+        val result = service.checkIn(rsvp.publicId, "kc-001")
 
-        assertEquals(409, ex.statusCode.value())
+        assertEquals(RsvpStatus.GOING, log.status)
+        assertEquals(fixedInstant, result.checkedInAt.toInstant())
     }
 
     @Test
@@ -448,30 +512,94 @@ class EventRsvpServiceTest {
 
         assertThrows<EntityNotFoundException> { service.checkIn(rsvp.publicId, "unknown") }
 
-        verify(eventRsvpLogRepo, never()).insertIfAbsent(any(), any(), any(), any(), any())
+        verify(eventRsvpLogRepo, never()).upsertResponse(any(), any(), any(), any(), any(), any())
+    }
+
+    // ─── setResponse ─────────────────────────────────────────────────────────
+
+    @Test
+    fun `setResponse accepts each status`() {
+        RsvpStatus.entries.forEach { status ->
+            val member = makeMember()
+            val rsvp = makeRsvp()
+            val log = makeLog(rsvp, member, status = status)
+            `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
+            `when`(eventRsvpRepo.findByPublicIdAndDeletedAtIsNull(rsvp.publicId)).thenReturn(Optional.of(rsvp))
+            `when`(eventRsvpLogRepo.upsertResponse(any(), eq(1L), eq(1L), eq(null), eq(now), eq(status.name)))
+                .thenReturn(1)
+            `when`(eventRsvpLogRepo.findByEventRsvpIdAndMemberIdAndDeletedAtIsNull(1L, 1L)).thenReturn(log)
+
+            val result = service.setResponse(rsvp.publicId, "kc-001", status)
+
+            assertEquals(status, result.status)
+            assertEquals(fixedInstant, result.respondedAt.toInstant())
+        }
+    }
+
+    @Test
+    fun `setResponse allows status changes`() {
+        val member = makeMember()
+        val rsvp = makeRsvp()
+        val updatedLog = makeLog(rsvp, member, status = RsvpStatus.NOT_GOING)
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
+        `when`(eventRsvpRepo.findByPublicIdAndDeletedAtIsNull(rsvp.publicId)).thenReturn(Optional.of(rsvp))
+        `when`(eventRsvpLogRepo.upsertResponse(any(), eq(1L), eq(1L), eq(null), eq(now), eq("NOT_GOING")))
+            .thenReturn(1)
+        `when`(eventRsvpLogRepo.findByEventRsvpIdAndMemberIdAndDeletedAtIsNull(1L, 1L)).thenReturn(updatedLog)
+
+        val result = service.setResponse(rsvp.publicId, "kc-001", RsvpStatus.NOT_GOING)
+
+        assertEquals(RsvpStatus.NOT_GOING, result.status)
+    }
+
+    @Test
+    fun `setResponse keeps reminder count when changing away from maybe`() {
+        val member = makeMember()
+        val rsvp = makeRsvp()
+        val updatedLog = makeLog(rsvp, member, status = RsvpStatus.GOING, reminderCount = 2)
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
+        `when`(eventRsvpRepo.findByPublicIdAndDeletedAtIsNull(rsvp.publicId)).thenReturn(Optional.of(rsvp))
+        `when`(eventRsvpLogRepo.upsertResponse(any(), eq(1L), eq(1L), eq(null), eq(now), eq("GOING"))).thenReturn(1)
+        `when`(eventRsvpLogRepo.findByEventRsvpIdAndMemberIdAndDeletedAtIsNull(1L, 1L)).thenReturn(updatedLog)
+
+        service.setResponse(rsvp.publicId, "kc-001", RsvpStatus.GOING)
+
+        assertEquals(2, updatedLog.reminderCount)
+    }
+
+    @Test
+    fun `setResponse rejects outside response window with existing message`() {
+        val member = makeMember()
+        val rsvp = makeRsvp(windowStart = now.plusMinutes(1), windowEnd = now.plusHours(1))
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
+        `when`(eventRsvpRepo.findByPublicIdAndDeletedAtIsNull(rsvp.publicId)).thenReturn(Optional.of(rsvp))
+
+        val ex = assertThrows<ResponseStatusException> { service.setResponse(rsvp.publicId, "kc-001", RsvpStatus.GOING) }
+
+        assertEquals(400, ex.statusCode.value())
+        assertEquals("현재 RSVP 신청 기간이 아닙니다.", ex.reason)
+        verify(eventRsvpLogRepo, never()).upsertResponse(any(), any(), any(), any(), any(), any())
     }
 
     // ─── getAttendees ─────────────────────────────────────────────────────────
 
     @Test
-    fun `getAttendees returns full list with totalCount`() {
+    fun `getAttendees returns all statuses with per-status counts`() {
         val rsvp = makeRsvp()
         val group = makeGroup()
         val member = makeMember(group = group)
-        val log =
-            EventRsvpLog(
-                eventRsvp = rsvp,
-                member = member,
-                groupAtRsvp = group,
-                checkedInAt = fixedInstant,
-            )
+        val logs = RsvpStatus.entries.map { status -> makeLog(rsvp, member, group, status) }
         `when`(eventRsvpRepo.findByPublicIdAndDeletedAtIsNull(rsvp.publicId)).thenReturn(Optional.of(rsvp))
-        `when`(eventRsvpLogRepo.findAttendeesWithDetails(1L)).thenReturn(listOf(log))
+        `when`(eventRsvpLogRepo.findAttendeesWithDetails(1L)).thenReturn(logs)
 
         val result = service.getAttendees(rsvp.publicId)
 
-        assertEquals(1, result.totalCount)
-        assertEquals(1, result.attendees.size)
+        assertEquals(3, result.totalCount)
+        assertEquals(1, result.goingCount)
+        assertEquals(1, result.notGoingCount)
+        assertEquals(1, result.maybeCount)
+        assertEquals(RsvpStatus.entries, result.attendees.map { it.status })
+        assertEquals(3, result.attendees.size)
         assertEquals("김철수", result.attendees[0].memberName)
         assertEquals("다니엘조", result.attendees[0].groupName)
         assertEquals("청년부", result.attendees[0].groupDivision)

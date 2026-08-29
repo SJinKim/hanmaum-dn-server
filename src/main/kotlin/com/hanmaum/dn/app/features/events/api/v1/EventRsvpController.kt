@@ -6,6 +6,8 @@ import com.hanmaum.dn.app.features.events.api.v1.dto.CreateEventRsvpRequest
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventAttendeesResponse
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventCheckInResponse
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpDto
+import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpResponseDto
+import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpResponseRequest
 import com.hanmaum.dn.app.features.events.api.v1.dto.UpdateEventRsvpRequest
 import com.hanmaum.dn.app.features.events.service.EventRsvpService
 import jakarta.validation.Valid
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.ResponseStatus
@@ -45,10 +48,11 @@ class EventRsvpController(
     fun listRsvps(): ResponseEntity<ApiResponse<List<EventRsvpDto>>> =
         ResponseEntity.ok(ApiResponse.success(data = eventRsvpService.listAllRsvps()))
 
+    /** Lists currently open event RSVPs together with the authenticated member's response. */
     @GetMapping("/active")
     @PreAuthorize("isAuthenticated()")
-    fun getActiveRsvps(): ResponseEntity<ApiResponse<List<ActiveEventRsvpDto>>> =
-        ResponseEntity.ok(ApiResponse.success(data = eventRsvpService.getActiveRsvps()))
+    fun getActiveRsvps(authentication: JwtAuthenticationToken): ResponseEntity<ApiResponse<List<ActiveEventRsvpDto>>> =
+        ResponseEntity.ok(ApiResponse.success(data = eventRsvpService.getActiveRsvps(authentication.token.subject)))
 
     @PatchMapping("/{publicId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'GROUP_LEADER')")
@@ -69,6 +73,7 @@ class EventRsvpController(
         eventRsvpService.deactivateRsvp(publicId)
     }
 
+    /** Backward-compatible shortcut that sets the authenticated member's response to GOING. */
     @PostMapping("/{publicId}/check-in")
     @PreAuthorize("isAuthenticated()")
     fun checkIn(
@@ -80,6 +85,20 @@ class EventRsvpController(
             .status(HttpStatus.CREATED)
             .body(ApiResponse.success(data = response, message = "RSVP 신청 완료."))
     }
+
+    /** Sets or changes the authenticated member's response for an active event RSVP. */
+    @PutMapping("/{publicId}/response")
+    @PreAuthorize("isAuthenticated()")
+    fun setResponse(
+        @PathVariable publicId: UUID,
+        @Valid @RequestBody request: EventRsvpResponseRequest,
+        authentication: JwtAuthenticationToken,
+    ): ResponseEntity<ApiResponse<EventRsvpResponseDto>> =
+        ResponseEntity.ok(
+            ApiResponse.success(
+                data = eventRsvpService.setResponse(publicId, authentication.token.subject, request.status),
+            ),
+        )
 
     @GetMapping("/{publicId}/attendees")
     @PreAuthorize("hasAnyRole('ADMIN', 'GROUP_LEADER')")
