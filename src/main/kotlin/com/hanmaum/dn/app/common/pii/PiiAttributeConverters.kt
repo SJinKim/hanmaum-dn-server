@@ -91,3 +91,16 @@ class EncryptedMinistryNoteConverter : EncryptedStringConverter("ministry_regist
 
 @Converter
 class EncryptedPrayerRequestConverter : EncryptedStringConverter("meeting_attendances.prayer_request")
+
+// The mentor (양육자) of a one-to-one discipleship record, written as free text with
+// honorifics because they may not be a member. A person's name, so encrypted like the rest.
+@Converter
+class EncryptedMentorNameConverter : EncryptedStringConverter("user_training.mentor_name_raw")
+
+// Admin-written notes about a member's participation; may name a mentor or another member.
+@Converter
+class EncryptedUserTrainingNoteConverter : EncryptedStringConverter("user_training.note")
+
+// Graduation notes are written by an admin and may name a spouse or another member.
+@Converter
+class EncryptedGraduationNoteConverter : EncryptedStringConverter("member_graduations.note")

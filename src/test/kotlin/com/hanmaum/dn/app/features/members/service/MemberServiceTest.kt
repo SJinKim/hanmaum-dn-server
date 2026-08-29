@@ -15,6 +15,7 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberMinistriesReq
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMyProfileRequest
 import com.hanmaum.dn.app.features.members.domain.Member
+import com.hanmaum.dn.app.features.members.repository.MemberGraduationRepository
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.ministry.domain.Ministry
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
@@ -61,6 +62,8 @@ class MemberServiceTest {
 
     @Mock private lateinit var groupLeaderRepository: GroupLeaderRepository
 
+    @Mock private lateinit var memberGraduationRepository: MemberGraduationRepository
+
     @Mock private lateinit var userTrainingRepository: UserTrainingRepository
 
     @Mock private lateinit var trainingRepository: TrainingRepository
@@ -88,6 +91,7 @@ class MemberServiceTest {
                 memberRepository,
                 churchGroupRepository,
                 groupLeaderRepository,
+                memberGraduationRepository,
                 userTrainingRepository,
                 trainingRepository,
                 ministryAssignmentRepository,

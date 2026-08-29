@@ -121,6 +121,7 @@ fun Member.toDto(
     trainings: List<UserTrainingDto> = emptyList(),
     ministries: List<MinistryHistoryDto> = emptyList(),
     groupLeaderSince: LocalDate? = null,
+    graduatedOn: LocalDate? = null,
 ): MemberDto =
     MemberDto(
         publicId = this.publicId.toString(),
@@ -148,6 +149,8 @@ fun Member.toDto(
         oneOnOneSignupFilled = this.oneOnOneSignupFilled,
         isGroupLeader = groupLeaderSince != null,
         groupLeaderSince = groupLeaderSince,
+        graduated = graduatedOn != null,
+        graduatedOn = graduatedOn,
     )
 
 /**
@@ -159,6 +162,7 @@ fun Member.toSummaryDto(
     trainings: List<SummaryTrainingDto> = emptyList(),
     activeMinistries: List<String> = emptyList(),
     groupLeaderSince: LocalDate? = null,
+    graduatedOn: LocalDate? = null,
 ): MemberSummaryDto =
     MemberSummaryDto(
         publicId = this.publicId.toString(),
@@ -178,6 +182,8 @@ fun Member.toSummaryDto(
         oneOnOneSignupFilled = this.oneOnOneSignupFilled,
         isGroupLeader = groupLeaderSince != null,
         groupLeaderSince = groupLeaderSince,
+        graduated = graduatedOn != null,
+        graduatedOn = graduatedOn,
     )
 
 /** Minimal identity projection for name pickers. Decryption happens on entity load. */

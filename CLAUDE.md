@@ -61,8 +61,16 @@ Pre-MVP. See `.claude/skills/mvp-focus/` for scope rules.
 - If something goes sideways: STOP immediately, re-plan. Don't push through a broken approach.
 
 ### Subagent Strategy
-- Offload research, exploration, and parallel analysis to subagents.
-- Keep main context window clean — one task per subagent.
+Delegate only when it *shrinks* the main context. The test: would the work generate a lot
+of tool output I don't need to keep?
+
+- **Delegate**: executing one task of a written plan (the plan is the subagent's context,
+  so it starts warm); broad searches where only the conclusion matters; anything whose
+  verification is a command exit code rather than a judgment call.
+- **Do inline**: design decisions, anything touching shared infrastructure (the local
+  Postgres volume is shared across worktrees), and work where I'd have to read the whole
+  diff to trust it — then I've paid for the context twice.
+- One task per subagent, and run them **sequentially**. See the token rules below.
 
 ### Self-Improvement Loop
 - After ANY user correction: append the pattern to `tasks/lessons.md`.
@@ -87,4 +95,9 @@ Pre-MVP. See `.claude/skills/mvp-focus/` for scope rules.
 - `/clear` between unrelated tasks.
 - `/compact` at ~50% context.
 - Reference files as `@path/to/File.kt`, not "look at the codebase".
-- No Agent Teams / parallel sub-agents on Pro — they multiply tokens 3–7×.
+- No Agent Teams / parallel sub-agent fan-out on Pro — several agents starting cold on the
+  same problem re-derive the same context and multiply tokens 3–7×.
+- Sequential subagents are the exception and are often *cheaper* than working inline: the
+  subagent's file reads and tool output stay in its context and are discarded, while inline
+  reads compound in the main context and are re-sent every turn. Use one per task, only for
+  tasks specified well enough that verification is running a command, not reviewing a design.
