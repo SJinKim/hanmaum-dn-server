@@ -2,6 +2,8 @@ package com.hanmaum.dn.app.features.events.repository
 
 import com.hanmaum.dn.app.common.pii.PiiCryptoConfiguration
 import com.hanmaum.dn.app.features.events.domain.EventRsvp
+import com.hanmaum.dn.app.features.events.domain.EventRsvpLog
+import com.hanmaum.dn.app.features.events.domain.RsvpStatus
 import com.hanmaum.dn.app.features.members.domain.Member
 import jakarta.persistence.EntityManager
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -92,6 +94,51 @@ class EventRsvpLogRepositoryIT {
         assertEquals(2, idempotent["reminder_count"])
         assertEquals(changedAt.toEpochSecond().toDouble(), idempotent["responded_at_epoch"])
     }
+
+    @Test
+    fun `reminder candidates include only active future RSVP responses`() {
+        val now = OffsetDateTime.of(2026, 8, 30, 10, 0, 0, 0, ZoneOffset.UTC)
+        val activeMember = persistMember("활성")
+        val deletedMember = persistMember("삭제").also { it.deletedAt = now.toInstant() }
+        val futureRsvp = persistRsvp("미래 행사", now.plusDays(7))
+        val expiredRsvp = persistRsvp("지난 행사", now)
+        val inactiveRsvp = persistRsvp("비활성 행사", now.plusDays(7)).also { it.isActive = false }
+        val expected = persistResponse(futureRsvp, activeMember, RsvpStatus.MAYBE)
+        persistResponse(expiredRsvp, activeMember, RsvpStatus.MAYBE)
+        persistResponse(inactiveRsvp, activeMember, RsvpStatus.MAYBE)
+        persistResponse(futureRsvp, deletedMember, RsvpStatus.MAYBE)
+        persistResponse(futureRsvp, persistMember("응답삭제"), RsvpStatus.MAYBE).deletedAt = now.toInstant()
+        entityManager.flush()
+        entityManager.clear()
+
+        val result = repository.findReminderCandidates(now)
+
+        assertEquals(listOf(expected.publicId), result.map { it.publicId })
+    }
+
+    private fun persistMember(firstName: String): Member = Member(lastName = "김", firstName = firstName).also(entityManager::persist)
+
+    private fun persistRsvp(
+        title: String,
+        windowEnd: OffsetDateTime,
+    ): EventRsvp =
+        EventRsvp(
+            title = title,
+            windowStart = windowEnd.minusDays(30),
+            windowEnd = windowEnd,
+        ).also(entityManager::persist)
+
+    private fun persistResponse(
+        eventRsvp: EventRsvp,
+        member: Member,
+        status: RsvpStatus,
+    ): EventRsvpLog =
+        EventRsvpLog(
+            eventRsvp = eventRsvp,
+            member = member,
+            checkedInAt = eventRsvp.windowStart.toInstant(),
+            status = status,
+        ).also(entityManager::persist)
 
     private fun loadResponse(
         eventRsvpId: Long,

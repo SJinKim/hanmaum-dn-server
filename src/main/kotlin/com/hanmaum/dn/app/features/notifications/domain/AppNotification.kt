@@ -15,10 +15,12 @@ import java.util.UUID
 
 enum class NotificationType {
     ANNOUNCEMENT,
+    EVENT,
 }
 
 enum class NotificationReferenceType {
     ANNOUNCEMENT,
+    EVENT,
 }
 
 @Entity

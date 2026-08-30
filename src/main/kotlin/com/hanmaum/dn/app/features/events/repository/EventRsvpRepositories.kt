@@ -89,6 +89,23 @@ interface EventRsvpLogRepository : JpaRepository<EventRsvpLog, Long> {
     @Query(
         """
         SELECT l FROM EventRsvpLog l
+        JOIN FETCH l.eventRsvp r
+        JOIN FETCH l.member m
+        WHERE r.isActive = true
+          AND r.deletedAt IS NULL
+          AND r.windowEnd > :now
+          AND l.deletedAt IS NULL
+          AND m.deletedAt IS NULL
+        ORDER BY r.windowEnd ASC, l.id ASC
+        """,
+    )
+    fun findReminderCandidates(
+        @Param("now") now: OffsetDateTime,
+    ): List<EventRsvpLog>
+
+    @Query(
+        """
+        SELECT l FROM EventRsvpLog l
         JOIN FETCH l.member
         LEFT JOIN FETCH l.groupAtRsvp
         WHERE l.eventRsvp.id = :eventRsvpId
