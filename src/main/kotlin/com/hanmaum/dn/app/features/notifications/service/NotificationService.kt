@@ -5,6 +5,8 @@ import com.hanmaum.dn.app.features.members.service.MemberService
 import com.hanmaum.dn.app.features.notifications.domain.AppNotification
 import com.hanmaum.dn.app.features.notifications.domain.DevicePlatform
 import com.hanmaum.dn.app.features.notifications.domain.DeviceToken
+import com.hanmaum.dn.app.features.notifications.domain.NotificationReferenceType
+import com.hanmaum.dn.app.features.notifications.domain.NotificationType
 import com.hanmaum.dn.app.features.notifications.repository.AppNotificationRepository
 import com.hanmaum.dn.app.features.notifications.repository.DeviceTokenRepository
 import org.springframework.data.domain.Page
@@ -20,6 +22,7 @@ class NotificationService(
     private val memberService: MemberService,
     private val notificationRepository: AppNotificationRepository,
     private val deviceTokenRepository: DeviceTokenRepository,
+    private val pushSender: PushSender,
 ) {
     private fun caller(
         keycloakSubject: String,
@@ -133,5 +136,50 @@ class NotificationService(
         enabled: Boolean,
     ) {
         caller(keycloakSubject, email).pushEnabled = enabled
+    }
+
+    @Transactional
+    fun sendRsvpReminder(
+        member: Member,
+        eventPublicId: UUID,
+        eventTitle: String,
+    ) {
+        val title = "행사 참석 여부를 알려주세요"
+        val body = "$eventTitle 참석 여부를 다시 확인해 주세요."
+        val notification =
+            notificationRepository.save(
+                AppNotification(
+                    member = member,
+                    type = NotificationType.EVENT,
+                    title = title,
+                    body = body,
+                    referenceType = NotificationReferenceType.EVENT,
+                    referencePublicId = eventPublicId,
+                ),
+            )
+        if (!member.pushEnabled) {
+            return
+        }
+
+        val tokens =
+            deviceTokenRepository
+                .findAllByMemberIdIn(listOf(member.id!!))
+                .map(DeviceToken::token)
+                .distinct()
+        if (tokens.isEmpty()) {
+            return
+        }
+        val badge = notificationRepository.countByMemberIdAndSeenAtIsNull(member.id!!).toInt()
+        val data =
+            mapOf(
+                "type" to NotificationType.EVENT.name,
+                "referenceType" to NotificationReferenceType.EVENT.name,
+                "referencePublicId" to eventPublicId.toString(),
+                "notificationPublicId" to notification.publicId.toString(),
+            )
+        val deadTokens = pushSender.send(tokens, title, body, data, badge)
+        if (deadTokens.isNotEmpty()) {
+            deviceTokenRepository.deleteAllByTokenIn(deadTokens)
+        }
     }
 }

@@ -6,6 +6,7 @@ import com.hanmaum.dn.app.features.members.service.MemberService
 import com.hanmaum.dn.app.features.notifications.domain.AppNotification
 import com.hanmaum.dn.app.features.notifications.domain.DevicePlatform
 import com.hanmaum.dn.app.features.notifications.domain.DeviceToken
+import com.hanmaum.dn.app.features.notifications.domain.NotificationReferenceType
 import com.hanmaum.dn.app.features.notifications.domain.NotificationType
 import com.hanmaum.dn.app.features.notifications.repository.AppNotificationRepository
 import com.hanmaum.dn.app.features.notifications.repository.DeviceTokenRepository
@@ -36,6 +37,9 @@ class NotificationServiceTest {
 
     @Mock
     private lateinit var deviceTokenRepository: DeviceTokenRepository
+
+    @Mock
+    private lateinit var pushSender: PushSender
 
     @InjectMocks
     private lateinit var service: NotificationService
@@ -156,5 +160,51 @@ class NotificationServiceTest {
         service.deleteAll("sub", null)
 
         verify(notificationRepository).deleteAllByMemberId(1L)
+    }
+
+    @Test
+    fun `sendRsvpReminder persists event notification and sends push`() {
+        val member = member()
+        val eventId = UUID.randomUUID()
+        `when`(notificationRepository.save(any<AppNotification>())).thenAnswer { it.arguments[0] }
+        `when`(deviceTokenRepository.findAllByMemberIdIn(listOf(1L))).thenReturn(
+            listOf(DeviceToken(member, "tok", DevicePlatform.ANDROID)),
+        )
+        `when`(notificationRepository.countByMemberIdAndSeenAtIsNull(1L)).thenReturn(2L)
+        `when`(pushSender.send(any(), any(), any(), any(), any())).thenReturn(emptyList())
+
+        service.sendRsvpReminder(member, eventId, "가을 수련회")
+
+        val notification = argumentCaptor<AppNotification>()
+        verify(notificationRepository).save(notification.capture())
+        assertEquals(NotificationType.EVENT, notification.firstValue.type)
+        assertEquals(NotificationReferenceType.EVENT, notification.firstValue.referenceType)
+        assertEquals(eventId, notification.firstValue.referencePublicId)
+        verify(pushSender).send(
+            eq(listOf("tok")),
+            eq("행사 참석 여부를 알려주세요"),
+            eq("가을 수련회 참석 여부를 다시 확인해 주세요."),
+            eq(
+                mapOf(
+                    "type" to "EVENT",
+                    "referenceType" to "EVENT",
+                    "referencePublicId" to eventId.toString(),
+                    "notificationPublicId" to notification.firstValue.publicId.toString(),
+                ),
+            ),
+            eq(2),
+        )
+    }
+
+    @Test
+    fun `sendRsvpReminder stores inbox notification without push when disabled`() {
+        val member = member().also { it.pushEnabled = false }
+        `when`(notificationRepository.save(any<AppNotification>())).thenAnswer { it.arguments[0] }
+
+        service.sendRsvpReminder(member, UUID.randomUUID(), "가을 수련회")
+
+        verify(notificationRepository).save(any<AppNotification>())
+        verify(deviceTokenRepository, never()).findAllByMemberIdIn(any())
+        verify(pushSender, never()).send(any(), any(), any(), any(), any())
     }
 }

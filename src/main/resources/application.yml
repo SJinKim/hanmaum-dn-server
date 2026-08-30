@@ -20,6 +20,10 @@ management:
       exposure:
         include: health,prometheus
 
+hanmaum:
+  rsvp:
+    reminder-offsets: ${HANMAUM_RSVP_REMINDEROFFSETS:P7D}
+
 app:
   pii:
     strict: ${PII_STRICT:false}
