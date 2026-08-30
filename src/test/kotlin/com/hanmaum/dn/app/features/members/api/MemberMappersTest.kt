@@ -379,29 +379,29 @@ class MemberMappersTest {
     }
 
     @Test
-    fun `toResponse exposes the registration date as joinedAt`() {
+    fun `toResponse exposes the registration date`() {
         val member = memberWithId(9L)
         member.registrationDate = LocalDate.of(2024, 3, 17)
 
-        assertEquals(LocalDate.of(2024, 3, 17), member.toResponse().joinedAt)
+        assertEquals(LocalDate.of(2024, 3, 17), member.toResponse().registrationDate)
     }
 
     @Test
-    fun `toResponse maps a missing registration date to a null joinedAt`() {
+    fun `toResponse maps a missing registration date to null`() {
         val member = memberWithId(10L)
         member.registrationDate = null
 
-        assertNull(member.toResponse().joinedAt)
+        assertNull(member.toResponse().registrationDate)
     }
 
     @Test
-    fun `toResponse and toDto report the same date under their own names`() {
+    fun `toResponse and toDto report the same date under the same name`() {
         val member = memberWithId(11L)
         member.registrationDate = LocalDate.of(2024, 3, 17)
 
-        // One column, two DTO field names. If these ever drift apart, the profile's
-        // 함께한 시간 and the admin grid would disagree about the same member.
-        assertEquals(member.toDto().registrationDate, member.toResponse().joinedAt)
+        // One column, one field name across both DTOs. If these ever drift apart, the
+        // profile's 함께한 시간 and the admin grid would disagree about the same member.
+        assertEquals(member.toDto().registrationDate, member.toResponse().registrationDate)
     }
 
     @Test

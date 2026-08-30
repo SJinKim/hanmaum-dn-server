@@ -43,7 +43,7 @@ class MemberProfileControllerTest {
 
     @MockitoBean private lateinit var jwtDecoder: JwtDecoder
 
-    private val joinedAt = LocalDate.of(2024, 3, 17)
+    private val registrationDate = LocalDate.of(2024, 3, 17)
 
     private fun profile() =
         MemberResponse(
@@ -53,7 +53,7 @@ class MemberProfileControllerTest {
             email = "chulsoo@example.com",
             status = MemberStatus.ACTIVE,
             churchRole = "청년부원",
-            joinedAt = joinedAt,
+            registrationDate = registrationDate,
             groupName = "다니엘조",
             division = "2교구",
             birthDate = LocalDate.of(1992, 12, 7),
@@ -65,20 +65,20 @@ class MemberProfileControllerTest {
             .authorities(SimpleGrantedAuthority("ROLE_MEMBER"))
 
     @Test
-    fun `GET members-me returns joinedAt as an ISO date`() {
+    fun `GET members-me returns the registration date as an ISO date`() {
         `when`(memberService.getMemberProfile(eq("kc-001"), any(), any())).thenReturn(profile())
 
         mockMvc
             .perform(get("/api/v1/members/me").with(memberToken()))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.joinedAt").value("2024-03-17"))
+            .andExpect(jsonPath("$.data.registrationDate").value("2024-03-17"))
             // A redacted date field must still serialize; birthDate is the existing proof.
             .andExpect(jsonPath("$.data.birthDate").value("1992-12-07"))
             .andExpect(jsonPath("$.data.publicId").value("pub-1"))
     }
 
     @Test
-    fun `GET members-me omits joinedAt when the member has no registration date`() {
+    fun `GET members-me omits the date when the member has no registration date`() {
         `when`(memberService.getMemberProfile(eq("kc-001"), any(), any()))
             .thenReturn(
                 MemberResponse(
@@ -86,14 +86,14 @@ class MemberProfileControllerTest {
                     firstName = "철수",
                     lastName = "김",
                     status = MemberStatus.ACTIVE,
-                    joinedAt = null,
+                    registrationDate = null,
                 ),
             )
 
         mockMvc
             .perform(get("/api/v1/members/me").with(memberToken()))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.joinedAt").doesNotExist())
+            .andExpect(jsonPath("$.data.registrationDate").doesNotExist())
     }
 
     @Test

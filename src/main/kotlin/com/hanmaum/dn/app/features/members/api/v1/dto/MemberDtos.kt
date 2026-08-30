@@ -137,11 +137,11 @@ data class MemberResponse(
      * Day the member joined the community — the profile's 함께한 시간 figure is the span
      * between this and today.
      *
-     * The same date the admin DTOs call `registrationDate`; it is stored once, on
+     * Same name as on [MemberDto] and the request DTOs, because it is the same column:
      * `members.registration_date`. Redacted like every other date about a person: it is
      * encrypted at rest and must not reach a log through `toString()`.
      */
-    val joinedAt: LocalDate? = null,
+    val registrationDate: LocalDate? = null,
     @Unredacted val groupName: String? = null,
     /** Division of the member's church group (e.g. "2교구"), or null when ungrouped. */
     @Unredacted val division: String? = null,
