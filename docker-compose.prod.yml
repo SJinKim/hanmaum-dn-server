@@ -10,6 +10,8 @@
 #   KEYCLOAK_BACKEND_CLIENT_SECRET — backend service account client secret
 #   BACKEND_IMAGE                  — set by CI: ghcr.io/sjinkim/hanmaum-dn-server:sha-<short>
 #   API_DOMAIN, AUTH_DOMAIN        — public hostnames (used by Caddy, sourced from .env)
+#   HANMAUM_CHURCH_LOCATION_LATITUDE, HANMAUM_CHURCH_LOCATION_LONGITUDE
+#   HANMAUM_CHURCH_LOCATION_RADIUS_METERS — server-controlled geofence configuration
 #
 # Usage:
 #   make prod-up    →  docker compose --project-name hanmaum-prod -f docker-compose.prod.yml up -d

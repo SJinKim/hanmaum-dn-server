@@ -13,13 +13,19 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.servlet.NoHandlerFoundException
+import org.springframework.web.servlet.resource.NoResourceFoundException
 import tools.jackson.module.kotlin.KotlinInvalidNullException
 
 @RestControllerAdvice
 class GlobalExceptionHandler {
     private val logger = LoggerFactory.getLogger(GlobalExceptionHandler::class.java)
 
-    @ExceptionHandler(EntityNotFoundException::class, NoSuchElementException::class, NoHandlerFoundException::class)
+    @ExceptionHandler(
+        EntityNotFoundException::class,
+        NoSuchElementException::class,
+        NoHandlerFoundException::class,
+        NoResourceFoundException::class,
+    )
     fun handleNotFound(e: Exception): ResponseEntity<ErrorResponse> {
         logger.warn("Not found: {}", e.message)
         val response =

@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 import org.springframework.web.server.ResponseStatusException
+import org.springframework.web.servlet.resource.NoResourceFoundException
 import tools.jackson.databind.json.JsonMapper
 import tools.jackson.module.kotlin.KotlinModule
 import java.io.ByteArrayInputStream
@@ -83,5 +84,22 @@ class GlobalExceptionHandlerTest {
         assertEquals(HttpStatus.BAD_REQUEST, response.statusCode)
         val body = assertNotNull(response.body)
         assertEquals("Malformed or missing request body.", body.message)
+    }
+
+    @Test
+    fun `handleNotFound maps a missing static resource to 404`() {
+        val exception =
+            NoResourceFoundException(
+                org.springframework.http.HttpMethod.GET,
+                "api/v1/does-not-exist",
+                "classpath:/static/",
+            )
+
+        val response = handler.handleNotFound(exception)
+
+        assertEquals(HttpStatus.NOT_FOUND, response.statusCode)
+        val body = assertNotNull(response.body)
+        assertEquals(HttpStatus.NOT_FOUND.value(), body.status)
+        assertEquals("Not Found", body.error)
     }
 }
