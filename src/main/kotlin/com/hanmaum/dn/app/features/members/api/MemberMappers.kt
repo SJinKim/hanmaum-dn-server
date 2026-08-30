@@ -202,6 +202,7 @@ fun Member.toResponse(): MemberResponse =
         email = this.email,
         status = this.memberStatus,
         churchRole = this.churchRole,
+        registrationDate = this.registrationDate,
         groupName = this.group?.name,
         division = this.group?.division,
         street = this.street,
