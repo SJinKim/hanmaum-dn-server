@@ -19,6 +19,22 @@ interface AnnouncementRepository : JpaRepository<Announcement, Long> {
     )
     fun findActiveAnnouncements(now: OffsetDateTime): List<Announcement>
 
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(
+        """
+        UPDATE Announcement a
+        SET a.viewCount = a.viewCount + 1
+        WHERE a.publicId = :publicId
+          AND a.deleteEntryAt IS NULL
+          AND a.startAt <= :now
+          AND (a.endAt IS NULL OR a.endAt >= :now)
+        """,
+    )
+    fun incrementActiveViewCount(
+        @Param("publicId") publicId: UUID,
+        @Param("now") now: OffsetDateTime,
+    ): Int
+
     // Admin dashboard: all announcements not scheduled for deletion, regardless of start/end window.
     @Query(
         "SELECT a FROM Announcement a WHERE a.deleteEntryAt IS NULL ORDER BY a.createdAt DESC",

@@ -13,6 +13,9 @@ fun Announcement.toDto() =
         body = this.body,
         startAt = this.startAt.toString(),
         endAt = this.endAt?.toString(),
+        imageUrl = this.imageUrl,
+        location = this.location,
+        viewCount = this.viewCount,
         isPinned = this.isPinned,
         category = this.category.name,
     )
@@ -23,6 +26,8 @@ fun CreateAnnouncementRequest.toEntity() =
         body = this.body,
         startAt = this.startAt,
         endAt = this.endAt,
+        imageUrl = this.imageUrl,
+        location = this.location,
         isPinned = this.isPinned,
         category = AnnouncementCategory.valueOf(this.category),
     )
@@ -32,6 +37,8 @@ fun Announcement.applyUpdate(req: UpdateAnnouncementRequest) {
     this.body = req.body
     this.startAt = req.startAt
     this.endAt = req.endAt
+    this.imageUrl = req.imageUrl
+    this.location = req.location
     this.isPinned = req.isPinned
     this.category = AnnouncementCategory.valueOf(req.category)
 }

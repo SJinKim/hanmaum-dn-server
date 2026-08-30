@@ -24,8 +24,14 @@ class Announcement(
     var startAt: OffsetDateTime,
     @Column(name = "end_at")
     var endAt: OffsetDateTime? = null,
+    @Column(name = "image_url", length = 2048)
+    var imageUrl: String? = null,
+    @Column(length = 255)
+    var location: String? = null,
     @Column(name = "is_pinned")
     var isPinned: Boolean = false,
+    @Column(name = "view_count", nullable = false)
+    var viewCount: Long = 0,
 ) : BaseEntity() {
     @Column(name = "delete_entry_at")
     var deleteEntryAt: Instant? = null
