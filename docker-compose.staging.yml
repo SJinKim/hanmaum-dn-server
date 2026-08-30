@@ -13,6 +13,8 @@
 #   BACKEND_IMAGE_STAGING          — set by CI: ghcr.io/sjinkim/hanmaum-dn-server:sha-<short>
 #   STAGING_API_DOMAIN             — public staging API hostname, e.g. api.staging.graceops.de
 #   APP_SECURITY_KEYCLOAK_PUBLIC_ISSUER — https://auth.graceops.de/realms/<staging-realm>
+#   HANMAUM_CHURCH_LOCATION_LATITUDE, HANMAUM_CHURCH_LOCATION_LONGITUDE
+#   HANMAUM_CHURCH_LOCATION_RADIUS_METERS — server-controlled geofence configuration
 # Server-local monitoring credentials (never commit these files):
 #   ./secrets/staging-postgres-exporter-user
 #   ./secrets/staging-postgres-exporter-password
