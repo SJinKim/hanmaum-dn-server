@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.members.api.v1.dto
 
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
+import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -14,6 +15,7 @@ class MemberDtosRedactionTest {
     private val email = "jane.doe@example.com"
     private val phone = "010-1234-5678"
     private val name = "Doe"
+    private val joinedAt = LocalDate.of(2024, 3, 17)
 
     @Test
     fun `MemberDto toString redacts PII but keeps non-PII fields`() {
@@ -67,12 +69,14 @@ class MemberDtosRedactionTest {
                 email = email,
                 status = MemberStatus.ACTIVE,
                 phoneNumber = phone,
+                joinedAt = joinedAt,
             )
 
         val output = response.toString()
 
         assertFalse(output.contains(email), "email leaked into toString(): $output")
         assertFalse(output.contains(phone), "phone leaked into toString(): $output")
+        assertFalse(output.contains(joinedAt.toString()), "joinedAt leaked into toString(): $output")
         assertTrue(output.contains("pub-3"), "non-PII publicId should still be visible: $output")
         assertTrue(output.contains("ACTIVE"), "non-PII status should still be visible: $output")
     }
