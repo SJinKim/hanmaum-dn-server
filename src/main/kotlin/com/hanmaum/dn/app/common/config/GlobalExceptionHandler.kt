@@ -10,6 +10,7 @@ import org.springframework.security.authorization.AuthorizationDeniedException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.servlet.NoHandlerFoundException
 import tools.jackson.module.kotlin.KotlinInvalidNullException
@@ -66,6 +67,26 @@ class GlobalExceptionHandler {
             is KotlinInvalidNullException -> t
             else -> findKotlinInvalidNull(t.cause)
         }
+
+    /**
+     * A query or path parameter that Spring could not convert to its declared type — a
+     * date written as "yesterday", a UUID that is not one. Without this the generic
+     * handler below turns a client mistake into a 500.
+     *
+     * The parameter name is echoed; its value is not, since it is unvalidated input that
+     * would land verbatim in the response and the log.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException::class)
+    fun handleTypeMismatch(e: MethodArgumentTypeMismatchException): ResponseEntity<ErrorResponse> {
+        logger.warn("Unparseable request parameter: name={} expectedType={}", e.name, e.requiredType?.simpleName)
+        val response =
+            ErrorResponse(
+                status = HttpStatus.BAD_REQUEST.value(),
+                error = "Bad Request",
+                message = "${e.name}: 형식이 올바르지 않습니다.",
+            )
+        return ResponseEntity(response, HttpStatus.BAD_REQUEST)
+    }
 
     @ExceptionHandler(AuthorizationDeniedException::class)
     fun handleAuthorizationDenied(e: AuthorizationDeniedException): ResponseEntity<ErrorResponse> {

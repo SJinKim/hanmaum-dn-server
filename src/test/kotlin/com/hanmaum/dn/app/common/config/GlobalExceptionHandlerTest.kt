@@ -1,14 +1,17 @@
 package com.hanmaum.dn.app.common.config
 
+import org.springframework.core.MethodParameter
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpInputMessage
 import org.springframework.http.HttpStatus
 import org.springframework.http.converter.HttpMessageNotReadableException
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 import org.springframework.web.server.ResponseStatusException
 import tools.jackson.databind.json.JsonMapper
 import tools.jackson.module.kotlin.KotlinModule
 import java.io.ByteArrayInputStream
 import java.io.InputStream
+import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -27,6 +30,22 @@ class GlobalExceptionHandlerTest {
         val firstName: String,
         val lastName: String,
     )
+
+    @Suppress("UNUSED_PARAMETER")
+    private fun sampleHandlerMethod(from: LocalDate) = Unit
+
+    @Test
+    fun `handleTypeMismatch reports a 400 naming the parameter but never its value`() {
+        val parameter = MethodParameter(javaClass.getDeclaredMethod("sampleHandlerMethod", LocalDate::class.java), 0)
+        val exception = MethodArgumentTypeMismatchException("yesterday", LocalDate::class.java, "from", parameter, null)
+
+        val response = handler.handleTypeMismatch(exception)
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.statusCode)
+        val body = assertNotNull(response.body)
+        assertEquals("from: 형식이 올바르지 않습니다.", body.message)
+        assertEquals(false, body.message.contains("yesterday"))
+    }
 
     @Test
     fun `handleResponseStatus preserves status and reason`() {
