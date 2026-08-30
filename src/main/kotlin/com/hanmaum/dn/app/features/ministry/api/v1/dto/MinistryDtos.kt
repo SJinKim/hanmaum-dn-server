@@ -13,7 +13,21 @@ import java.util.UUID
 
 // ─── Response DTOs ────────────────────────────────────────────────────────────
 
-/** Lightweight DTO for list endpoints. */
+/**
+ * Lightweight DTO for list endpoints.
+ *
+ * **The field names here are the frozen wire contract** and deliberately differ from the
+ * `ministries` columns behind them (`name`, `short_description`, `long_description`,
+ * `is_ministry_active`). Both clients read these names; the dashboard also writes them
+ * back on create and update. Renaming a field to match the entity would empty the 사역
+ * list in the app again, which is what HDN-118 reported.
+ *
+ * [isActive] serializes as `isActive`, matching every other DTO here and the attendance
+ * definition the mobile app already consumes. It is pinned by [MinistryWireContractTest]
+ * because the name comes from a serializer default rather than from anything written down,
+ * and because two stale artifacts still claim it is `active`: the generated spec in
+ * hanmaum-dn-ops and the ministry models in the mobile app (see HDN-118).
+ */
 data class MinistrySummaryDto(
     val publicId: String,
     val title: String,
@@ -23,7 +37,11 @@ data class MinistrySummaryDto(
     val isActive: Boolean,
 )
 
-/** Full detail DTO returned by GET /{publicId}. */
+/**
+ * Full detail DTO returned by GET /{publicId}.
+ *
+ * Same frozen wire names as [MinistrySummaryDto]; see the note there.
+ */
 data class MinistryDto(
     val publicId: String,
     val title: String,
@@ -36,6 +54,15 @@ data class MinistryDto(
     val isActive: Boolean,
 )
 
+/**
+ * One named contact for a ministry, in the order an admin arranged them.
+ *
+ * There is no separate leader field on purpose: contact roles vary between ministries and
+ * grow over time, so they are modelled as an ordered role-to-person collection rather than
+ * as role-specific fields. The clients render the first entry as 리더 — see the ordering
+ * test in [MinistryWireContractTest], which makes that position a contract instead of the
+ * assumption HDN-118 flagged.
+ */
 data class MinistryContactDto(
     val role: String,
     val name: String,
