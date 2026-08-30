@@ -117,6 +117,30 @@ interface AttendanceLogRepository : JpaRepository<AttendanceLog, Long> {
         @Param("attendanceDate") attendanceDate: LocalDate,
     ): List<ChurchGroupAttendanceCountView>
 
+    /**
+     * One member's accepted check-ins in a date range, newest first.
+     *
+     * The definition is fetched eagerly because every row is rendered with its title, and
+     * the range is bounded by the caller, so this is a handful of rows rather than a page.
+     * Served by uq_attendance_log, whose leading column is member_id.
+     */
+    @Query(
+        """
+        SELECT l FROM AttendanceLog l
+        JOIN FETCH l.definition
+        WHERE l.member.id = :memberId
+          AND l.attendanceDate BETWEEN :from AND :to
+          AND l.attended = true
+          AND l.deletedAt IS NULL
+        ORDER BY l.attendanceDate DESC
+        """,
+    )
+    fun findMemberLogsBetween(
+        @Param("memberId") memberId: Long,
+        @Param("from") from: LocalDate,
+        @Param("to") to: LocalDate,
+    ): List<AttendanceLog>
+
     @Modifying(clearAutomatically = true)
     @Transactional
     @Query(
