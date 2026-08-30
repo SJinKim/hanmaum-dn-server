@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.training.repository
 
+import com.hanmaum.dn.app.features.training.domain.TrainingStatus
 import com.hanmaum.dn.app.features.training.domain.TrainingVariant
 import com.hanmaum.dn.app.features.training.domain.UserTraining
 import org.springframework.data.jpa.repository.JpaRepository
@@ -62,6 +63,18 @@ interface UserTrainingRepository : JpaRepository<UserTraining, Long> {
         @Param("trainingId") trainingId: Long,
         @Param("variant") variant: TrainingVariant?,
     ): Optional<UserTraining>
+
+    /**
+     * How many members hold one of [statuses] for a course.
+     *
+     * The caller decides which statuses count as "signed up for the run that is open
+     * now" — see TrainingService.REGISTERED_STATUSES. Passing them in keeps that
+     * business rule out of the repository, where a change to it would be invisible.
+     */
+    fun countByTrainingIdAndStatusInAndDeletedAtIsNull(
+        trainingId: Long,
+        statuses: Collection<TrainingStatus>,
+    ): Int
 
     /** Replace-set support: removes a member's existing rows before re-insert. */
     fun deleteByMemberId(memberId: Long)
