@@ -25,14 +25,23 @@ import java.util.UUID
 class AnnouncementController(
     private val announcementService: AnnouncementService,
 ) {
-    // Mobile app feed: only currently-active announcements (date-windowed).
+    /** Returns currently active announcements for the mobile feed and home carousel. */
     @GetMapping
     fun getAnnouncements(): ResponseEntity<ApiResponse<List<AnnouncementDto>>> {
         val data = announcementService.getActiveAnnouncements().map { it.toDto() }
         return ResponseEntity.ok(ApiResponse.success(data = data))
     }
 
-    // Admin dashboard: all not-soft-deleted announcements (regardless of start/end window).
+    /** Returns one active announcement and records a detail view. */
+    @GetMapping("/{publicId}")
+    fun getAnnouncement(
+        @PathVariable publicId: UUID,
+    ): ResponseEntity<ApiResponse<AnnouncementDto>> {
+        val data = announcementService.getActiveAnnouncement(publicId).toDto()
+        return ResponseEntity.ok(ApiResponse.success(data = data))
+    }
+
+    /** Returns all non-deleted announcements for the admin dashboard. */
     @GetMapping("/admin")
     @PreAuthorize("hasRole('ADMIN')")
     fun getAnnouncementsForAdmin(): ResponseEntity<ApiResponse<List<AnnouncementDto>>> {
@@ -40,6 +49,7 @@ class AnnouncementController(
         return ResponseEntity.ok(ApiResponse.success(data = data))
     }
 
+    /** Creates an announcement as an administrator. */
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     fun createAnnouncement(
@@ -49,6 +59,7 @@ class AnnouncementController(
         return ResponseEntity.ok(ApiResponse.success(data = data))
     }
 
+    /** Fully replaces editable announcement data as an administrator. */
     @PutMapping("/{publicId}")
     @PreAuthorize("hasRole('ADMIN')")
     fun updateAnnouncement(
@@ -59,6 +70,7 @@ class AnnouncementController(
         return ResponseEntity.ok(ApiResponse.success(data = data))
     }
 
+    /** Moves an announcement to the admin trash for delayed deletion. */
     @DeleteMapping("/{publicId}")
     @PreAuthorize("hasRole('ADMIN')")
     @ResponseStatus(HttpStatus.NO_CONTENT)

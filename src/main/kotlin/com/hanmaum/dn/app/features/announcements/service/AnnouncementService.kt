@@ -26,6 +26,22 @@ class AnnouncementService(
             OffsetDateTime.now(ZoneId.of("Europe/Berlin")),
         )
 
+    /** Returns an active announcement and atomically records the successful detail view. */
+    @Transactional
+    fun getActiveAnnouncement(publicId: UUID): Announcement {
+        val updatedRows =
+            announcementRepository.incrementActiveViewCount(
+                publicId,
+                OffsetDateTime.now(ZoneId.of("Europe/Berlin")),
+            )
+        if (updatedRows == 0) {
+            throw EntityNotFoundException("Active announcement not found: $publicId")
+        }
+        return announcementRepository
+            .findByPublicIdAndDeleteEntryAtIsNull(publicId)
+            .orElseThrow { EntityNotFoundException("Announcement not found: $publicId") }
+    }
+
     // for Admin Dashboard: all not-soft-deleted announcements
     fun getAllForAdmin(): List<Announcement> = announcementRepository.findAllNotDeleted()
 
