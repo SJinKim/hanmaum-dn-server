@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.ministry.api.v1.dto
 
 import com.fasterxml.jackson.annotation.JsonFormat
+import com.fasterxml.jackson.annotation.JsonProperty
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
@@ -34,6 +35,7 @@ data class MinistrySummaryDto(
     val subtitle: String,
     val imageUrl: String?,
     val contacts: List<MinistryContactDto>,
+    @JsonProperty("isActive")
     val isActive: Boolean,
 )
 
@@ -51,6 +53,7 @@ data class MinistryDto(
     val schedules: List<MinistryScheduleDto>,
     val contacts: List<MinistryContactDto>,
     val imageUrl: String?,
+    @JsonProperty("isActive")
     val isActive: Boolean,
 )
 
@@ -134,6 +137,7 @@ data class UpdateMinistryRequest(
     @field:Size(max = 20, message = "연락처는 최대 20개입니다.")
     val contacts: List<MinistryContactRequest>? = null,
     val imageUrl: String? = null,
+    @JsonProperty("isActive")
     val isActive: Boolean? = null,
 )
 

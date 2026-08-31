@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.carpool.api.v1.dto
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -13,7 +14,9 @@ data class CarDto(
     val departureLocation: String?,
     val departureTime: LocalTime?,
     // UI Helfer
+    @JsonProperty("isFull")
     val isFull: Boolean,
+    @JsonProperty("isJoinedByMe")
     val isJoinedByMe: Boolean, // True, wenn der User, der anfragt, hier drin sitzt
 )
 

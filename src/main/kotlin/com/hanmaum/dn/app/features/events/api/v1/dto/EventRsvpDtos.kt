@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.events.api.v1.dto
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.hanmaum.dn.app.features.events.domain.RsvpStatus
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
@@ -12,6 +13,7 @@ data class EventRsvpDto(
     val title: String,
     val windowStart: OffsetDateTime,
     val windowEnd: OffsetDateTime,
+    @JsonProperty("isActive")
     val isActive: Boolean,
     val announcementPublicId: String?,
 )
@@ -90,6 +92,7 @@ data class UpdateEventRsvpRequest(
     val title: String? = null,
     val windowStart: OffsetDateTime? = null,
     val windowEnd: OffsetDateTime? = null,
+    @JsonProperty("isActive")
     val isActive: Boolean? = null,
     val announcementId: UUID? = null,
 )

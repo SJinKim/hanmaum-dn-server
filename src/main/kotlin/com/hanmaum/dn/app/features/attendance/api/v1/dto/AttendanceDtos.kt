@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.attendance.api.v1.dto
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
@@ -15,6 +16,7 @@ data class DefinitionDto(
     val dayOfWeek: DayOfWeek,
     val windowStart: LocalTime,
     val windowEnd: LocalTime,
+    @JsonProperty("isActive")
     val isActive: Boolean,
 )
 
@@ -72,6 +74,7 @@ data class UpdateDefinitionRequest(
     val dayOfWeek: DayOfWeek? = null,
     val windowStart: LocalTime? = null,
     val windowEnd: LocalTime? = null,
+    @JsonProperty("isActive")
     val isActive: Boolean? = null,
 )
 // CheckInRequest has no body — member resolved entirely from JWT subject.
