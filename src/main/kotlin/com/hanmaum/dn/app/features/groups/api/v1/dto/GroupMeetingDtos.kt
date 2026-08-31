@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.groups.api.v1.dto
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import java.time.OffsetDateTime
 
 // --- RESPONSE (Anzeige) ---
@@ -48,6 +49,7 @@ data class SubmitMeetingReportRequest(
 
 data class ReportEntry(
     val memberId: String, // Public UUID des Mitglieds
+    @get:JsonProperty("isPresent")
     val isPresent: Boolean,
     val prayerRequest: String?,
 )

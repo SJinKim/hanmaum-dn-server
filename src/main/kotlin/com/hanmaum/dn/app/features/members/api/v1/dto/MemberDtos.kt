@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.members.api.v1.dto
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.common.serialization.TrimmingStringConverter
 import dev.zacsweers.redacted.annotations.Redacted
@@ -44,9 +45,11 @@ data class MemberDto(
     @Unredacted val trainings: List<UserTrainingDto> = emptyList(),
     /** Full ministry history, most recent registration period first. */
     @Unredacted val ministries: List<MinistryHistoryDto> = emptyList(),
+    @get:JsonProperty("isNextGroupLeader")
     @Unredacted val isNextGroupLeader: Boolean = false,
     @Unredacted val oneOnOneSignupFilled: Boolean = false,
     /** True while the member currently leads their church group. Unrelated to [isNextGroupLeader]. */
+    @get:JsonProperty("isGroupLeader")
     @Unredacted val isGroupLeader: Boolean = false,
     /** Day the member took over as group leader. Null exactly when [isGroupLeader] is false. */
     @Unredacted val groupLeaderSince: LocalDate? = null,
@@ -75,9 +78,11 @@ data class MemberSummaryDto(
     /** Names of the member's currently-active ministry assignments (end_date IS NULL), sorted. */
     @Unredacted val activeMinistries: List<String> = emptyList(),
     val churchRole: String? = null,
+    @get:JsonProperty("isNextGroupLeader")
     @Unredacted val isNextGroupLeader: Boolean = false,
     @Unredacted val oneOnOneSignupFilled: Boolean = false,
     /** True while the member currently leads their church group. Unrelated to [isNextGroupLeader]. */
+    @get:JsonProperty("isGroupLeader")
     @Unredacted val isGroupLeader: Boolean = false,
     /** Day the member took over as group leader. Null exactly when [isGroupLeader] is false. */
     @Unredacted val groupLeaderSince: LocalDate? = null,
@@ -213,6 +218,7 @@ data class UpdateMemberRequest(
      */
     @Unredacted val groupPublicId: String? = null,
     val profileImageUrl: String? = null,
+    @get:JsonProperty("isNextGroupLeader")
     @Unredacted val isNextGroupLeader: Boolean? = null,
     @Unredacted val oneOnOneSignupFilled: Boolean? = null,
 )

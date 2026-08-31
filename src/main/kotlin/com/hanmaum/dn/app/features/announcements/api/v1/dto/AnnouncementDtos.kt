@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.announcements.api.v1.dto
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import io.swagger.v3.oas.annotations.media.Schema
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -31,6 +32,7 @@ data class AnnouncementDto(
     @field:Schema(types = ["string", "null"])
     val location: String?,
     val viewCount: Long,
+    @get:JsonProperty("isPinned")
     val isPinned: Boolean,
 )
 
@@ -56,6 +58,7 @@ data class CreateAnnouncementRequest(
     val imageUrl: String? = null,
     @field:Schema(types = ["string", "null"])
     val location: String? = null,
+    @get:JsonProperty("isPinned")
     val isPinned: Boolean = false,
     val category: String,
 )
@@ -82,6 +85,7 @@ data class UpdateAnnouncementRequest(
     val imageUrl: String? = null,
     @field:Schema(types = ["string", "null"])
     val location: String? = null,
+    @get:JsonProperty("isPinned")
     val isPinned: Boolean = false,
     val category: String,
 )
