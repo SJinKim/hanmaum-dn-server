@@ -32,7 +32,7 @@ data class AnnouncementDto(
     @field:Schema(types = ["string", "null"])
     val location: String?,
     val viewCount: Long,
-    @JsonProperty("isPinned")
+    @get:JsonProperty("isPinned")
     val isPinned: Boolean,
 )
 
@@ -58,7 +58,7 @@ data class CreateAnnouncementRequest(
     val imageUrl: String? = null,
     @field:Schema(types = ["string", "null"])
     val location: String? = null,
-    @JsonProperty("isPinned")
+    @get:JsonProperty("isPinned")
     val isPinned: Boolean = false,
     val category: String,
 )
@@ -85,7 +85,7 @@ data class UpdateAnnouncementRequest(
     val imageUrl: String? = null,
     @field:Schema(types = ["string", "null"])
     val location: String? = null,
-    @JsonProperty("isPinned")
+    @get:JsonProperty("isPinned")
     val isPinned: Boolean = false,
     val category: String,
 )

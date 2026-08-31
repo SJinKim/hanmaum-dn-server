@@ -13,7 +13,7 @@ data class EventRsvpDto(
     val title: String,
     val windowStart: OffsetDateTime,
     val windowEnd: OffsetDateTime,
-    @JsonProperty("isActive")
+    @get:JsonProperty("isActive")
     val isActive: Boolean,
     val announcementPublicId: String?,
 )
@@ -92,7 +92,7 @@ data class UpdateEventRsvpRequest(
     val title: String? = null,
     val windowStart: OffsetDateTime? = null,
     val windowEnd: OffsetDateTime? = null,
-    @JsonProperty("isActive")
+    @get:JsonProperty("isActive")
     val isActive: Boolean? = null,
     val announcementId: UUID? = null,
 )

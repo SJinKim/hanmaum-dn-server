@@ -14,9 +14,9 @@ data class CarDto(
     val departureLocation: String?,
     val departureTime: LocalTime?,
     // UI Helfer
-    @JsonProperty("isFull")
+    @get:JsonProperty("isFull")
     val isFull: Boolean,
-    @JsonProperty("isJoinedByMe")
+    @get:JsonProperty("isJoinedByMe")
     val isJoinedByMe: Boolean, // True, wenn der User, der anfragt, hier drin sitzt
 )
 

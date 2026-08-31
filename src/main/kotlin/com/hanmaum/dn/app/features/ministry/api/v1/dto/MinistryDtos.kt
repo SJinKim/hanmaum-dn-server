@@ -35,7 +35,7 @@ data class MinistrySummaryDto(
     val subtitle: String,
     val imageUrl: String?,
     val contacts: List<MinistryContactDto>,
-    @JsonProperty("isActive")
+    @get:JsonProperty("isActive")
     val isActive: Boolean,
 )
 
@@ -53,7 +53,7 @@ data class MinistryDto(
     val schedules: List<MinistryScheduleDto>,
     val contacts: List<MinistryContactDto>,
     val imageUrl: String?,
-    @JsonProperty("isActive")
+    @get:JsonProperty("isActive")
     val isActive: Boolean,
 )
 
@@ -137,7 +137,7 @@ data class UpdateMinistryRequest(
     @field:Size(max = 20, message = "연락처는 최대 20개입니다.")
     val contacts: List<MinistryContactRequest>? = null,
     val imageUrl: String? = null,
-    @JsonProperty("isActive")
+    @get:JsonProperty("isActive")
     val isActive: Boolean? = null,
 )
 

@@ -77,7 +77,7 @@ data class TrainingCatalogDto(
     val category: String?,
     val sortOrder: Int,
     val hasCohorts: Boolean,
-    @JsonProperty("isActive")
+    @get:JsonProperty("isActive")
     val isActive: Boolean,
     val prerequisiteCode: String?,
 )

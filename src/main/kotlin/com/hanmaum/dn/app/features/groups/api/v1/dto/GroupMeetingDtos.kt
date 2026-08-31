@@ -49,7 +49,7 @@ data class SubmitMeetingReportRequest(
 
 data class ReportEntry(
     val memberId: String, // Public UUID des Mitglieds
-    @JsonProperty("isPresent")
+    @get:JsonProperty("isPresent")
     val isPresent: Boolean,
     val prayerRequest: String?,
 )

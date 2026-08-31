@@ -16,7 +16,7 @@ data class DefinitionDto(
     val dayOfWeek: DayOfWeek,
     val windowStart: LocalTime,
     val windowEnd: LocalTime,
-    @JsonProperty("isActive")
+    @get:JsonProperty("isActive")
     val isActive: Boolean,
 )
 
@@ -74,7 +74,7 @@ data class UpdateDefinitionRequest(
     val dayOfWeek: DayOfWeek? = null,
     val windowStart: LocalTime? = null,
     val windowEnd: LocalTime? = null,
-    @JsonProperty("isActive")
+    @get:JsonProperty("isActive")
     val isActive: Boolean? = null,
 )
 // CheckInRequest has no body — member resolved entirely from JWT subject.
