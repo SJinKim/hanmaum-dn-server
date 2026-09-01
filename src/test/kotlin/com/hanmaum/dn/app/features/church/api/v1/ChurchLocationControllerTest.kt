@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.context.annotation.Import
+import org.springframework.http.HttpStatus
 import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt
 import org.springframework.test.context.ActiveProfiles
@@ -17,6 +18,7 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import org.springframework.web.server.ResponseStatusException
 import kotlin.test.Test
 
 @WebMvcTest(ChurchLocationController::class, excludeAutoConfiguration = [OAuth2ResourceServerAutoConfiguration::class])
@@ -35,8 +37,8 @@ class ChurchLocationControllerTest {
     fun `GET church location returns client compatible top-level response`() {
         `when`(churchLocationService.getLocation()).thenReturn(
             ChurchLocationResponse(
-                latitude = 50.1281518,
-                longitude = 8.5843494,
+                latitude = 51.1234,
+                longitude = 6.5678,
                 radiusMeters = 100,
             ),
         )
@@ -46,8 +48,8 @@ class ChurchLocationControllerTest {
                 get("/api/v1/church/location")
                     .with(jwt().jwt { it.subject("kc-001") }),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.latitude").value(50.1281518))
-            .andExpect(jsonPath("$.longitude").value(8.5843494))
+            .andExpect(jsonPath("$.latitude").value(51.1234))
+            .andExpect(jsonPath("$.longitude").value(6.5678))
             .andExpect(jsonPath("$.radiusMeters").value(100))
             .andExpect(jsonPath("$.data").doesNotExist())
     }
@@ -60,13 +62,18 @@ class ChurchLocationControllerTest {
     }
 
     @Test
-    fun `GET unknown API route returns not found instead of internal server error`() {
+    fun `GET church location returns 503 with the error shape while the deployment is unconfigured`() {
+        `when`(churchLocationService.getLocation()).thenThrow(
+            ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Church location is not configured."),
+        )
+
         mockMvc
             .perform(
-                get("/api/v1/does-not-exist")
+                get("/api/v1/church/location")
                     .with(jwt().jwt { it.subject("kc-001") }),
-            ).andExpect(status().isNotFound)
-            .andExpect(jsonPath("$.status").value(404))
-            .andExpect(jsonPath("$.error").value("Not Found"))
+            ).andExpect(status().isServiceUnavailable)
+            .andExpect(jsonPath("$.status").value(503))
+            .andExpect(jsonPath("$.error").value("Service Unavailable"))
+            .andExpect(jsonPath("$.message").value("Church location is not configured."))
     }
 }

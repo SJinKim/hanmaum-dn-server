@@ -23,7 +23,13 @@ management:
 hanmaum:
   church:
     location:
-      # Leonhard-Heißwolf-Straße 5, 65936 Frankfurt am Main
+      # Leonhard-Heißwolf-Straße 5, 65936 Frankfurt am Main.
+      # The one congregation this deployment serves, so it is the default rather than
+      # something every host has to repeat. Clearing the variables does NOT disable the
+      # geofence — the defaults below still apply — so a deployment without one sets
+      # enabled to false. Overriding the coordinates is all-or-nothing: two of three is
+      # rejected at startup.
+      enabled: ${HANMAUM_CHURCH_LOCATION_ENABLED:true}
       latitude: ${HANMAUM_CHURCH_LOCATION_LATITUDE:50.1281518}
       longitude: ${HANMAUM_CHURCH_LOCATION_LONGITUDE:8.5843494}
       radius-meters: ${HANMAUM_CHURCH_LOCATION_RADIUS_METERS:100}
