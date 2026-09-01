@@ -6,6 +6,13 @@ import org.springframework.context.annotation.Configuration
 
 @ConfigurationProperties("hanmaum.church.location")
 data class ChurchLocationProperties(
+    /**
+     * Explicit off switch. The coordinates ship as defaults in application.yml, so clearing
+     * the environment variables cannot disable the geofence — the placeholder default still
+     * applies. A deployment without a geofence therefore sets this to false, which is also
+     * the only way the documented 503 is reachable.
+     */
+    val enabled: Boolean = true,
     val latitude: Double? = null,
     val longitude: Double? = null,
     val radiusMeters: Int? = null,
@@ -30,7 +37,7 @@ data class ChurchLocationProperties(
         }
     }
 
-    fun isConfigured(): Boolean = latitude != null && longitude != null && radiusMeters != null
+    fun isConfigured(): Boolean = enabled && latitude != null && longitude != null && radiusMeters != null
 }
 
 @Configuration(proxyBeanMethods = false)
