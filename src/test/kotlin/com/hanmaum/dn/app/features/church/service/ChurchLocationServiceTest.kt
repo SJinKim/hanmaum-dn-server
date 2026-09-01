@@ -1,8 +1,11 @@
 package com.hanmaum.dn.app.features.church.service
 
 import com.hanmaum.dn.app.features.church.config.ChurchLocationProperties
+import org.springframework.http.HttpStatus
+import org.springframework.web.server.ResponseStatusException
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class ChurchLocationServiceTest {
     @Test
@@ -10,16 +13,26 @@ class ChurchLocationServiceTest {
         val service =
             ChurchLocationService(
                 ChurchLocationProperties(
-                    latitude = 50.1281518,
-                    longitude = 8.5843494,
-                    radiusMeters = 100,
+                    latitude = 51.1234,
+                    longitude = 6.5678,
+                    radiusMeters = 125,
                 ),
             )
 
         val result = service.getLocation()
 
-        assertEquals(50.1281518, result.latitude)
-        assertEquals(8.5843494, result.longitude)
-        assertEquals(100, result.radiusMeters)
+        assertEquals(51.1234, result.latitude)
+        assertEquals(6.5678, result.longitude)
+        assertEquals(125, result.radiusMeters)
+    }
+
+    @Test
+    fun `getLocation returns service unavailable while deployment is unconfigured`() {
+        val exception =
+            assertFailsWith<ResponseStatusException> {
+                ChurchLocationService(ChurchLocationProperties()).getLocation()
+            }
+
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, exception.statusCode)
     }
 }

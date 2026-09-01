@@ -21,12 +21,6 @@ management:
         include: health,prometheus
 
 hanmaum:
-  church:
-    location:
-      # Leonhard-Heißwolf-Straße 5, 65936 Frankfurt am Main
-      latitude: ${HANMAUM_CHURCH_LOCATION_LATITUDE:50.1281518}
-      longitude: ${HANMAUM_CHURCH_LOCATION_LONGITUDE:8.5843494}
-      radius-meters: ${HANMAUM_CHURCH_LOCATION_RADIUS_METERS:100}
   rsvp:
     reminder-offsets: ${HANMAUM_RSVP_REMINDEROFFSETS:P7D}
 
