@@ -57,6 +57,7 @@ class MemberProfileControllerTest {
             groupName = "다니엘조",
             division = "2교구",
             birthDate = LocalDate.of(1992, 12, 7),
+            activeMinistries = listOf("미디어팀", "찬양팀"),
         )
 
     private fun memberToken() =
@@ -94,6 +95,40 @@ class MemberProfileControllerTest {
             .perform(get("/api/v1/members/me").with(memberToken()))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.data.registrationDate").doesNotExist())
+    }
+
+    @Test
+    fun `GET members-me returns the active ministries as a JSON array of names`() {
+        `when`(memberService.getMemberProfile(eq("kc-001"), any(), any())).thenReturn(profile())
+
+        mockMvc
+            .perform(get("/api/v1/members/me").with(memberToken()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.activeMinistries").isArray)
+            .andExpect(jsonPath("$.data.activeMinistries.length()").value(2))
+            .andExpect(jsonPath("$.data.activeMinistries[0]").value("미디어팀"))
+            .andExpect(jsonPath("$.data.activeMinistries[1]").value("찬양팀"))
+    }
+
+    @Test
+    fun `GET members-me serializes an empty ministry list rather than omitting it`() {
+        `when`(memberService.getMemberProfile(eq("kc-001"), any(), any()))
+            .thenReturn(
+                MemberResponse(
+                    publicId = "pub-1",
+                    firstName = "철수",
+                    lastName = "김",
+                    status = MemberStatus.ACTIVE,
+                ),
+            )
+
+        // The client shows a dash while nothing is loaded and 0 once it is. An absent field
+        // is indistinguishable from the former, so "in no 사역" has to arrive as [].
+        mockMvc
+            .perform(get("/api/v1/members/me").with(memberToken()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.activeMinistries").isArray)
+            .andExpect(jsonPath("$.data.activeMinistries.length()").value(0))
     }
 
     @Test

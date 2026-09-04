@@ -194,7 +194,11 @@ fun Member.toNameDto(): MemberNameDto =
         discriminator = this.discriminator,
     )
 
-fun Member.toResponse(): MemberResponse =
+/**
+ * Own-profile mapper. [activeMinistries] is derived by the service (the assignment lives in
+ * another aggregate) and passed in, the same way [toDto] takes its trainings and ministries.
+ */
+fun Member.toResponse(activeMinistries: List<String> = emptyList()): MemberResponse =
     MemberResponse(
         publicId = this.publicId.toString(),
         firstName = this.firstName,
@@ -205,6 +209,7 @@ fun Member.toResponse(): MemberResponse =
         registrationDate = this.registrationDate,
         groupName = this.group?.name,
         division = this.group?.division,
+        activeMinistries = activeMinistries,
         street = this.street,
         houseNumber = this.houseNumber,
         zipCode = this.zipCode,

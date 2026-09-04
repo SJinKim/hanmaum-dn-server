@@ -660,6 +660,58 @@ class MemberServiceTest {
     }
 
     @Test
+    fun `getMemberProfile returns the active ministry names sorted, ignoring the history query`() {
+        val keycloakSub = UUID.randomUUID().toString()
+        val member = memberWithId(1L, "철수", "김")
+        member.keycloakId = keycloakSub
+        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(member)
+        `when`(ministryAssignmentRepository.findActiveByMemberIds(listOf(1L)))
+            .thenReturn(listOf(MemberMinistryView(1L, "찬양팀"), MemberMinistryView(1L, "미디어팀")))
+
+        val response = memberService.getMemberProfile(keycloakSub, "found@example.com")
+
+        assertEquals(listOf("미디어팀", "찬양팀"), response.activeMinistries)
+        // findByMemberId is the full history, including ended assignments. Reaching for it
+        // here would silently inflate the profile's 소속 사역 figure with past 사역.
+        verify(ministryAssignmentRepository, never()).findByMemberId(any())
+    }
+
+    @Test
+    fun `getMemberProfile returns an empty list for a member in no ministry`() {
+        val keycloakSub = UUID.randomUUID().toString()
+        val member = memberWithId(1L, "철수", "김")
+        member.keycloakId = keycloakSub
+        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(member)
+        `when`(ministryAssignmentRepository.findActiveByMemberIds(listOf(1L))).thenReturn(emptyList())
+
+        val response = memberService.getMemberProfile(keycloakSub, "found@example.com")
+
+        assertEquals(emptyList<String>(), response.activeMinistries)
+    }
+
+    @Test
+    fun `updateMyProfile also returns the active ministries`() {
+        val keycloakSub = UUID.randomUUID().toString()
+        val member = memberWithId(1L, "철수", "김")
+        member.keycloakId = keycloakSub
+        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(member)
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+        `when`(ministryAssignmentRepository.findActiveByMemberIds(listOf(1L)))
+            .thenReturn(listOf(MemberMinistryView(1L, "찬양팀")))
+
+        // PATCH /me answers with the same DTO as GET /me. If only the GET were filled, the
+        // tile would empty itself the moment the member edits their phone number.
+        val response =
+            memberService.updateMyProfile(
+                keycloakSubject = keycloakSub,
+                email = "found@example.com",
+                request = UpdateMyProfileRequest(city = "서울"),
+            )
+
+        assertEquals(listOf("찬양팀"), response.activeMinistries)
+    }
+
+    @Test
     fun `getMemberProfile falls back to email lookup for legacy records`() {
         val keycloakSub = UUID.randomUUID().toString()
         val email = "legacy@example.com"

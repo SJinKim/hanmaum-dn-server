@@ -85,6 +85,27 @@ class MemberDtosRedactionTest {
     }
 
     @Test
+    fun `MemberResponse toString keeps ministry names, which are org units and not PII`() {
+        val response =
+            MemberResponse(
+                publicId = "pub-4",
+                firstName = "Jane",
+                lastName = name,
+                status = MemberStatus.ACTIVE,
+                email = email,
+                activeMinistries = listOf("찬양팀"),
+            )
+
+        val output = response.toString()
+
+        // Deliberately @Unredacted: a ministry is an org unit like groupName, so it stays
+        // readable in a log. The member's own identity in the same line is still redacted.
+        assertTrue(output.contains("찬양팀"), "ministry name should stay visible: $output")
+        assertFalse(output.contains(email), "email leaked into toString(): $output")
+        assertFalse(output.contains(name), "lastName leaked into toString(): $output")
+    }
+
+    @Test
     fun `CreateMemberRequest toString redacts PII`() {
         val request = CreateMemberRequest(lastName = name, firstName = "Jane", email = email, phoneNumber = phone)
 
