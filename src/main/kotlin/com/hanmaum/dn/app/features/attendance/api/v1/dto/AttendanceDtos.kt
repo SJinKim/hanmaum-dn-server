@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.attendance.api.v1.dto
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.hanmaum.dn.app.common.domainvalue.CheckInPresence
 import jakarta.validation.constraints.AssertTrue
@@ -41,7 +42,13 @@ data class AttendanceCheckInRequest(
     /**
      * All three or none. Two of three cannot be judged and is a client bug worth surfacing,
      * rather than something to silently treat as "no position".
+     *
+     * JsonIgnore because this is a validation predicate, not a field. Its `is` prefix makes
+     * Jackson — and through it springdoc — read it as a bean property, which put a
+     * `positionComplete` boolean into the published request schema and invited clients to
+     * send a field the server neither reads nor wants.
      */
+    @JsonIgnore
     @AssertTrue(message = "latitude, longitude, and accuracyMeters must be sent together or not at all")
     fun isPositionComplete(): Boolean {
         val provided = listOfNotNull(latitude, longitude, accuracyMeters).size
