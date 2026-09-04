@@ -150,6 +150,20 @@ data class MemberResponse(
     @Unredacted val groupName: String? = null,
     /** Division of the member's church group (e.g. "2교구"), or null when ungrouped. */
     @Unredacted val division: String? = null,
+    /**
+     * Names of the 사역 the member currently serves in — the profile's 소속 사역 figure is
+     * this list's size.
+     *
+     * "Currently" means the assignment has no end date; finished ones are left out. That is
+     * the same definition [MemberSummaryDto.activeMinistries] uses, and the reason this
+     * field shares its name rather than [MemberDto]'s `ministries`, which is the full
+     * history and a different type.
+     *
+     * Empty means "in no 사역" — a real answer, never null, so a client can tell it apart
+     * from "not loaded yet". Unredacted because a ministry name says nothing about a
+     * person; it is an org unit, like [groupName] and [division].
+     */
+    @Unredacted val activeMinistries: List<String> = emptyList(),
     val street: String? = null,
     val houseNumber: String? = null,
     val zipCode: String? = null,

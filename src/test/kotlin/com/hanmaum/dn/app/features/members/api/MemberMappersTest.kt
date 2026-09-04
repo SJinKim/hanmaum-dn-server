@@ -405,6 +405,24 @@ class MemberMappersTest {
     }
 
     @Test
+    fun `toResponse carries the active ministry names it is given`() {
+        val member = memberWithId(12L)
+
+        val response = member.toResponse(listOf("미디어팀", "찬양팀"))
+
+        assertEquals(listOf("미디어팀", "찬양팀"), response.activeMinistries)
+    }
+
+    @Test
+    fun `toResponse defaults active ministries to an empty list, never null`() {
+        val member = memberWithId(13L)
+
+        // Empty is a real answer the client renders as 0. Null would be indistinguishable
+        // from "not loaded" and would put a dash where the truth is "in no 사역".
+        assertEquals(emptyList<String>(), member.toResponse().activeMinistries)
+    }
+
+    @Test
     fun `toResponse maps missing group division and birthDate to null`() {
         val member = memberWithId(8L)
         val response = member.toResponse()

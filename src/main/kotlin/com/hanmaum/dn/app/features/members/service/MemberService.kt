@@ -305,7 +305,26 @@ class MemberService(
         keycloakSubject: String,
         email: String?,
         emailVerified: Boolean = false,
-    ): MemberResponse = resolveAndLinkMember(keycloakSubject, email, emailVerified).toResponse()
+    ): MemberResponse {
+        val member = resolveAndLinkMember(keycloakSubject, email, emailVerified)
+        return member.toResponse(activeMinistryNames(member.id))
+    }
+
+    /**
+     * Ministry names the member currently serves in, sorted, for the own-profile response.
+     *
+     * Same source and same "active" definition as the admin grid in [listMembers]
+     * (`end_date IS NULL`), reusing its batch query with a single id — one member is one
+     * row set, so there is nothing to batch here.
+     */
+    private fun activeMinistryNames(memberId: Long?): List<String> =
+        memberId
+            ?.let { id ->
+                ministryAssignmentRepository
+                    .findActiveByMemberIds(listOf(id))
+                    .map { it.ministryName }
+                    .sorted()
+            }.orEmpty()
 
     /**
      * Resolve the calling member from JWT claims for the notifications feature.
@@ -331,7 +350,8 @@ class MemberService(
         request.houseNumber?.let { member.houseNumber = it }
         request.zipCode?.let { member.zipCode = it }
         request.city?.let { member.city = it }
-        return memberRepository.save(member).toResponse()
+        val saved = memberRepository.save(member)
+        return saved.toResponse(activeMinistryNames(saved.id))
     }
 
     // ─── Write ─────────────────────────────────────────────────────────────────
