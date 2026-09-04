@@ -1,7 +1,9 @@
 package com.hanmaum.dn.app.features.attendance.api.v1
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.hanmaum.dn.app.common.config.SecurityConfig
 import com.hanmaum.dn.app.common.domainvalue.CheckInPresence
+import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceCheckInRequest
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceCheckInResponse
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceGroupCountsResponse
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.ChurchGroupAttendanceCountResponse
@@ -28,6 +30,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.time.LocalDate
 import java.util.UUID
 import kotlin.test.Test
+import kotlin.test.assertFalse
 
 @WebMvcTest(AttendanceController::class, excludeAutoConfiguration = [OAuth2ResourceServerAutoConfiguration::class])
 @ActiveProfiles("test")
@@ -172,6 +175,17 @@ class AttendanceControllerTest {
                     .content("""{"latitude":50.1281518,"longitude":8.5843494}"""),
             ).andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.status").value(400))
+    }
+
+    @Test
+    fun `the check-in request contract carries no validation predicate`() {
+        // isPositionComplete() is an @AssertTrue check, not a field. Its `is` prefix makes
+        // Jackson read it as a bean property, which leaked a `positionComplete` boolean into
+        // the published request schema and invited clients to send something the server
+        // neither reads nor wants.
+        val json = ObjectMapper().writeValueAsString(AttendanceCheckInRequest(1.0, 2.0, 3.0))
+
+        assertFalse(json.contains("positionComplete"), "validation predicate leaked into the contract: $json")
     }
 
     @Test
