@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.attendance.api.v1
 
 import com.hanmaum.dn.app.common.dto.ApiResponse
+import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceCheckInRequest
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceCheckInResponse
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceGroupCountsResponse
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.CreateDefinitionRequest
@@ -79,13 +80,20 @@ class AttendanceController(
     /**
      * Records one attendance check-in for the authenticated member.
      *
+     * The body is optional and carries at most a device position. It never decides whether
+     * the check-in is accepted — only the time window does — and the client sends raw
+     * coordinates rather than a verdict; the server owns the comparison.
+     *
      * The response intentionally contains no member identity or exact timestamp.
      */
     @PostMapping("/check-in")
     @PreAuthorize("isAuthenticated()")
     @OpenApiResponse(responseCode = "201", description = "Attendance check-in accepted")
-    fun checkIn(authentication: JwtAuthenticationToken): ResponseEntity<ApiResponse<AttendanceCheckInResponse>> {
-        val checkIn = attendanceService.checkIn(authentication.token.subject)
+    fun checkIn(
+        authentication: JwtAuthenticationToken,
+        @Valid @RequestBody(required = false) request: AttendanceCheckInRequest?,
+    ): ResponseEntity<ApiResponse<AttendanceCheckInResponse>> {
+        val checkIn = attendanceService.checkIn(authentication.token.subject, request)
         return ResponseEntity
             .status(HttpStatus.CREATED)
             .body(ApiResponse.success(data = checkIn, message = "출석 체크인 완료."))

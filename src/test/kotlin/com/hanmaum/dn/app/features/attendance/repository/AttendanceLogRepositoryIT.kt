@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.attendance.repository
 
+import com.hanmaum.dn.app.common.domainvalue.CheckInPresence
 import com.hanmaum.dn.app.common.pii.PiiCryptoConfiguration
 import com.hanmaum.dn.app.features.attendance.domain.AttendanceDefinition
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
@@ -59,6 +60,7 @@ class AttendanceLogRepositoryIT {
                 memberId = member.id!!,
                 groupId = originalGroup.id,
                 attendanceDate = attendanceDate,
+                presence = CheckInPresence.UNCONFIRMED.name,
             )
 
         member.group = newGroup
@@ -71,6 +73,7 @@ class AttendanceLogRepositoryIT {
                 memberId = member.id!!,
                 groupId = newGroup.id,
                 attendanceDate = attendanceDate,
+                presence = CheckInPresence.UNCONFIRMED.name,
             )
         val counts = repository.countByChurchGroup(definition.id!!, attendanceDate)
 

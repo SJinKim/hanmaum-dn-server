@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.attendance.service
 
 import com.hanmaum.dn.app.features.attendance.api.toDto
+import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceCheckInRequest
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceCheckInResponse
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceGroupCountsResponse
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.ChurchGroupAttendanceCountResponse
@@ -10,8 +11,10 @@ import com.hanmaum.dn.app.features.attendance.api.v1.dto.UpdateDefinitionRequest
 import com.hanmaum.dn.app.features.attendance.domain.AttendanceDefinition
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceDefinitionRepository
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
+import com.hanmaum.dn.app.features.church.service.ChurchGeofenceService
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import jakarta.persistence.EntityNotFoundException
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -26,8 +29,11 @@ class AttendanceService(
     private val definitionRepo: AttendanceDefinitionRepository,
     private val logRepo: AttendanceLogRepository,
     private val memberRepo: MemberRepository,
+    private val churchGeofenceService: ChurchGeofenceService,
     private val clock: Clock,
 ) {
+    private val log = LoggerFactory.getLogger(AttendanceService::class.java)
+
     // ─── Definition CRUD ───────────────────────────────────────────────────────
 
     @Transactional
@@ -85,7 +91,10 @@ class AttendanceService(
     // ─── Check-in ─────────────────────────────────────────────────────────────
 
     @Transactional
-    fun checkIn(keycloakSubject: String): AttendanceCheckInResponse {
+    fun checkIn(
+        keycloakSubject: String,
+        request: AttendanceCheckInRequest? = null,
+    ): AttendanceCheckInResponse {
         val member =
             memberRepo.findByKeycloakIdAndDeletedAtIsNull(keycloakSubject)
                 ?: throw EntityNotFoundException("Member not found for subject: $keycloakSubject")
@@ -105,6 +114,16 @@ class AttendanceService(
                 "현재 활성화된 출석 체크인 시간이 없습니다.",
             )
 
+        // Evaluated before the insert so the verdict is stored with the row it describes.
+        // A missing body, an unconfigured geofence and a fix too vague to judge all land on
+        // UNCONFIRMED — none of them is a reason to refuse the check-in.
+        val presence =
+            churchGeofenceService.evaluate(
+                latitude = request?.latitude,
+                longitude = request?.longitude,
+                accuracyMeters = request?.accuracyMeters,
+            )
+
         val inserted =
             logRepo.insertIfAbsent(
                 publicId = UUID.randomUUID(),
@@ -112,15 +131,23 @@ class AttendanceService(
                 memberId = member.id!!,
                 groupId = member.group?.id,
                 attendanceDate = today,
+                presence = presence.name,
             )
         if (inserted == 0) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "이미 오늘 출석 체크인 했습니다.")
         }
 
+        log.info(
+            "Attendance check-in recorded definitionId={} presence={}",
+            matchingDefinition.id,
+            presence,
+        )
+
         return AttendanceCheckInResponse(
             definitionPublicId = matchingDefinition.publicId.toString(),
             definitionTitle = matchingDefinition.title,
             attendanceDate = today,
+            presence = presence,
         )
     }
 
@@ -143,6 +170,9 @@ class AttendanceService(
                         groupDivision = count.groupDivision,
                         groupName = count.groupName,
                         attendanceCount = count.attendanceCount,
+                        inPlaceCount = count.inPlaceCount,
+                        outsideCount = count.outsideCount,
+                        unconfirmedCount = count.unconfirmedCount,
                     )
                 }
 
@@ -151,6 +181,9 @@ class AttendanceService(
             definitionTitle = definition.title,
             attendanceDate = attendanceDate,
             totalCount = groups.sumOf { it.attendanceCount },
+            totalInPlaceCount = groups.sumOf { it.inPlaceCount },
+            totalOutsideCount = groups.sumOf { it.outsideCount },
+            totalUnconfirmedCount = groups.sumOf { it.unconfirmedCount },
             groups = groups,
         )
     }

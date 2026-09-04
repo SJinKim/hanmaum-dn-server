@@ -1,11 +1,14 @@
 package com.hanmaum.dn.app.features.attendance.service
 
+import com.hanmaum.dn.app.common.domainvalue.CheckInPresence
+import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceCheckInRequest
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.CreateDefinitionRequest
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.UpdateDefinitionRequest
 import com.hanmaum.dn.app.features.attendance.domain.AttendanceDefinition
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceDefinitionRepository
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
 import com.hanmaum.dn.app.features.attendance.repository.ChurchGroupAttendanceCountView
+import com.hanmaum.dn.app.features.church.service.ChurchGeofenceService
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
@@ -17,11 +20,13 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
+import org.mockito.Mockito.lenient
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.eq
 import org.springframework.web.server.ResponseStatusException
@@ -43,6 +48,8 @@ class AttendanceServiceTest {
 
     @Mock private lateinit var memberRepo: MemberRepository
 
+    @Mock private lateinit var churchGeofenceService: ChurchGeofenceService
+
     private lateinit var service: AttendanceService
 
     private val berlinZone = ZoneId.of("Europe/Berlin")
@@ -51,7 +58,13 @@ class AttendanceServiceTest {
 
     @BeforeEach
     fun setUp() {
-        service = AttendanceService(definitionRepo, logRepo, memberRepo, clock)
+        service = AttendanceService(definitionRepo, logRepo, memberRepo, churchGeofenceService, clock)
+        // The real evaluator never returns null: with no position, no geofence, or a fix it
+        // cannot judge, it answers UNCONFIRMED. Lenient because most tests here are about
+        // the window and the duplicate guard and never reach it.
+        lenient()
+            .`when`(churchGeofenceService.evaluate(anyOrNull(), anyOrNull(), anyOrNull()))
+            .thenReturn(CheckInPresence.UNCONFIRMED)
     }
 
     private fun makeDefinition(
@@ -185,6 +198,7 @@ class AttendanceServiceTest {
                 memberId = eq(1L),
                 groupId = eq(7L),
                 attendanceDate = eq(attendanceDate),
+                presence = eq(CheckInPresence.UNCONFIRMED.name),
             ),
         ).thenReturn(1)
 
@@ -199,8 +213,55 @@ class AttendanceServiceTest {
             eq(1L),
             eq(7L),
             eq(attendanceDate),
+            eq(CheckInPresence.UNCONFIRMED.name),
         )
         assertNotNull(publicIdCaptor.firstValue)
+    }
+
+    @Test
+    fun `checkIn stores and returns the verdict the geofence service produced`() {
+        val member = makeMember()
+        val definition = makeDefinition()
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
+        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNull(DayOfWeek.SUNDAY))
+            .thenReturn(listOf(definition))
+        `when`(churchGeofenceService.evaluate(eq(50.128), eq(8.584), eq(12.0)))
+            .thenReturn(CheckInPresence.IN_PLACE)
+        `when`(logRepo.insertIfAbsent(any(), any(), any(), anyOrNull(), any(), any())).thenReturn(1)
+
+        val result =
+            service.checkIn(
+                "kc-001",
+                AttendanceCheckInRequest(latitude = 50.128, longitude = 8.584, accuracyMeters = 12.0),
+            )
+
+        assertEquals(CheckInPresence.IN_PLACE, result.presence)
+        verify(logRepo).insertIfAbsent(
+            any(),
+            any(),
+            any(),
+            anyOrNull(),
+            any(),
+            eq(CheckInPresence.IN_PLACE.name),
+        )
+    }
+
+    @Test
+    fun `checkIn without a body is accepted and recorded as UNCONFIRMED`() {
+        val member = makeMember()
+        val definition = makeDefinition()
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
+        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNull(DayOfWeek.SUNDAY))
+            .thenReturn(listOf(definition))
+        `when`(churchGeofenceService.evaluate(anyOrNull(), anyOrNull(), anyOrNull()))
+            .thenReturn(CheckInPresence.UNCONFIRMED)
+        `when`(logRepo.insertIfAbsent(any(), any(), any(), anyOrNull(), any(), any())).thenReturn(1)
+
+        // Sending no position is not a failure. The window decides whether a check-in is
+        // accepted; the position only decides what the row can claim afterwards.
+        val result = service.checkIn("kc-001", null)
+
+        assertEquals(CheckInPresence.UNCONFIRMED, result.presence)
     }
 
     @Test
@@ -210,11 +271,11 @@ class AttendanceServiceTest {
         `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
         `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNull(DayOfWeek.SUNDAY))
             .thenReturn(listOf(definition))
-        `when`(logRepo.insertIfAbsent(any(), eq(1L), eq(1L), eq(null), eq(attendanceDate))).thenReturn(1)
+        `when`(logRepo.insertIfAbsent(any(), eq(1L), eq(1L), eq(null), eq(attendanceDate), any())).thenReturn(1)
 
         service.checkIn("kc-001")
 
-        verify(logRepo).insertIfAbsent(any(), eq(1L), eq(1L), eq(null), eq(attendanceDate))
+        verify(logRepo).insertIfAbsent(any(), eq(1L), eq(1L), eq(null), eq(attendanceDate), any())
     }
 
     @Test
@@ -224,7 +285,7 @@ class AttendanceServiceTest {
         `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
         `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNull(DayOfWeek.SUNDAY))
             .thenReturn(listOf(definition))
-        `when`(logRepo.insertIfAbsent(any(), eq(1L), eq(1L), eq(null), eq(attendanceDate))).thenReturn(0)
+        `when`(logRepo.insertIfAbsent(any(), eq(1L), eq(1L), eq(null), eq(attendanceDate), any())).thenReturn(0)
 
         val exception = assertThrows<ResponseStatusException> { service.checkIn("kc-001") }
 
@@ -242,7 +303,7 @@ class AttendanceServiceTest {
         val exception = assertThrows<ResponseStatusException> { service.checkIn("kc-001") }
 
         assertEquals(400, exception.statusCode.value())
-        verify(logRepo, never()).insertIfAbsent(any(), any(), any(), any(), any())
+        verify(logRepo, never()).insertIfAbsent(any(), any(), any(), any(), any(), any())
     }
 
     @Test
@@ -251,7 +312,7 @@ class AttendanceServiceTest {
 
         assertThrows<EntityNotFoundException> { service.checkIn("unknown") }
 
-        verify(logRepo, never()).insertIfAbsent(any(), any(), any(), any(), any())
+        verify(logRepo, never()).insertIfAbsent(any(), any(), any(), any(), any(), any())
     }
 
     @Test
@@ -281,11 +342,17 @@ class AttendanceServiceTest {
         division: String?,
         name: String?,
         count: Long,
+        inPlace: Long = 0,
+        outside: Long = 0,
+        unconfirmed: Long = count,
     ): ChurchGroupAttendanceCountView =
         object : ChurchGroupAttendanceCountView {
             override val groupPublicId = publicId
             override val groupDivision = division
             override val groupName = name
             override val attendanceCount = count
+            override val inPlaceCount = inPlace
+            override val outsideCount = outside
+            override val unconfirmedCount = unconfirmed
         }
 }
