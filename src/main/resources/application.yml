@@ -33,6 +33,22 @@ hanmaum:
       latitude: ${HANMAUM_CHURCH_LOCATION_LATITUDE:50.1281518}
       longitude: ${HANMAUM_CHURCH_LOCATION_LONGITUDE:8.5843494}
       radius-meters: ${HANMAUM_CHURCH_LOCATION_RADIUS_METERS:100}
+  bible-api:
+    # The congregation's bible API, which backs both verse cards on Home.
+    #
+    # The credentials belong here and never in the app binary: a static bearer secret is
+    # extractable from an APK or IPA, and rotating it would break every installed client at
+    # once. That is the reason this proxy exists.
+    #
+    # They default to blank so a deployment — and every test — boots without them. An
+    # unconfigured deployment answers 503 on the verse endpoints rather than pretending the
+    # reading plan is empty.
+    base-url: ${HANMAUM_BIBLE_API_BASE_URL:https://bible.asher.design/api/v1}
+    reader-base-url: ${HANMAUM_BIBLE_API_READER_BASE_URL:https://bible.asher.design}
+    key-id: ${HANMAUM_BIBLE_API_KEY_ID:}
+    secret: ${HANMAUM_BIBLE_API_SECRET:}
+    # 92 is 개역개정, the upstream default and what the Home card shows.
+    default-translation-id: ${HANMAUM_BIBLE_API_DEFAULT_TRANSLATION_ID:92}
   rsvp:
     reminder-offsets: ${HANMAUM_RSVP_REMINDEROFFSETS:P7D}
 

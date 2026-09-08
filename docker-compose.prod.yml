@@ -12,6 +12,8 @@
 #   API_DOMAIN, AUTH_DOMAIN        — public hostnames (used by Caddy, sourced from .env)
 #   HANMAUM_CHURCH_LOCATION_LATITUDE, HANMAUM_CHURCH_LOCATION_LONGITUDE
 #   HANMAUM_CHURCH_LOCATION_RADIUS_METERS — server-controlled geofence configuration
+#   HANMAUM_BIBLE_API_KEY_ID, HANMAUM_BIBLE_API_SECRET — congregation bible API
+#     credentials; without them the verse endpoints answer 503
 #
 # Usage:
 #   make prod-up    →  docker compose --project-name hanmaum-prod -f docker-compose.prod.yml up -d
