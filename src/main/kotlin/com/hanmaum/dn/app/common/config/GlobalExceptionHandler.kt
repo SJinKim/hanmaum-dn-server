@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.security.authorization.AuthorizationDeniedException
+import org.springframework.web.HttpRequestMethodNotSupportedException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
@@ -92,6 +93,23 @@ class GlobalExceptionHandler {
                 message = "${e.name}: 형식이 올바르지 않습니다.",
             )
         return ResponseEntity(response, HttpStatus.BAD_REQUEST)
+    }
+
+    /**
+     * A known path called with a method it does not offer — a DELETE on an insert-only
+     * collection, say. Without this the generic handler below turns a client mistake into a
+     * 500, which reads like a server fault and hides the actual problem.
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException::class)
+    fun handleMethodNotSupported(e: HttpRequestMethodNotSupportedException): ResponseEntity<ErrorResponse> {
+        logger.warn("Method not allowed: method={} supported={}", e.method, e.supportedMethods?.joinToString(","))
+        val response =
+            ErrorResponse(
+                status = HttpStatus.METHOD_NOT_ALLOWED.value(),
+                error = "Method Not Allowed",
+                message = "This endpoint does not support ${e.method}.",
+            )
+        return ResponseEntity(response, HttpStatus.METHOD_NOT_ALLOWED)
     }
 
     @ExceptionHandler(AuthorizationDeniedException::class)

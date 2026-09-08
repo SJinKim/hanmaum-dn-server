@@ -5,6 +5,7 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpInputMessage
 import org.springframework.http.HttpStatus
 import org.springframework.http.converter.HttpMessageNotReadableException
+import org.springframework.web.HttpRequestMethodNotSupportedException
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.servlet.resource.NoResourceFoundException
@@ -101,5 +102,20 @@ class GlobalExceptionHandlerTest {
         val body = assertNotNull(response.body)
         assertEquals(HttpStatus.NOT_FOUND.value(), body.status)
         assertEquals("Not Found", body.error)
+    }
+
+    @Test
+    fun `handleMethodNotSupported maps a wrong verb to 405, not 500`() {
+        // Same class of bug as the unknown-route 404 above: without an explicit handler the
+        // generic one turns a client mistake into a server fault. It matters wherever a
+        // missing verb is the contract — an insert-only collection offering no DELETE.
+        val exception = HttpRequestMethodNotSupportedException("DELETE", listOf("GET", "POST"))
+
+        val response = handler.handleMethodNotSupported(exception)
+
+        assertEquals(HttpStatus.METHOD_NOT_ALLOWED, response.statusCode)
+        val body = assertNotNull(response.body)
+        assertEquals(HttpStatus.METHOD_NOT_ALLOWED.value(), body.status)
+        assertEquals("Method Not Allowed", body.error)
     }
 }
