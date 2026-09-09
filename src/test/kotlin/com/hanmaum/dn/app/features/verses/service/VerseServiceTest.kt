@@ -42,6 +42,10 @@ class VerseServiceTest {
     // Tuesday 2026-09-08; the Sunday that starts its week is 2026-09-06.
     private val clock = Clock.fixed(Instant.parse("2026-09-08T09:00:00Z"), zone)
     private val today = LocalDate.of(2026, 9, 8)
+
+    // Sunday 2026-09-06.
+    private val sundayClock = Clock.fixed(Instant.parse("2026-09-06T09:00:00Z"), zone)
+    private val sunday = LocalDate.of(2026, 9, 6)
     private val weekStart = LocalDate.of(2026, 9, 6)
 
     private val appConfig =
@@ -98,13 +102,42 @@ class VerseServiceTest {
 
     @Test
     fun `a day without a passage is an empty answer, not a failure`() {
-        // Sundays carry no quiet time upstream — verified on four of them.
+        // A gap in the plan, which happens at a year boundary. Nothing to read and nothing
+        // to announce, so the card stays blank.
         `when`(client.quietTime(today)).thenReturn(null)
 
         val result = service.getToday()
 
         assertNull(result.reference)
         assertNull(result.sourceUrl)
+        assertNull(result.notice)
+    }
+
+    @Test
+    fun `a sunday without a passage names the service instead of going blank`() {
+        val sundayService = VerseService(client, repository, BibleApiProperties(), sundayClock)
+        `when`(client.quietTime(sunday)).thenReturn(null)
+
+        val result = sundayService.getToday()
+
+        assertEquals("주일 말씀!", result.notice)
+        assertNull(result.reference)
+    }
+
+    @Test
+    fun `a sunday the congregation does publish a passage for shows the passage`() {
+        val sundayService = VerseService(client, repository, BibleApiProperties(), sundayClock)
+        `when`(client.quietTime(sunday)).thenReturn(
+            QuietTimeItem(book = 5, chapterStart = 3, verseStart = 1, chapterEnd = 3, verseEnd = 11),
+        )
+        `when`(client.appConfig()).thenReturn(appConfig)
+
+        // Upstream is asked on Sundays rather than short-circuited, so a passage published
+        // for one wins over the notice instead of being hidden by a local weekday rule.
+        val result = sundayService.getToday()
+
+        assertEquals("신명기 3:1-11", result.reference?.ko)
+        assertNull(result.notice)
     }
 
     @Test

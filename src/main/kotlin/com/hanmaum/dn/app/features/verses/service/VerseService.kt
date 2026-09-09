@@ -35,7 +35,11 @@ class VerseService(
     @Transactional(readOnly = true)
     fun getToday(): DailyVerseResponse {
         val today = LocalDate.now(clock)
-        val item = unavailableAs503 { client.quietTime(today) } ?: return DailyVerseResponse()
+        val item =
+            unavailableAs503 { client.quietTime(today) }
+                // Upstream is still asked on Sundays rather than short-circuited: should the
+                // congregation ever publish a Sunday passage, it wins over the notice.
+                ?: return DailyVerseResponse(notice = SUNDAY_NOTICE.takeIf { today.dayOfWeek == DayOfWeek.SUNDAY })
         val config = unavailableAs503 { client.appConfig() }
 
         return DailyVerseResponse(
@@ -172,6 +176,14 @@ class VerseService(
         config: com.hanmaum.dn.app.features.verses.client.BibleAppConfig,
         translationId: Int,
     ): String? = config.translations.firstOrNull { it.id == translationId }?.title
+
+    private companion object {
+        /**
+         * Shown instead of a passage on Sundays. The congregation gathers rather than
+         * reading alone, so the card names that instead of going blank.
+         */
+        const val SUNDAY_NOTICE = "주일 말씀!"
+    }
 
     /**
      * The upstream being unreachable is an infrastructure fault, not an empty reading plan.
