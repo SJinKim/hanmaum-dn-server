@@ -36,17 +36,37 @@ data class DailyVerseResponse(
     /** Deeplink into the congregation's own reader, so the card can offer "read on". */
     val sourceUrl: String? = null,
     /**
-     * What the card shows on a day with no passage of its own — 주일 말씀! on Sundays, when
-     * the congregation gathers instead of reading alone.
+     * Which of the three shapes this answer has, so the client renders the right thing and
+     * writes the wording itself.
      *
-     * Only set for Sundays, never for the other reason a day comes back empty: a gap in the
-     * plan, which happens at a year boundary. A client that rendered a Sunday notice
-     * whenever the payload was empty would announce the Sunday service on a Tuesday, so the
-     * server decides which of the two it is rather than leaving the client to guess from
-     * the date.
+     * An empty payload alone would not say enough: it happens on Sundays *and* in a gap in
+     * the reading plan at a year boundary, and those two want different words. The server
+     * knows the date and decides; the app owns the sentence, in whichever language the
+     * member reads.
      */
-    val notice: String? = null,
+    val state: DailyVerseState = DailyVerseState.NO_PLAN,
 )
+
+/**
+ * What GET /verses/today is telling the client.
+ *
+ * A state rather than a ready-made sentence, because the app is localized and the server
+ * is not. Sending a fixed Korean string would put Korean on a German member's home screen
+ * and make every future wording change a server deploy.
+ */
+enum class DailyVerseState {
+    /** The reading plan has a passage; the reference fields are filled. */
+    PASSAGE,
+
+    /**
+     * Sunday. The plan never carries one, because the passages come from the sermon — so
+     * this is not an absence to apologise for, it is where the reading happens that day.
+     */
+    SUNDAY_SERVICE,
+
+    /** No passage and no service: a gap in the plan, as at a year boundary. */
+    NO_PLAN,
+}
 
 data class WeeklyVerseResponse(
     /** Null while no verse has been chosen for the current week. */

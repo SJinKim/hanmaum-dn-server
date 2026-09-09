@@ -114,9 +114,14 @@ class VerseRecordService(
      *
      * 암송 needs a verse to recite — without a chosen one the card has nothing to offer.
      *
-     * 오늘의 말씀 needs a passage in the reading plan. Sundays never have one, verified
-     * across four of them, and that much is decided locally without asking anyone. Other
-     * days need the upstream.
+     * 오늘의 말씀 is markable on every day there is something to read, and Sunday is one of
+     * them. The reading plan carries no Sunday entry, but that is not an empty day: the
+     * passages come from the sermon, so a member who goes to church and reads along has
+     * done the same thing as on any other day. Treating Sunday as unmarkable made a full
+     * week 6/7 by construction and quietly told those members their Sunday did not count.
+     * The week is seven pills, the same as 암송.
+     *
+     * The other days need the upstream, because a gap in the plan is a real absence.
      *
      * When the upstream cannot be reached the answer is *yes*. Refusing to record something
      * a member actually did, because a third party is down, is the worse of the two
@@ -131,7 +136,8 @@ class VerseRecordService(
             VerseRecordKind.RECITATION -> verseService.currentWeeklyVerse() != null
             VerseRecordKind.QUIET_TIME -> {
                 if (today.dayOfWeek == DayOfWeek.SUNDAY) {
-                    false
+                    // The sermon is the passage. No upstream lookup can tell us that.
+                    true
                 } else {
                     try {
                         client.quietTime(today) != null

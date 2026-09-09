@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.verses.service
 
 import com.hanmaum.dn.app.features.verses.api.v1.dto.DailyVerseResponse
+import com.hanmaum.dn.app.features.verses.api.v1.dto.DailyVerseState
 import com.hanmaum.dn.app.features.verses.api.v1.dto.SetWeeklyVerseRequest
 import com.hanmaum.dn.app.features.verses.api.v1.dto.VerseReference
 import com.hanmaum.dn.app.features.verses.api.v1.dto.WeeklyVerseResponse
@@ -39,7 +40,14 @@ class VerseService(
             unavailableAs503 { client.quietTime(today) }
                 // Upstream is still asked on Sundays rather than short-circuited: should the
                 // congregation ever publish a Sunday passage, it wins over the notice.
-                ?: return DailyVerseResponse(notice = SUNDAY_NOTICE.takeIf { today.dayOfWeek == DayOfWeek.SUNDAY })
+                ?: return DailyVerseResponse(
+                    state =
+                        if (today.dayOfWeek == DayOfWeek.SUNDAY) {
+                            DailyVerseState.SUNDAY_SERVICE
+                        } else {
+                            DailyVerseState.NO_PLAN
+                        },
+                )
         val config = unavailableAs503 { client.appConfig() }
 
         return DailyVerseResponse(
@@ -64,6 +72,7 @@ class VerseService(
             // shows a reference and a link. See the field's own note.
             text = null,
             sourceUrl = "${properties.readerBaseUrl}/quiettime.php?qt_date=$today",
+            state = DailyVerseState.PASSAGE,
         )
     }
 
@@ -176,14 +185,6 @@ class VerseService(
         config: com.hanmaum.dn.app.features.verses.client.BibleAppConfig,
         translationId: Int,
     ): String? = config.translations.firstOrNull { it.id == translationId }?.title
-
-    private companion object {
-        /**
-         * Shown instead of a passage on Sundays. The congregation gathers rather than
-         * reading alone, so the card names that instead of going blank.
-         */
-        const val SUNDAY_NOTICE = "주일 말씀!"
-    }
 
     /**
      * The upstream being unreachable is an infrastructure fault, not an empty reading plan.
