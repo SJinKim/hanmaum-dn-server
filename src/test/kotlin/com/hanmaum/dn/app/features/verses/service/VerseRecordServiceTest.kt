@@ -78,12 +78,14 @@ class VerseRecordServiceTest {
     }
 
     @Test
-    fun `sunday is not markable for the daily passage, without asking upstream`() {
-        // Sunday 2026-09-06. The reading plan has no passage on Sundays — measured on four
-        // of them — and that much is decidable locally.
+    fun `sunday is markable for the daily passage, without asking upstream`() {
+        // Sunday 2026-09-06. The reading plan carries no Sunday entry, but the day is not
+        // empty: the passages come from the sermon. A member who goes to church and reads
+        // along has done the same thing as on any other day, so the week is seven pills
+        // rather than six — the same as 암송. No upstream lookup can establish that.
         val result = service("2026-09-06T09:00:00Z").getRecords("kc-001")
 
-        assertFalse(result.quietTime.todayMarkable)
+        assertTrue(result.quietTime.todayMarkable)
         verify(client, never()).quietTime(any())
     }
 
@@ -151,14 +153,30 @@ class VerseRecordServiceTest {
     }
 
     @Test
-    fun `marking a sunday for the daily passage is refused rather than written`() {
-        val exception =
-            assertThrows<ResponseStatusException> {
-                service("2026-09-06T09:00:00Z").mark("kc-001", VerseRecordKind.QUIET_TIME)
-            }
+    fun `marking a sunday for the daily passage writes the row`() {
+        val sunday = LocalDate.of(2026, 9, 6)
+        `when`(recordRepository.insertIfAbsent(any(), eq(1L), eq(sunday), eq("QUIET_TIME"))).thenReturn(1)
+        `when`(recordRepository.findDatesInRange(eq(1L), eq("QUIET_TIME"), any(), any())).thenReturn(listOf(sunday))
+        `when`(recordRepository.countForMember(1L, "QUIET_TIME")).thenReturn(1L)
 
-        assertEquals(400, exception.statusCode.value())
-        verify(recordRepository, never()).insertIfAbsent(any(), any(), any(), any())
+        val block = service("2026-09-06T09:00:00Z").mark("kc-001", VerseRecordKind.QUIET_TIME)
+
+        assertTrue(block.todayMarked)
+    }
+
+    @Test
+    fun `a full week of daily passages reaches seven, not six`() {
+        val sunday = LocalDate.of(2026, 9, 6)
+        val wholeWeek = (0L..6L).map { sunday.plusDays(it) }
+        `when`(recordRepository.findDatesInRange(eq(1L), eq("QUIET_TIME"), any(), any())).thenReturn(wholeWeek)
+        `when`(recordRepository.countForMember(1L, "QUIET_TIME")).thenReturn(7L)
+
+        val block = service("2026-09-06T09:00:00Z").getRecords("kc-001").quietTime
+
+        // Sunday used to be unmarkable, which made a perfect week 6/7 by construction and
+        // quietly told members their Sunday did not count.
+        assertEquals(7, block.days.size)
+        assertTrue(block.days.contains(sunday))
     }
 
     @Test

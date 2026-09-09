@@ -3,6 +3,7 @@ package com.hanmaum.dn.app.features.verses.api.v1
 import com.hanmaum.dn.app.common.config.SecurityConfig
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.verses.api.v1.dto.DailyVerseResponse
+import com.hanmaum.dn.app.features.verses.api.v1.dto.DailyVerseState
 import com.hanmaum.dn.app.features.verses.api.v1.dto.VerseReference
 import com.hanmaum.dn.app.features.verses.api.v1.dto.WeeklyVerseResponse
 import com.hanmaum.dn.app.features.verses.service.VerseService
@@ -74,20 +75,21 @@ class VerseControllerTest {
             .perform(get("/api/v1/verses/today").with(memberToken()))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.data.reference").doesNotExist())
-            .andExpect(jsonPath("$.data.notice").doesNotExist())
+            .andExpect(jsonPath("$.data.state").value("NO_PLAN"))
     }
 
     @Test
-    fun `GET today carries the sunday notice as its own field`() {
-        `when`(verseService.getToday()).thenReturn(DailyVerseResponse(notice = "주일 말씀!"))
+    fun `GET today distinguishes a sunday from a gap in the plan`() {
+        `when`(verseService.getToday()).thenReturn(DailyVerseResponse(state = DailyVerseState.SUNDAY_SERVICE))
 
-        // The notice arrives separately from the reference, so a client renders it without
-        // deriving the weekday itself — an empty payload also means "gap in the plan", and
-        // guessing from the date would announce the Sunday service on a Tuesday.
+        // The state arrives separately from the reference, so a client renders the right
+        // wording — in its own language — without deriving the weekday itself. An empty
+        // payload also means "gap in the plan", and guessing from the date would announce
+        // the Sunday service on a Tuesday in January.
         mockMvc
             .perform(get("/api/v1/verses/today").with(memberToken()))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.notice").value("주일 말씀!"))
+            .andExpect(jsonPath("$.data.state").value("SUNDAY_SERVICE"))
             .andExpect(jsonPath("$.data.reference").doesNotExist())
     }
 

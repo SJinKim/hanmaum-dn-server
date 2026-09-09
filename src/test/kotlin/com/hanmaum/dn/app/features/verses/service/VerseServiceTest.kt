@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.verses.service
 
+import com.hanmaum.dn.app.features.verses.api.v1.dto.DailyVerseState
 import com.hanmaum.dn.app.features.verses.api.v1.dto.SetWeeklyVerseRequest
 import com.hanmaum.dn.app.features.verses.client.BibleApiClient
 import com.hanmaum.dn.app.features.verses.client.BibleApiUnavailableException
@@ -84,6 +85,7 @@ class VerseServiceTest {
         // German cites chapter and verse with a comma.
         assertEquals("5. Mose 3,1-11", result.reference?.de)
         assertEquals("개역개정", result.translation)
+        assertEquals(DailyVerseState.PASSAGE, result.state)
         assertEquals("https://bible.asher.design/quiettime.php?qt_date=2026-09-08", result.sourceUrl)
     }
 
@@ -110,7 +112,7 @@ class VerseServiceTest {
 
         assertNull(result.reference)
         assertNull(result.sourceUrl)
-        assertNull(result.notice)
+        assertEquals(DailyVerseState.NO_PLAN, result.state)
     }
 
     @Test
@@ -120,7 +122,9 @@ class VerseServiceTest {
 
         val result = sundayService.getToday()
 
-        assertEquals("주일 말씀!", result.notice)
+        // A state, not a sentence: the app is localized and the server is not, so the
+        // wording stays where the member's language is known.
+        assertEquals(DailyVerseState.SUNDAY_SERVICE, result.state)
         assertNull(result.reference)
     }
 
@@ -137,7 +141,7 @@ class VerseServiceTest {
         val result = sundayService.getToday()
 
         assertEquals("신명기 3:1-11", result.reference?.ko)
-        assertNull(result.notice)
+        assertEquals(DailyVerseState.PASSAGE, result.state)
     }
 
     @Test
