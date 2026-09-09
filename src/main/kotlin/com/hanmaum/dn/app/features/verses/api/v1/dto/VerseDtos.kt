@@ -35,6 +35,17 @@ data class DailyVerseResponse(
     val text: String? = null,
     /** Deeplink into the congregation's own reader, so the card can offer "read on". */
     val sourceUrl: String? = null,
+    /**
+     * What the card shows on a day with no passage of its own — 주일 말씀! on Sundays, when
+     * the congregation gathers instead of reading alone.
+     *
+     * Only set for Sundays, never for the other reason a day comes back empty: a gap in the
+     * plan, which happens at a year boundary. A client that rendered a Sunday notice
+     * whenever the payload was empty would announce the Sunday service on a Tuesday, so the
+     * server decides which of the two it is rather than leaving the client to guess from
+     * the date.
+     */
+    val notice: String? = null,
 )
 
 data class WeeklyVerseResponse(

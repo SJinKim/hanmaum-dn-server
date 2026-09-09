@@ -68,11 +68,26 @@ class VerseControllerTest {
     fun `GET today serves an empty payload on a day without a passage`() {
         `when`(verseService.getToday()).thenReturn(DailyVerseResponse())
 
-        // Sundays. A 200 with nothing in it, not an error — the card simply has nothing to
-        // show, and the client must be able to tell that apart from a 503.
+        // A gap in the plan. A 200 with nothing in it, not an error — the card has nothing
+        // to show, and the client must be able to tell that apart from a 503.
         mockMvc
             .perform(get("/api/v1/verses/today").with(memberToken()))
             .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.reference").doesNotExist())
+            .andExpect(jsonPath("$.data.notice").doesNotExist())
+    }
+
+    @Test
+    fun `GET today carries the sunday notice as its own field`() {
+        `when`(verseService.getToday()).thenReturn(DailyVerseResponse(notice = "주일 말씀!"))
+
+        // The notice arrives separately from the reference, so a client renders it without
+        // deriving the weekday itself — an empty payload also means "gap in the plan", and
+        // guessing from the date would announce the Sunday service on a Tuesday.
+        mockMvc
+            .perform(get("/api/v1/verses/today").with(memberToken()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.notice").value("주일 말씀!"))
             .andExpect(jsonPath("$.data.reference").doesNotExist())
     }
 
