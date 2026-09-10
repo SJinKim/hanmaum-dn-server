@@ -2,6 +2,8 @@ package com.hanmaum.dn.app.features.training.service
 
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.members.service.CurrentMemberResolver
+import com.hanmaum.dn.app.features.members.service.MemberProfileNotFoundException
 import com.hanmaum.dn.app.features.training.domain.Training
 import com.hanmaum.dn.app.features.training.domain.TrainingCategory
 import com.hanmaum.dn.app.features.training.domain.TrainingCode
@@ -10,7 +12,6 @@ import com.hanmaum.dn.app.features.training.domain.UserTraining
 import com.hanmaum.dn.app.features.training.repository.TrainingCohortRepository
 import com.hanmaum.dn.app.features.training.repository.TrainingRepository
 import com.hanmaum.dn.app.features.training.repository.UserTrainingRepository
-import jakarta.persistence.EntityNotFoundException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -59,7 +60,7 @@ class TrainingServiceTest {
 
     @BeforeEach
     fun setUp() {
-        service = TrainingService(trainingRepo, cohortRepo, userTrainingRepo, memberRepo, clock)
+        service = TrainingService(trainingRepo, cohortRepo, userTrainingRepo, memberRepo, CurrentMemberResolver(memberRepo), clock)
     }
 
     // ─── getTrainings ─────────────────────────────────────────────────────────
@@ -274,7 +275,7 @@ class TrainingServiceTest {
     fun `registerCurrentMember fails when the token has no member row`() {
         `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-unknown")).thenReturn(null)
 
-        assertThrows<EntityNotFoundException> { service.registerCurrentMember(UUID.randomUUID(), "kc-unknown") }
+        assertThrows<MemberProfileNotFoundException> { service.registerCurrentMember(UUID.randomUUID(), "kc-unknown") }
 
         verify(userTrainingRepo, never()).saveAndFlush(any<UserTraining>())
     }

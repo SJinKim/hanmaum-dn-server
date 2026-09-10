@@ -13,6 +13,8 @@ import com.hanmaum.dn.app.features.events.repository.EventRsvpRepository
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.members.service.CurrentMemberResolver
+import com.hanmaum.dn.app.features.members.service.MemberProfileNotFoundException
 import jakarta.persistence.EntityNotFoundException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -58,7 +60,7 @@ class EventRsvpServiceTest {
 
     @BeforeEach
     fun setUp() {
-        service = EventRsvpService(eventRsvpRepo, eventRsvpLogRepo, memberRepo, announcementRepo, clock)
+        service = EventRsvpService(eventRsvpRepo, eventRsvpLogRepo, memberRepo, CurrentMemberResolver(memberRepo), announcementRepo, clock)
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -510,7 +512,7 @@ class EventRsvpServiceTest {
         val rsvp = makeRsvp()
         `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("unknown")).thenReturn(null)
 
-        assertThrows<EntityNotFoundException> { service.checkIn(rsvp.publicId, "unknown") }
+        assertThrows<MemberProfileNotFoundException> { service.checkIn(rsvp.publicId, "unknown") }
 
         verify(eventRsvpLogRepo, never()).upsertResponse(any(), any(), any(), any(), any(), any())
     }

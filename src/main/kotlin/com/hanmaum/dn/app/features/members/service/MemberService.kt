@@ -65,6 +65,7 @@ class MemberService(
     private val ministryAssignmentRepository: MinistryAssignmentRepository,
     private val ministryRepository: MinistryRepository,
     private val keycloak: Keycloak,
+    private val currentMemberResolver: CurrentMemberResolver,
     private val operationalMetrics: OperationalMetrics,
     @Value("\${app.keycloak.realm:hanmaum}") private val realm: String,
     @Value("\${app.member-retention.days:30}") private val memberRetentionDays: Long = 30,
@@ -611,25 +612,11 @@ class MemberService(
         )
     }
 
+    // Delegates rather than reimplements: this used to be the only self-healing resolution
+    // in the codebase, which is exactly why the other readers behaved differently.
     private fun resolveAndLinkMember(
         keycloakSubject: String,
         email: String?,
         emailVerified: Boolean,
-    ): Member {
-        memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSubject)?.let { return it }
-
-        if (!emailVerified || email.isNullOrBlank()) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Member profile not found.")
-        }
-
-        val legacyMember =
-            memberRepository.findByEmailAndDeletedAtIsNull(email)
-                ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Member profile not found.")
-        if (legacyMember.keycloakId != null && legacyMember.keycloakId != keycloakSubject) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "Member profile is linked to another identity.")
-        }
-
-        legacyMember.keycloakId = keycloakSubject
-        return memberRepository.save(legacyMember)
-    }
+    ): Member = currentMemberResolver.resolveAndLink(keycloakSubject, email, emailVerified)
 }

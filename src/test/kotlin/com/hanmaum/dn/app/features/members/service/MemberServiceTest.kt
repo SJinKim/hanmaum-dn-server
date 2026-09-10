@@ -97,6 +97,7 @@ class MemberServiceTest {
                 ministryAssignmentRepository,
                 ministryRepository,
                 keycloak,
+                CurrentMemberResolver(memberRepository),
                 operationalMetrics,
                 "test-realm",
             )
@@ -631,13 +632,13 @@ class MemberServiceTest {
     // --- getMemberProfile ---
 
     @Test
-    fun `getMemberProfile throws ResponseStatusException when member not found`() {
+    fun `getMemberProfile reports a missing profile distinguishably`() {
         val keycloakSub = UUID.randomUUID().toString()
         val email = "notfound@example.com"
         `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(null)
         `when`(memberRepository.findByEmailAndDeletedAtIsNull(email)).thenReturn(null)
 
-        assertThrows<ResponseStatusException> {
+        assertThrows<MemberProfileNotFoundException> {
             memberService.getMemberProfile(keycloakSub, email, emailVerified = true)
         }
     }
@@ -736,7 +737,7 @@ class MemberServiceTest {
         val email = "unverified@example.com"
         `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(null)
 
-        assertThrows<ResponseStatusException> {
+        assertThrows<MemberProfileNotFoundException> {
             memberService.getMemberProfile(keycloakSub, email, emailVerified = false)
         }
 

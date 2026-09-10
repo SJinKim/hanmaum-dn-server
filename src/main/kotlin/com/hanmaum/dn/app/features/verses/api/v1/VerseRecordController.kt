@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.verses.api.v1
 
 import com.hanmaum.dn.app.common.dto.ApiResponse
+import com.hanmaum.dn.app.features.members.service.MemberPrincipal
 import com.hanmaum.dn.app.features.verses.api.v1.dto.MarkVerseRecordRequest
 import com.hanmaum.dn.app.features.verses.api.v1.dto.VerseRecordBlock
 import com.hanmaum.dn.app.features.verses.api.v1.dto.VerseRecordsResponse
@@ -35,7 +36,7 @@ class VerseRecordController(
     @GetMapping
     @PreAuthorize("isAuthenticated()")
     fun getRecords(authentication: JwtAuthenticationToken): ResponseEntity<ApiResponse<VerseRecordsResponse>> =
-        ResponseEntity.ok(ApiResponse.success(data = verseRecordService.getRecords(authentication.token.subject)))
+        ResponseEntity.ok(ApiResponse.success(data = verseRecordService.getRecords(MemberPrincipal.from(authentication))))
 
     /**
      * POST /api/v1/verses/records
@@ -50,11 +51,15 @@ class VerseRecordController(
     @OpenApiResponse(responseCode = "201", description = "Marked; the refreshed block for that kind.")
     @OpenApiResponse(responseCode = "400", description = "Today cannot be marked for this kind.")
     @OpenApiResponse(responseCode = "409", description = "Already marked today. Clients treat this as success.")
+    @OpenApiResponse(
+        responseCode = "404",
+        description = "No member profile for this account; the error carries code MEMBER_PROFILE_NOT_FOUND.",
+    )
     fun mark(
         authentication: JwtAuthenticationToken,
         @Valid @RequestBody request: MarkVerseRecordRequest,
     ): ResponseEntity<ApiResponse<VerseRecordBlock>> {
-        val block = verseRecordService.mark(authentication.token.subject, request.kind)
+        val block = verseRecordService.mark(MemberPrincipal.from(authentication), request.kind)
         return ResponseEntity
             .status(HttpStatus.CREATED)
             .body(ApiResponse.success(data = block, message = "기록되었습니다."))

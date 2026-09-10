@@ -10,36 +10,43 @@ import java.util.UUID
 
 interface VerseRecordRepository : JpaRepository<VerseRecord, Long> {
     /**
-     * The marks of one kind inside one week. Only seven days ever reach the client, so this
-     * is bounded by construction — a member with years of history still transfers a week.
+     * Every mark in a date span, both kinds at once.
+     *
+     * One query rather than one per kind: the two streaks can sit on different weeks —
+     * recitation follows the chosen verse's week — so the caller passes the span that covers
+     * both and splits the rows by kind. Bounded by construction: only the running week ever
+     * reaches a client, so this is at most fourteen rows.
+     *
+     * Served by uq_verse_record, whose leading column is member_id.
      */
     @Query(
         """
-        SELECT r.recordDate FROM VerseRecord r
+        SELECT new com.hanmaum.dn.app.features.verses.repository.VerseRecordMark(r.recordDate, r.kind)
+        FROM VerseRecord r
         WHERE r.member.id = :memberId
-          AND r.kind = :kind
           AND r.deletedAt IS NULL
           AND r.recordDate BETWEEN :from AND :to
         ORDER BY r.recordDate
         """,
     )
-    fun findDatesInRange(
+    fun findMarksInRange(
         @Param("memberId") memberId: Long,
-        @Param("kind") kind: String,
         @Param("from") from: LocalDate,
         @Param("to") to: LocalDate,
-    ): List<LocalDate>
+    ): List<VerseRecordMark>
 
+    /** All-time totals, grouped in the database instead of counted once per kind. */
     @Query(
         """
-        SELECT COUNT(r) FROM VerseRecord r
-        WHERE r.member.id = :memberId AND r.kind = :kind AND r.deletedAt IS NULL
+        SELECT new com.hanmaum.dn.app.features.verses.repository.VerseRecordCount(r.kind, COUNT(r))
+        FROM VerseRecord r
+        WHERE r.member.id = :memberId AND r.deletedAt IS NULL
+        GROUP BY r.kind
         """,
     )
-    fun countForMember(
+    fun countByKind(
         @Param("memberId") memberId: Long,
-        @Param("kind") kind: String,
-    ): Long
+    ): List<VerseRecordCount>
 
     /**
      * Atomically records one mark. The unique constraint is the duplicate guard, so two

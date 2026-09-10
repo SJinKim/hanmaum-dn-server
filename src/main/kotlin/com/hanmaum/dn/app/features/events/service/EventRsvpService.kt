@@ -18,6 +18,7 @@ import com.hanmaum.dn.app.features.events.domain.RsvpStatus
 import com.hanmaum.dn.app.features.events.repository.EventRsvpLogRepository
 import com.hanmaum.dn.app.features.events.repository.EventRsvpRepository
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.members.service.CurrentMemberResolver
 import jakarta.persistence.EntityNotFoundException
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -32,6 +33,7 @@ class EventRsvpService(
     private val eventRsvpRepo: EventRsvpRepository,
     private val eventRsvpLogRepo: EventRsvpLogRepository,
     private val memberRepo: MemberRepository,
+    private val currentMemberResolver: CurrentMemberResolver,
     private val announcementRepo: AnnouncementRepository,
     private val clock: Clock,
 ) {
@@ -179,9 +181,7 @@ class EventRsvpService(
         )
     }
 
-    private fun findMember(keycloakSub: String) =
-        memberRepo.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)
-            ?: throw EntityNotFoundException("Member not found for authenticated subject")
+    private fun findMember(keycloakSub: String) = currentMemberResolver.require(keycloakSub)
 
     private fun validateResponseWindow(rsvp: EventRsvp) {
         if (!rsvp.isActive) {

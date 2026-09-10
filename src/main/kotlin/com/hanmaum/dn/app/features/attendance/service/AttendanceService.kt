@@ -13,6 +13,7 @@ import com.hanmaum.dn.app.features.attendance.repository.AttendanceDefinitionRep
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
 import com.hanmaum.dn.app.features.church.service.ChurchGeofenceService
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.members.service.CurrentMemberResolver
 import jakarta.persistence.EntityNotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -29,6 +30,7 @@ class AttendanceService(
     private val definitionRepo: AttendanceDefinitionRepository,
     private val logRepo: AttendanceLogRepository,
     private val memberRepo: MemberRepository,
+    private val currentMemberResolver: CurrentMemberResolver,
     private val churchGeofenceService: ChurchGeofenceService,
     private val clock: Clock,
 ) {
@@ -95,9 +97,7 @@ class AttendanceService(
         keycloakSubject: String,
         request: AttendanceCheckInRequest? = null,
     ): AttendanceCheckInResponse {
-        val member =
-            memberRepo.findByKeycloakIdAndDeletedAtIsNull(keycloakSubject)
-                ?: throw EntityNotFoundException("Member not found for subject: $keycloakSubject")
+        val member = currentMemberResolver.require(keycloakSubject)
 
         val now = LocalDateTime.now(clock)
         val today = now.toLocalDate()

@@ -1,6 +1,8 @@
 package com.hanmaum.dn.app.common.config
 
+import com.hanmaum.dn.app.common.api.ApiErrorCode
 import com.hanmaum.dn.app.common.api.ErrorResponse
+import com.hanmaum.dn.app.features.members.service.MemberProfileNotFoundException
 import jakarta.persistence.EntityNotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -34,6 +36,27 @@ class GlobalExceptionHandler {
                 status = HttpStatus.NOT_FOUND.value(),
                 error = "Not Found",
                 message = "The requested resource could not be found.",
+            )
+        return ResponseEntity(response, HttpStatus.NOT_FOUND)
+    }
+
+    /**
+     * Authenticated, but no member row belongs to the caller.
+     *
+     * Still a 404 — the profile genuinely is not there — but carrying a code, because the
+     * status alone reads exactly like "this route does not exist". A client has to tell them
+     * apart: one is a bug to report, the other is a person who belongs outside the member
+     * area and for whom a retry can never succeed.
+     */
+    @ExceptionHandler(MemberProfileNotFoundException::class)
+    fun handleMemberProfileNotFound(e: MemberProfileNotFoundException): ResponseEntity<ErrorResponse> {
+        logger.warn("No member profile for the authenticated caller")
+        val response =
+            ErrorResponse(
+                status = HttpStatus.NOT_FOUND.value(),
+                error = "Not Found",
+                message = e.message ?: "Member profile not found.",
+                code = ApiErrorCode.MEMBER_PROFILE_NOT_FOUND,
             )
         return ResponseEntity(response, HttpStatus.NOT_FOUND)
     }
