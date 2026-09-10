@@ -77,14 +77,51 @@ class VerseService(
     }
 
     /**
-     * This week's memory verse, or an empty response while none has been chosen.
+     * The 주간 암송 verse, from wherever it comes from, or an empty response when there is
+     * none to be had.
+     *
+     * Two sources, in that order: an admin's choice for the running week overrides, and
+     * otherwise the congregation's own publication is used — which is the normal case and
+     * means nobody has to maintain anything. See [currentWeeklyVerse].
+     */
+    @Transactional(readOnly = true)
+    fun getWeekly(): WeeklyVerseResponse =
+        when (val selection = unavailableAs503 { currentWeeklyVerse() }) {
+            null -> WeeklyVerseResponse()
+            is AdminWeeklyVerse -> chosenVerseResponse(selection.verse)
+            is SourceWeeklyVerse -> publishedVerseResponse(selection)
+        }
+
+    /**
+     * What the congregation published, passed through.
+     *
+     * Nothing is fetched here — the payload already carries the text — and nothing is
+     * resolved: no coordinates come with it, so there is no book to name, no translation to
+     * title and no reader page to deeplink into. Korean alone, which is what the card shows.
+     */
+    private fun publishedVerseResponse(selection: SourceWeeklyVerse): WeeklyVerseResponse =
+        WeeklyVerseResponse(
+            reference =
+                selection.item.reference
+                    .trim()
+                    .ifBlank { null }
+                    ?.let { VerseReference(ko = it) },
+            text =
+                selection.item.text
+                    .trim()
+                    .ifBlank { null },
+            weekStart = selection.weekStart,
+            weekEnd = selection.weekEnd,
+            sourceUrl = properties.readerBaseUrl,
+        )
+
+    /**
+     * An admin's choice, rendered from its coordinates.
      *
      * Unlike the daily passage the text is fetched: a memory verse is one or two verses, and
      * reciting it is the entire point of the card.
      */
-    @Transactional(readOnly = true)
-    fun getWeekly(): WeeklyVerseResponse {
-        val verse = currentWeeklyVerse() ?: return WeeklyVerseResponse()
+    private fun chosenVerseResponse(verse: WeeklyVerse): WeeklyVerseResponse {
         val translationId = verse.translationId ?: properties.defaultTranslationId
         val config = unavailableAs503 { client.appConfig() }
         val lines =
@@ -149,8 +186,32 @@ class VerseService(
         return getWeekly()
     }
 
-    /** The row for the running week, or null when the admin has not chosen one. */
-    fun currentWeeklyVerse(): WeeklyVerse? = weeklyVerseRepository.findByWeekStartAndDeletedAtIsNull(weekStartOf(LocalDate.now(clock)))
+    /**
+     * The verse in force, and which week it belongs to.
+     *
+     * An admin row for the running week wins — that is what `PUT /verses/weekly` is for, and
+     * it is how the congregation stays able to act when the source has nothing or the wrong
+     * thing. Otherwise the source answers.
+     *
+     * The running week is frequently not published yet: the congregation posts it late, and
+     * measuring found the current week empty on a Thursday. So rather than blanking the
+     * card, this walks back Sunday by Sunday to the newest verse there is and returns *its*
+     * week. Nothing here pretends that verse is this week's — [WeeklyVerseSelection.weekStart]
+     * says which week it is, the card shows the span, and the streak follows the same week.
+     *
+     * Cheap on purpose: the streak asks for this on every Home open, for every member. The
+     * admin branch is one indexed row, and the source branch is one cached lookup.
+     *
+     * Throws [BibleApiUnavailableException] when the source could not be asked. That is not
+     * the same as "no verse published", and callers treat it differently.
+     */
+    fun currentWeeklyVerse(): WeeklyVerseSelection? {
+        val thisWeek = weekStartOf(LocalDate.now(clock))
+        weeklyVerseRepository.findByWeekStartAndDeletedAtIsNull(thisWeek)?.let { return AdminWeeklyVerse(it) }
+        return generateSequence(thisWeek) { it.minusWeeks(1) }
+            .take(properties.weeklyLookbackWeeks + 1)
+            .firstNotNullOfOrNull { sunday -> client.weeklyVerse(sunday)?.let { SourceWeeklyVerse(sunday, it) } }
+    }
 
     /** Sunday-based, matching 주일 as the start of the week everywhere else in this app. */
     fun weekStartOf(date: LocalDate): LocalDate = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))

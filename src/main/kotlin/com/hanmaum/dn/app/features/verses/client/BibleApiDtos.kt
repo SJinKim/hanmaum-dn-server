@@ -87,3 +87,25 @@ data class VerseLine(
     val verse: Int = 0,
     val text: String = "",
 )
+
+/**
+ * One week's 주간 암송 verse, as the congregation's old front-end serves it.
+ *
+ * A different shape from everything above, because it comes from a different place: not
+ * `api/v1` but `_call_weekly.php` on the old site, which answers an unenveloped DataTables
+ * payload — `recordsTotal` plus `data` — with no `ok` flag and no authentication. It is what
+ * the homepage's own 주간 암송 block renders.
+ *
+ * Only Korean, and only prose: the reference arrives as a finished string ("신명기 1:33 ",
+ * trailing space and all), never as book/chapter/verse coordinates. Parsing it back into
+ * numbers would mean guessing at abbreviated and spelled-out book names, ranges and
+ * one-offs, so the string is passed through as-is and [com.hanmaum.dn.app.features.verses.api.v1.dto.VerseReference]
+ * carries Korean alone for these.
+ */
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class WeeklyVerseItem(
+    @param:JsonProperty("weekly_verse_from") val reference: String = "",
+    @param:JsonProperty("weekly_verse_gospel") val text: String = "",
+    /** Human-readable span, e.g. "8월 30일(일) ~ 9월 5일(토)". Kept for logs, not served. */
+    @param:JsonProperty("weekly_date") val weekLabel: String? = null,
+)

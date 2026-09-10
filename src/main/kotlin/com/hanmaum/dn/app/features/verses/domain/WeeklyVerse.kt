@@ -8,12 +8,17 @@ import jakarta.persistence.UniqueConstraint
 import java.time.LocalDate
 
 /**
- * The week's 암송 구절, chosen by an admin and stored here.
+ * An admin's override for the week's 암송 구절.
  *
- * The upstream bible API has no weekly-verse endpoint — every candidate path 404s and
- * app-config carries no such field. `verse.php` is a pure renderer, so the *selection* has
- * to live somewhere, and that somewhere is this table. The text is still fetched upstream
- * from these coordinates; only the choice is ours.
+ * Not the primary source any more, and never should have been the only one: the
+ * congregation publishes the weekly verse itself, on its old front-end rather than under
+ * `api/v1`, which is why an earlier search for it came up empty and this table was made to
+ * carry the whole job. It no longer does — see
+ * [com.hanmaum.dn.app.features.verses.service.VerseService.currentWeeklyVerse].
+ *
+ * A row here still wins for its week. That is deliberate: it is what the congregation has
+ * when the source publishes nothing, publishes late, or publishes the wrong thing. The text
+ * is fetched upstream from these coordinates; only the choice is ours.
  *
  * One row per week: [weekStart] is unique, and it is always a Sunday, matching 주일 as the
  * start of the week everywhere else in this app.
