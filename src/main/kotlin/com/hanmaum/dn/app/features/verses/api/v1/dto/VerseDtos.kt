@@ -14,8 +14,13 @@ import java.time.LocalDate
  */
 data class VerseReference(
     val ko: String,
-    val en: String,
-    val de: String,
+    /**
+     * Null when the reference could not be resolved into names — which is the case for the
+     * weekly verse, published as finished Korean prose with no coordinates to look up. The
+     * daily passage always fills all three.
+     */
+    val en: String? = null,
+    val de: String? = null,
 )
 
 data class DailyVerseResponse(
@@ -69,7 +74,7 @@ enum class DailyVerseState {
 }
 
 data class WeeklyVerseResponse(
-    /** Null while no verse has been chosen for the current week. */
+    /** Null while there is no verse to show at all. Korean-only when it came from the source. */
     val reference: VerseReference? = null,
     val book: Int? = null,
     val chapter: Int? = null,
@@ -78,15 +83,24 @@ data class WeeklyVerseResponse(
     val translation: String? = null,
     /** Filled here, unlike the daily passage — a memory verse is short and is the point. */
     val text: String? = null,
+    /**
+     * The week the verse belongs to — not necessarily the running one.
+     *
+     * The congregation publishes the running week late, often after it has begun. Rather
+     * than showing an empty card until then, the card shows the newest verse there is and
+     * says which week it is for. The recitation streak follows this same week, so its seven
+     * pills and the verse above them agree.
+     */
     val weekStart: LocalDate? = null,
     val weekEnd: LocalDate? = null,
     val sourceUrl: String? = null,
 )
 
 /**
- * Admin choice of the week's memory verse. [weekStart] is optional and defaults to the
- * current week, which is the common case — setting next week's ahead of time is the
- * exception, not the default.
+ * Admin choice of the week's memory verse, which overrides what the congregation published.
+ *
+ * [weekStart] is optional and defaults to the current week, which is the common case —
+ * setting next week's ahead of time is the exception, not the default.
  */
 data class SetWeeklyVerseRequest(
     val weekStart: LocalDate? = null,

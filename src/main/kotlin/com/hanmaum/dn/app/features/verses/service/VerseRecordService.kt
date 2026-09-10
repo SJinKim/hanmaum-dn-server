@@ -8,7 +8,6 @@ import com.hanmaum.dn.app.features.verses.api.v1.dto.VerseRecordBlock
 import com.hanmaum.dn.app.features.verses.api.v1.dto.VerseRecordsResponse
 import com.hanmaum.dn.app.features.verses.client.BibleApiClient
 import com.hanmaum.dn.app.features.verses.client.BibleApiUnavailableException
-import com.hanmaum.dn.app.features.verses.domain.WeeklyVerse
 import com.hanmaum.dn.app.features.verses.repository.VerseRecordMark
 import com.hanmaum.dn.app.features.verses.repository.VerseRecordRepository
 import org.slf4j.LoggerFactory
@@ -34,7 +33,9 @@ class VerseRecordService(
      * Both streaks in one read, so Home does not load twice for one screen.
      *
      * Four queries: the member, the week's verse, the marks, the totals. It was seven, one
-     * of which resolved the weekly verse a second time inside the same call.
+     * of which resolved the weekly verse a second time inside the same call. Resolving the
+     * verse may now reach the congregation's site rather than the database, which is why the
+     * client caches it per week — see BibleApiClient.weeklyVerse.
      *
      * Not read-only, despite being a GET: resolving the caller may adopt a legacy member row.
      * A read-only transaction would leave that write unflushed and the adoption would
@@ -65,7 +66,7 @@ class VerseRecordService(
     ): VerseRecordBlock {
         val member = resolveMember(caller)
         val today = LocalDate.now(clock)
-        val weeklyVerse = verseService.currentWeeklyVerse()
+        val weeklyVerse = lookUpWeeklyVerse()
 
         if (!isMarkableToday(kind, today, weeklyVerse)) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "오늘은 기록할 수 없습니다.")
@@ -94,12 +95,14 @@ class VerseRecordService(
      */
     private fun loadContext(
         member: Member,
-        preloadedWeeklyVerse: WeeklyVerse? = null,
+        preloadedWeeklyVerse: WeeklyVerseLookup? = null,
     ): BlockContext {
         val today = LocalDate.now(clock)
-        val weeklyVerse = preloadedWeeklyVerse ?: verseService.currentWeeklyVerse()
+        val weeklyVerse = preloadedWeeklyVerse ?: lookUpWeeklyVerse()
         val quietTimeWeek = verseService.weekStartOf(today)
-        val recitationWeek = weeklyVerse?.weekStart ?: quietTimeWeek
+        // The verse's own week, which is not always the running one: the congregation
+        // publishes late, and the pills then belong to the week the verse belongs to.
+        val recitationWeek = weeklyVerse.selection?.weekStart ?: quietTimeWeek
         val marks =
             recordRepository.findMarksInRange(
                 memberId = member.id!!,
@@ -110,9 +113,29 @@ class VerseRecordService(
         return BlockContext(today, weeklyVerse, quietTimeWeek, recitationWeek, marks, totals)
     }
 
+    /**
+     * The verse in force, or the fact that we could not find out.
+     *
+     * The two are different: since the verse comes from the congregation's own site, an
+     * unreachable source now looks the same as an unpublished week unless it is kept apart,
+     * and [isMarkableToday] answers them differently.
+     */
+    private data class WeeklyVerseLookup(
+        val selection: WeeklyVerseSelection?,
+        val resolved: Boolean,
+    )
+
+    private fun lookUpWeeklyVerse(): WeeklyVerseLookup =
+        try {
+            WeeklyVerseLookup(verseService.currentWeeklyVerse(), resolved = true)
+        } catch (e: BibleApiUnavailableException) {
+            log.warn("Weekly verse unknown, allowing the recitation mark: {}", e.message)
+            WeeklyVerseLookup(null, resolved = false)
+        }
+
     private inner class BlockContext(
         val today: LocalDate,
-        val weeklyVerse: WeeklyVerse?,
+        val weeklyVerse: WeeklyVerseLookup,
         val quietTimeWeek: LocalDate,
         val recitationWeek: LocalDate,
         val marks: List<VerseRecordMark>,
@@ -138,7 +161,9 @@ class VerseRecordService(
     /**
      * Whether today can be marked, computed here so the client never has to derive it.
      *
-     * 암송 needs a verse to recite — without a chosen one the card has nothing to offer.
+     * 암송 needs a verse to recite — without one the card has nothing to offer. When the
+     * source could not be reached the answer is yes, for the same reason it is yes for
+     * 오늘의 말씀 below: a member must not lose a day they earned to a third party's outage.
      *
      * 오늘의 말씀 is markable on every day there is something to read, and Sunday is one of
      * them. The reading plan carries no Sunday entry, but that is not an empty day: the
@@ -157,10 +182,10 @@ class VerseRecordService(
     private fun isMarkableToday(
         kind: VerseRecordKind,
         today: LocalDate,
-        weeklyVerse: WeeklyVerse?,
+        weeklyVerse: WeeklyVerseLookup,
     ): Boolean =
         when (kind) {
-            VerseRecordKind.RECITATION -> weeklyVerse != null
+            VerseRecordKind.RECITATION -> weeklyVerse.selection != null || !weeklyVerse.resolved
             VerseRecordKind.QUIET_TIME -> {
                 if (today.dayOfWeek == DayOfWeek.SUNDAY) {
                     // The sermon is the passage. No upstream lookup can tell us that.

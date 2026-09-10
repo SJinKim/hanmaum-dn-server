@@ -1,8 +1,11 @@
 package com.hanmaum.dn.app.features.verses.client
 
+import com.fasterxml.jackson.core.JacksonException
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.hanmaum.dn.app.features.verses.config.BibleApiProperties
 import org.slf4j.LoggerFactory
 import org.springframework.core.ParameterizedTypeReference
+import org.springframework.http.MediaType
 import org.springframework.http.client.SimpleClientHttpRequestFactory
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
@@ -11,6 +14,7 @@ import java.time.Duration
 import java.time.LocalDate
 import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -37,6 +41,12 @@ interface BibleApiClient {
 
     /** Quiet-time passage coordinates for [date], or null on days without one. */
     fun quietTime(date: LocalDate): QuietTimeItem?
+
+    /**
+     * The 주간 암송 verse published for the week starting on [sunday], or null when that week
+     * has none. Never throws for an unpublished week — that is an answer, not a failure.
+     */
+    fun weeklyVerse(sunday: LocalDate): WeeklyVerseItem?
 
     /** Verse text for a coordinate range; empty when the upstream has no such passage. */
     fun verses(
@@ -71,10 +81,19 @@ class HttpBibleApiClient(
     // here, so a caller that supplies its own builder — a test binding a mock server — keeps
     // the request factory it set.
     restClientBuilder: RestClient.Builder = timeoutedBuilder(properties),
+    // The weekly endpoint answers JSON under `Content-Type: text/html`, so no message
+    // converter will touch it and the body is read as a string and parsed here. Defaulted
+    // for the same reason as the builder above; Spring injects its configured mapper.
+    private val objectMapper: ObjectMapper = ObjectMapper(),
 ) : BibleApiClient {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    private val restClient = restClientBuilder.baseUrl(properties.baseUrl).build()
+    // Cloned rather than mutated: two hosts are involved — `api/v1` and the old site the
+    // weekly verse lives on — and a caller that handed us a builder keeps it as it was.
+    private val restClient = restClientBuilder.clone().baseUrl(properties.baseUrl).build()
+
+    /** The old front-end, which is where 주간 암송 is published. No credentials, no envelope. */
+    private val legacyClient = restClientBuilder.clone().baseUrl(properties.readerBaseUrl).build()
 
     /**
      * One quiet-time lookup per date, process-wide.
@@ -99,6 +118,23 @@ class HttpBibleApiClient(
      */
     private val cachedConfig = AtomicReference<BibleAppConfig?>(null)
 
+    /**
+     * One weekly lookup per Sunday, for a while.
+     *
+     * Cached for the same reason as the quiet time — every member's Home asks the identical
+     * question — but with an expiry rather than forever. The congregation publishes the
+     * running week late, sometimes after it has already begun, so a "nothing yet" remembered
+     * for the life of the process would keep the previous week's verse on the card until the
+     * next deploy. A published week is cached under the same expiry: a correction to it
+     * should reach the app too.
+     */
+    private val weeklyBySunday = ConcurrentHashMap<LocalDate, CachedWeekly>()
+
+    private class CachedWeekly(
+        val item: WeeklyVerseItem?,
+        val fetchedAtNanos: Long,
+    )
+
     override fun appConfig(): BibleAppConfig {
         cachedConfig.get()?.let { return it }
         val fetched =
@@ -122,6 +158,55 @@ class HttpBibleApiClient(
         quietTimeByDate[date] = Optional.ofNullable(item)
         return item
     }
+
+    override fun weeklyVerse(sunday: LocalDate): WeeklyVerseItem? {
+        val ttlNanos = TimeUnit.MINUTES.toNanos(properties.weeklyCacheMinutes)
+        weeklyBySunday[sunday]
+            ?.takeIf { System.nanoTime() - it.fetchedAtNanos < ttlNanos }
+            ?.let { return it.item }
+
+        // A form POST without credentials, unlike everything in api/v1: this endpoint backs
+        // the congregation's public homepage and takes no key.
+        val body =
+            try {
+                legacyClient
+                    .post()
+                    .uri(WEEKLY_PATH)
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                    .body("lastSunday=$sunday")
+                    .retrieve()
+                    .body(String::class.java)
+            } catch (e: RestClientException) {
+                log.warn("Weekly verse call failed sunday={} reason={}", sunday, e.javaClass.simpleName)
+                throw BibleApiUnavailableException("Bible API request failed for $WEEKLY_PATH", e)
+            }
+        if (body.isNullOrBlank()) {
+            throw BibleApiUnavailableException("Bible API returned no weekly-verse payload")
+        }
+
+        val item = parseWeekly(body, sunday)
+        if (weeklyBySunday.size >= MAX_CACHED_DATES) weeklyBySunday.clear()
+        weeklyBySunday[sunday] = CachedWeekly(item, System.nanoTime())
+        return item
+    }
+
+    /**
+     * An unpublished week is `recordsTotal: 0` with `data: ""` — an empty *string*, not an
+     * empty array. The payload is read as a tree for exactly that reason: `data` is not one
+     * shape, and binding it to a list would turn "no verse this week" into a parse failure.
+     */
+    private fun parseWeekly(
+        body: String,
+        sunday: LocalDate,
+    ): WeeklyVerseItem? =
+        try {
+            val data = objectMapper.readTree(body).path("data")
+            val first = if (data.isArray) data.firstOrNull() else null
+            first?.let { objectMapper.treeToValue(it, WeeklyVerseItem::class.java) }
+        } catch (e: JacksonException) {
+            log.warn("Weekly verse payload was unreadable sunday={} reason={}", sunday, e.javaClass.simpleName)
+            throw BibleApiUnavailableException("Bible API returned an unreadable weekly-verse payload", e)
+        }
 
     override fun verses(
         book: Int,
@@ -149,6 +234,9 @@ class HttpBibleApiClient(
          * policy to reason about.
          */
         const val MAX_CACHED_DATES = 64
+
+        /** Not under api/v1: the weekly verse is published on the old front-end. */
+        const val WEEKLY_PATH = "/_call_weekly.php"
     }
 
     private fun <T> get(

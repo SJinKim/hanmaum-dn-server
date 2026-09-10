@@ -39,9 +39,13 @@ class VerseController(
      * GET /api/v1/verses/weekly
      * Role: any authenticated member — the 주간 암송 구절 card on Home.
      *
-     * An empty payload means no verse has been chosen for the running week. Unlike the daily
-     * passage this one carries its text: a memory verse is short, and reciting it is the
-     * point of the card.
+     * The verse comes from the congregation's own publication, or from an admin override
+     * where one is set. `weekStart`/`weekEnd` say which week it belongs to, which is not
+     * always the running one — the congregation often publishes late, and showing the newest
+     * verse with its own span beats showing an empty card.
+     *
+     * An empty payload means there is no verse to show at all. Unlike the daily passage this
+     * one carries its text: a memory verse is short, and reciting it is the point of the card.
      */
     @GetMapping("/weekly")
     @PreAuthorize("isAuthenticated()")
@@ -54,8 +58,9 @@ class VerseController(
      * PUT /api/v1/verses/weekly
      * Role: ADMIN — chooses the memory verse for a week.
      *
-     * The upstream has no weekly-verse endpoint, so this selection is the only source there
-     * is. Re-sending for the same week overwrites; weekStart defaults to the running week.
+     * An override: a row set here wins over what the congregation published for that week,
+     * which is how they stay able to act when the source has nothing or the wrong thing.
+     * Re-sending for the same week overwrites; weekStart defaults to the running week.
      */
     @PutMapping("/weekly")
     @PreAuthorize("hasRole('ADMIN')")

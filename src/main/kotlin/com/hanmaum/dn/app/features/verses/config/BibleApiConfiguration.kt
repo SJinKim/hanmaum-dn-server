@@ -22,8 +22,30 @@ data class BibleApiProperties(
     val secret: String = "",
     /** 92 is 개역개정, the upstream default and the one the Home card shows. */
     val defaultTranslationId: Int = 92,
-    /** Deeplink base for "read on" — the congregation's own reader page, not the API. */
+    /**
+     * The congregation's own site, not the API.
+     *
+     * Two things hang off it: the "read on" deeplink for the daily passage, and the weekly
+     * verse itself — `_call_weekly.php` lives here rather than under [baseUrl], which is why
+     * the endpoint went unfound long enough for the verse to be maintained by hand instead.
+     */
     val readerBaseUrl: String = "https://bible.asher.design",
+    /**
+     * How long a weekly lookup is remembered, in minutes.
+     *
+     * Long enough that a congregation opening Home costs one request rather than hundreds,
+     * short enough that a week published mid-week — the normal case — reaches the card
+     * without a deploy.
+     */
+    val weeklyCacheMinutes: Long = 30,
+    /**
+     * How many weeks back to look when the running week has no verse published yet.
+     *
+     * The card then shows the newest verse there is, with the week it belongs to, rather
+     * than going blank; the congregation's own homepage does the same. The bound exists so a
+     * source that has gone quiet for good costs a fixed number of requests and then stops.
+     */
+    val weeklyLookbackWeeks: Int = 8,
     /**
      * Connect and read timeouts, in milliseconds.
      *

@@ -9,7 +9,7 @@ import com.hanmaum.dn.app.features.members.service.MemberProfileNotFoundExceptio
 import com.hanmaum.dn.app.features.verses.client.BibleApiClient
 import com.hanmaum.dn.app.features.verses.client.BibleApiUnavailableException
 import com.hanmaum.dn.app.features.verses.client.QuietTimeItem
-import com.hanmaum.dn.app.features.verses.domain.WeeklyVerse
+import com.hanmaum.dn.app.features.verses.client.WeeklyVerseItem
 import com.hanmaum.dn.app.features.verses.repository.VerseRecordCount
 import com.hanmaum.dn.app.features.verses.repository.VerseRecordMark
 import com.hanmaum.dn.app.features.verses.repository.VerseRecordRepository
@@ -72,8 +72,11 @@ class VerseRecordServiceTest {
             Clock.fixed(Instant.parse(instant), zone),
         )
 
-    private fun weeklyVerse(week: LocalDate = weekStart) =
-        WeeklyVerse(weekStart = week, book = 43, chapterStart = 1, verseStart = 5, chapterEnd = 1, verseEnd = 5)
+    // What the congregation published, which is where the verse comes from now. The streak
+    // only ever reads the week off it, so which of the two sources it is does not matter
+    // here — it matters that the week is the verse's own, not the calendar's.
+    private fun weeklyVerse(week: LocalDate = weekStart): WeeklyVerseSelection =
+        SourceWeeklyVerse(week, WeeklyVerseItem(reference = "요 1:5 ", text = "빛이 어둠에 비치되"))
 
     // ─── The blocker ───────────────────────────────────────────────────────────
 
@@ -193,11 +196,26 @@ class VerseRecordServiceTest {
     }
 
     @Test
-    fun `recitation is not markable while no verse has been chosen`() {
+    fun `recitation is not markable while there is no verse at all`() {
         `when`(verseService.currentWeeklyVerse()).thenReturn(null)
         `when`(client.quietTime(tuesday)).thenReturn(QuietTimeItem(book = 5, chapterStart = 3, verseStart = 1))
 
         assertFalse(service().getRecords(caller).recitation.todayMarkable)
+    }
+
+    @Test
+    fun `an unreachable source lets a member mark the recitation too`() {
+        `when`(verseService.currentWeeklyVerse()).thenThrow(BibleApiUnavailableException("down"))
+        `when`(client.quietTime(tuesday)).thenReturn(QuietTimeItem(book = 5, chapterStart = 3, verseStart = 1))
+
+        // The verse now comes from the congregation's site, so "no verse published" and "we
+        // could not ask" arrive by the same door. Only the first is a reason to refuse: the
+        // member who recited this week's verse must not lose the day to someone's outage.
+        val result = service().getRecords(caller)
+
+        assertTrue(result.recitation.todayMarkable)
+        // And the pills fall back to the running week, rather than the block failing.
+        assertEquals(weekStart, result.recitation.weekStart)
     }
 
     @Test
@@ -249,7 +267,7 @@ class VerseRecordServiceTest {
     }
 
     @Test
-    fun `marking recitation without a chosen verse is refused`() {
+    fun `marking recitation with no verse to recite is refused`() {
         `when`(verseService.currentWeeklyVerse()).thenReturn(null)
 
         assertThrows<ResponseStatusException> { service().mark(caller, VerseRecordKind.RECITATION) }
