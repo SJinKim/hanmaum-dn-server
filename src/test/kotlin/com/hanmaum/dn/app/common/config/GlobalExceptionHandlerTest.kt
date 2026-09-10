@@ -1,5 +1,8 @@
 package com.hanmaum.dn.app.common.config
 
+import com.hanmaum.dn.app.common.api.ApiErrorCode
+import com.hanmaum.dn.app.features.members.service.MemberProfileNotFoundException
+import jakarta.persistence.EntityNotFoundException
 import org.springframework.core.MethodParameter
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpInputMessage
@@ -17,6 +20,7 @@ import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class GlobalExceptionHandlerTest {
     private val handler = GlobalExceptionHandler()
@@ -117,5 +121,26 @@ class GlobalExceptionHandlerTest {
         val body = assertNotNull(response.body)
         assertEquals(HttpStatus.METHOD_NOT_ALLOWED.value(), body.status)
         assertEquals("Method Not Allowed", body.error)
+    }
+
+    @Test
+    fun `handleMemberProfileNotFound carries a code the client can branch on`() {
+        val response = handler.handleMemberProfileNotFound(MemberProfileNotFoundException())
+
+        // Still a 404 — the profile genuinely is not there — but a bare one reads exactly
+        // like "this route does not exist". Those are different problems: one is a bug to
+        // report, the other a person who belongs outside the member area, for whom a retry
+        // can never succeed. Looking for a deployed-but-invisible endpoint cost an afternoon.
+        assertEquals(HttpStatus.NOT_FOUND, response.statusCode)
+        val body = assertNotNull(response.body)
+        assertEquals(ApiErrorCode.MEMBER_PROFILE_NOT_FOUND, body.code)
+    }
+
+    @Test
+    fun `an ordinary not-found carries no code`() {
+        val response = handler.handleNotFound(EntityNotFoundException("nothing here"))
+
+        // The code is opt-in. A client branching on it must not be handed one for every 404.
+        assertNull(assertNotNull(response.body).code)
     }
 }

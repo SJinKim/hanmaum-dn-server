@@ -12,7 +12,8 @@ import com.hanmaum.dn.app.features.church.service.ChurchGeofenceService
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
-import jakarta.persistence.EntityNotFoundException
+import com.hanmaum.dn.app.features.members.service.CurrentMemberResolver
+import com.hanmaum.dn.app.features.members.service.MemberProfileNotFoundException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.BeforeEach
@@ -58,7 +59,7 @@ class AttendanceServiceTest {
 
     @BeforeEach
     fun setUp() {
-        service = AttendanceService(definitionRepo, logRepo, memberRepo, churchGeofenceService, clock)
+        service = AttendanceService(definitionRepo, logRepo, memberRepo, CurrentMemberResolver(memberRepo), churchGeofenceService, clock)
         // The real evaluator never returns null: with no position, no geofence, or a fix it
         // cannot judge, it answers UNCONFIRMED. Lenient because most tests here are about
         // the window and the duplicate guard and never reach it.
@@ -310,7 +311,7 @@ class AttendanceServiceTest {
     fun `checkIn rejects unknown member`() {
         `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("unknown")).thenReturn(null)
 
-        assertThrows<EntityNotFoundException> { service.checkIn("unknown") }
+        assertThrows<MemberProfileNotFoundException> { service.checkIn("unknown") }
 
         verify(logRepo, never()).insertIfAbsent(any(), any(), any(), any(), any(), any())
     }

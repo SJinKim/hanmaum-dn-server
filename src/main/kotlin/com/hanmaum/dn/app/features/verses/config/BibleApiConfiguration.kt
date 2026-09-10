@@ -24,6 +24,15 @@ data class BibleApiProperties(
     val defaultTranslationId: Int = 92,
     /** Deeplink base for "read on" — the congregation's own reader page, not the API. */
     val readerBaseUrl: String = "https://bible.asher.design",
+    /**
+     * Connect and read timeouts, in milliseconds.
+     *
+     * A verse card is decoration on a home screen and the upstream is a small PHP host. With
+     * no timeout a hung one holds request threads until the container gives up; failing fast
+     * turns that into the already-handled "unavailable" path instead.
+     */
+    val connectTimeoutMillis: Long = 2_000,
+    val readTimeoutMillis: Long = 4_000,
 ) {
     fun isConfigured(): Boolean = keyId.isNotBlank() && secret.isNotBlank()
 }

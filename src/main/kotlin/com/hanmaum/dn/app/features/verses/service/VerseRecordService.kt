@@ -2,19 +2,20 @@ package com.hanmaum.dn.app.features.verses.service
 
 import com.hanmaum.dn.app.common.domainvalue.VerseRecordKind
 import com.hanmaum.dn.app.features.members.domain.Member
-import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.members.service.CurrentMemberResolver
+import com.hanmaum.dn.app.features.members.service.MemberPrincipal
 import com.hanmaum.dn.app.features.verses.api.v1.dto.VerseRecordBlock
 import com.hanmaum.dn.app.features.verses.api.v1.dto.VerseRecordsResponse
 import com.hanmaum.dn.app.features.verses.client.BibleApiClient
 import com.hanmaum.dn.app.features.verses.client.BibleApiUnavailableException
+import com.hanmaum.dn.app.features.verses.domain.WeeklyVerse
+import com.hanmaum.dn.app.features.verses.repository.VerseRecordMark
 import com.hanmaum.dn.app.features.verses.repository.VerseRecordRepository
-import jakarta.persistence.EntityNotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
-import java.time.Clock
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.util.UUID
@@ -22,20 +23,31 @@ import java.util.UUID
 @Service
 class VerseRecordService(
     private val recordRepository: VerseRecordRepository,
-    private val memberRepository: MemberRepository,
+    private val currentMemberResolver: CurrentMemberResolver,
     private val verseService: VerseService,
     private val client: BibleApiClient,
-    private val clock: Clock,
+    private val clock: java.time.Clock,
 ) {
     private val log = LoggerFactory.getLogger(VerseRecordService::class.java)
 
-    /** Both streaks in one read, so Home does not load twice for one screen. */
-    @Transactional(readOnly = true)
-    fun getRecords(keycloakSubject: String): VerseRecordsResponse {
-        val member = resolveMember(keycloakSubject)
+    /**
+     * Both streaks in one read, so Home does not load twice for one screen.
+     *
+     * Four queries: the member, the week's verse, the marks, the totals. It was seven, one
+     * of which resolved the weekly verse a second time inside the same call.
+     *
+     * Not read-only, despite being a GET: resolving the caller may adopt a legacy member row.
+     * A read-only transaction would leave that write unflushed and the adoption would
+     * silently not happen. That a read path can write at all is the wart named in HDN-161 —
+     * the annotation says so out loud rather than hiding it.
+     */
+    @Transactional
+    fun getRecords(caller: MemberPrincipal): VerseRecordsResponse {
+        val member = resolveMember(caller)
+        val context = loadContext(member)
         return VerseRecordsResponse(
-            quietTime = block(member, VerseRecordKind.QUIET_TIME),
-            recitation = block(member, VerseRecordKind.RECITATION),
+            quietTime = context.block(VerseRecordKind.QUIET_TIME),
+            recitation = context.block(VerseRecordKind.RECITATION),
         )
     }
 
@@ -48,13 +60,14 @@ class VerseRecordService(
      */
     @Transactional
     fun mark(
-        keycloakSubject: String,
+        caller: MemberPrincipal,
         kind: VerseRecordKind,
     ): VerseRecordBlock {
-        val member = resolveMember(keycloakSubject)
+        val member = resolveMember(caller)
         val today = LocalDate.now(clock)
+        val weeklyVerse = verseService.currentWeeklyVerse()
 
-        if (!isMarkableToday(kind, today)) {
+        if (!isMarkableToday(kind, today, weeklyVerse)) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "오늘은 기록할 수 없습니다.")
         }
 
@@ -70,44 +83,57 @@ class VerseRecordService(
         }
 
         log.info("Verse record written kind={} memberId={}", kind, member.id)
-        return block(member, kind)
-    }
-
-    private fun block(
-        member: Member,
-        kind: VerseRecordKind,
-    ): VerseRecordBlock {
-        val today = LocalDate.now(clock)
-        val weekStart = weekStartFor(kind, today)
-        val days =
-            recordRepository.findDatesInRange(
-                memberId = member.id!!,
-                kind = kind.name,
-                from = weekStart,
-                to = weekStart.plusDays(6),
-            )
-        return VerseRecordBlock(
-            weekStart = weekStart,
-            days = days,
-            todayMarked = days.contains(today),
-            todayMarkable = isMarkableToday(kind, today),
-            totalDays = recordRepository.countForMember(member.id!!, kind.name),
-        )
+        return loadContext(member, weeklyVerse).block(kind)
     }
 
     /**
-     * 암송 follows the week of the chosen verse; 오늘의 말씀 follows the calendar week.
-     * Both start on Sunday, so the seven pills line up either way.
+     * Everything both blocks need, read once.
+     *
+     * The two streaks can sit on different weeks — recitation follows the chosen verse — so
+     * the marks are fetched across the span covering both and split by kind here.
      */
-    private fun weekStartFor(
-        kind: VerseRecordKind,
-        today: LocalDate,
-    ): LocalDate =
-        when (kind) {
-            VerseRecordKind.RECITATION ->
-                verseService.currentWeeklyVerse()?.weekStart ?: verseService.weekStartOf(today)
-            VerseRecordKind.QUIET_TIME -> verseService.weekStartOf(today)
+    private fun loadContext(
+        member: Member,
+        preloadedWeeklyVerse: WeeklyVerse? = null,
+    ): BlockContext {
+        val today = LocalDate.now(clock)
+        val weeklyVerse = preloadedWeeklyVerse ?: verseService.currentWeeklyVerse()
+        val quietTimeWeek = verseService.weekStartOf(today)
+        val recitationWeek = weeklyVerse?.weekStart ?: quietTimeWeek
+        val marks =
+            recordRepository.findMarksInRange(
+                memberId = member.id!!,
+                from = minOf(quietTimeWeek, recitationWeek),
+                to = maxOf(quietTimeWeek, recitationWeek).plusDays(6),
+            )
+        val totals = recordRepository.countByKind(member.id!!).associate { it.kind to it.total }
+        return BlockContext(today, weeklyVerse, quietTimeWeek, recitationWeek, marks, totals)
+    }
+
+    private inner class BlockContext(
+        val today: LocalDate,
+        val weeklyVerse: WeeklyVerse?,
+        val quietTimeWeek: LocalDate,
+        val recitationWeek: LocalDate,
+        val marks: List<VerseRecordMark>,
+        val totals: Map<VerseRecordKind, Long>,
+    ) {
+        fun block(kind: VerseRecordKind): VerseRecordBlock {
+            val weekStart = if (kind == VerseRecordKind.RECITATION) recitationWeek else quietTimeWeek
+            val weekEnd = weekStart.plusDays(6)
+            val days =
+                marks
+                    .filter { it.kind == kind && !it.recordDate.isBefore(weekStart) && !it.recordDate.isAfter(weekEnd) }
+                    .map { it.recordDate }
+            return VerseRecordBlock(
+                weekStart = weekStart,
+                days = days,
+                todayMarked = days.contains(today),
+                todayMarkable = isMarkableToday(kind, today, weeklyVerse),
+                totalDays = totals[kind] ?: 0L,
+            )
         }
+    }
 
     /**
      * Whether today can be marked, computed here so the client never has to derive it.
@@ -116,12 +142,12 @@ class VerseRecordService(
      *
      * 오늘의 말씀 is markable on every day there is something to read, and Sunday is one of
      * them. The reading plan carries no Sunday entry, but that is not an empty day: the
-     * passages come from the sermon, so a member who goes to church and reads along has
-     * done the same thing as on any other day. Treating Sunday as unmarkable made a full
-     * week 6/7 by construction and quietly told those members their Sunday did not count.
-     * The week is seven pills, the same as 암송.
+     * passages come from the sermon, so a member who goes to church and reads along has done
+     * the same thing as on any other day. The week is seven pills, the same as 암송.
      *
-     * The other days need the upstream, because a gap in the plan is a real absence.
+     * The other days need the upstream, because a gap in the plan is a real absence. That
+     * lookup is cached per date inside the client, so a congregation opening Home on a
+     * Sunday morning costs one call rather than one per member.
      *
      * When the upstream cannot be reached the answer is *yes*. Refusing to record something
      * a member actually did, because a third party is down, is the worse of the two
@@ -131,9 +157,10 @@ class VerseRecordService(
     private fun isMarkableToday(
         kind: VerseRecordKind,
         today: LocalDate,
+        weeklyVerse: WeeklyVerse?,
     ): Boolean =
         when (kind) {
-            VerseRecordKind.RECITATION -> verseService.currentWeeklyVerse() != null
+            VerseRecordKind.RECITATION -> weeklyVerse != null
             VerseRecordKind.QUIET_TIME -> {
                 if (today.dayOfWeek == DayOfWeek.SUNDAY) {
                     // The sermon is the passage. No upstream lookup can tell us that.
@@ -149,7 +176,9 @@ class VerseRecordService(
             }
         }
 
-    private fun resolveMember(keycloakSubject: String): Member =
-        memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSubject)
-            ?: throw EntityNotFoundException("Member not found for subject: $keycloakSubject")
+    // The linking variant, matching /members/me. A legacy account that reaches the member
+    // area through the profile endpoint must not then fail here — which is exactly what a
+    // bare lookup did, and why the streak bars never appeared in 0.8.0.
+    private fun resolveMember(caller: MemberPrincipal): Member =
+        currentMemberResolver.resolveAndLink(caller.subject, caller.email, caller.emailVerified)
 }

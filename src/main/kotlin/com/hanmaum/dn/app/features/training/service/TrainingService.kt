@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.training.service
 
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.members.service.CurrentMemberResolver
 import com.hanmaum.dn.app.features.training.api.toDetailDto
 import com.hanmaum.dn.app.features.training.api.toDto
 import com.hanmaum.dn.app.features.training.api.toRegistrationDto
@@ -15,7 +16,6 @@ import com.hanmaum.dn.app.features.training.domain.UserTraining
 import com.hanmaum.dn.app.features.training.repository.TrainingCohortRepository
 import com.hanmaum.dn.app.features.training.repository.TrainingRepository
 import com.hanmaum.dn.app.features.training.repository.UserTrainingRepository
-import jakarta.persistence.EntityNotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
@@ -34,6 +34,7 @@ class TrainingService(
     private val cohortRepository: TrainingCohortRepository,
     private val userTrainingRepository: UserTrainingRepository,
     private val memberRepository: MemberRepository,
+    private val currentMemberResolver: CurrentMemberResolver,
     private val clock: Clock,
 ) {
     private val log = LoggerFactory.getLogger(TrainingService::class.java)
@@ -95,9 +96,7 @@ class TrainingService(
         publicId: UUID,
         keycloakSub: String,
     ): TrainingRegistrationDto {
-        val member =
-            memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)
-                ?: throw EntityNotFoundException("Member not found for authenticated subject")
+        val member = currentMemberResolver.require(keycloakSub)
         val training = requireTraining(publicId)
         val today = LocalDate.now(clock)
 

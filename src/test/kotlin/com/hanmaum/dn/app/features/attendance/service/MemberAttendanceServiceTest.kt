@@ -6,7 +6,8 @@ import com.hanmaum.dn.app.features.attendance.repository.AttendanceDefinitionRep
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
-import jakarta.persistence.EntityNotFoundException
+import com.hanmaum.dn.app.features.members.service.CurrentMemberResolver
+import com.hanmaum.dn.app.features.members.service.MemberProfileNotFoundException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -50,7 +51,7 @@ class MemberAttendanceServiceTest {
 
     @BeforeEach
     fun setUp() {
-        service = MemberAttendanceService(definitionRepo, logRepo, memberRepo, clock)
+        service = MemberAttendanceService(definitionRepo, logRepo, memberRepo, CurrentMemberResolver(memberRepo), clock)
         sundayService = makeDefinition(id = 1L, title = "주일예배", dayOfWeek = DayOfWeek.SUNDAY)
     }
 
@@ -190,7 +191,7 @@ class MemberAttendanceServiceTest {
     fun `getHistory fails when the token has no member row`() {
         `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-unknown")).thenReturn(null)
 
-        assertThrows<EntityNotFoundException> { service.getHistory("kc-unknown", null, null) }
+        assertThrows<MemberProfileNotFoundException> { service.getHistory("kc-unknown", null, null) }
     }
 
     // ─── getSummary ───────────────────────────────────────────────────────────

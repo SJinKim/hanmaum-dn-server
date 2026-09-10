@@ -3,10 +3,13 @@ package com.hanmaum.dn.app.features.verses.api.v1
 import com.hanmaum.dn.app.common.config.SecurityConfig
 import com.hanmaum.dn.app.common.domainvalue.VerseRecordKind
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.members.service.MemberPrincipal
+import com.hanmaum.dn.app.features.members.service.MemberProfileNotFoundException
 import com.hanmaum.dn.app.features.verses.api.v1.dto.VerseRecordBlock
 import com.hanmaum.dn.app.features.verses.api.v1.dto.VerseRecordsResponse
 import com.hanmaum.dn.app.features.verses.service.VerseRecordService
 import org.mockito.Mockito.`when`
+import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration
@@ -57,7 +60,7 @@ class VerseRecordControllerTest {
 
     @Test
     fun `GET records returns both streaks in one payload`() {
-        `when`(verseRecordService.getRecords("kc-001")).thenReturn(
+        `when`(verseRecordService.getRecords(any<MemberPrincipal>())).thenReturn(
             VerseRecordsResponse(quietTime = block(total = 84), recitation = block(marked = false, total = 127)),
         )
 
@@ -74,7 +77,7 @@ class VerseRecordControllerTest {
 
     @Test
     fun `POST records marks today and answers 201`() {
-        `when`(verseRecordService.mark(eq("kc-001"), eq(VerseRecordKind.QUIET_TIME))).thenReturn(block())
+        `when`(verseRecordService.mark(any<MemberPrincipal>(), eq(VerseRecordKind.QUIET_TIME))).thenReturn(block())
 
         mockMvc
             .perform(
@@ -104,6 +107,39 @@ class VerseRecordControllerTest {
         mockMvc
             .perform(delete("/api/v1/verses/records").with(memberToken()))
             .andExpect(status().isMethodNotAllowed)
+    }
+
+    @Test
+    fun `an account without a member profile gets a distinguishable 404`() {
+        `when`(verseRecordService.getRecords(any<MemberPrincipal>()))
+            .thenThrow(MemberProfileNotFoundException())
+
+        // The app has to tell three cases apart, because it does three different things:
+        // no profile (route the person out of the member area), server or upstream fault
+        // (bars off, retry later), and a profile with no marks (show seven empty pills).
+        // The first two were the same bare 404 until this code existed.
+        mockMvc
+            .perform(get("/api/v1/verses/records").with(memberToken()))
+            .andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.code").value("MEMBER_PROFILE_NOT_FOUND"))
+    }
+
+    @Test
+    fun `a member with no marks at all still gets both blocks`() {
+        `when`(verseRecordService.getRecords(any<MemberPrincipal>())).thenReturn(
+            VerseRecordsResponse(
+                quietTime = VerseRecordBlock(weekStart, emptyList(), false, true, 0),
+                recitation = VerseRecordBlock(weekStart, emptyList(), false, true, 0),
+            ),
+        )
+
+        // The third case: a valid answer, not an error. This is what 0.8.0 could not render.
+        mockMvc
+            .perform(get("/api/v1/verses/records").with(memberToken()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.quietTime.days").isArray)
+            .andExpect(jsonPath("$.data.quietTime.days.length()").value(0))
+            .andExpect(jsonPath("$.data.quietTime.totalDays").value(0))
     }
 
     @Test

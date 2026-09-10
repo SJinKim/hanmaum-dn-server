@@ -8,7 +8,7 @@ import com.hanmaum.dn.app.features.attendance.domain.AttendanceLog
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceDefinitionRepository
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
-import jakarta.persistence.EntityNotFoundException
+import com.hanmaum.dn.app.features.members.service.CurrentMemberResolver
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -32,6 +32,7 @@ class MemberAttendanceService(
     private val definitionRepo: AttendanceDefinitionRepository,
     private val logRepo: AttendanceLogRepository,
     private val memberRepo: MemberRepository,
+    private val currentMemberResolver: CurrentMemberResolver,
     private val clock: Clock,
 ) {
     /**
@@ -139,9 +140,7 @@ class MemberAttendanceService(
 
     private fun activeDefinitions(): List<AttendanceDefinition> = definitionRepo.findAll(activeOnly = true)
 
-    private fun requireMember(keycloakSubject: String) =
-        memberRepo.findByKeycloakIdAndDeletedAtIsNull(keycloakSubject)
-            ?: throw EntityNotFoundException("Member not found for subject: $keycloakSubject")
+    private fun requireMember(keycloakSubject: String) = currentMemberResolver.require(keycloakSubject)
 
     private fun AttendanceDefinition.toEntry(
         date: LocalDate,
