@@ -148,3 +148,20 @@
   first**; if those match the stored values, the recomputed one is trustworthy. Apply to
   both the dev DB (`hanmaumApp-db`, 5433) and the test DB (`infrastructure-test-db-1`, 5434).
 
+
+### Fetch a sibling repo before diagnosing drift in it
+- **Mistake**: Reported that `hanmaum-dn-ops/api/openapi.yaml` was missing every
+  `/verses` path and opened a "sync" PR for it. The local ops clone was four commits
+  behind (`55fd45c`/#15 while `main` was at #20); the paths had been synced hours
+  earlier by ops #18, #19 and #20. The PR merged as an empty commit, and its message —
+  now on ops `main` — claims 314 additive lines and a sync that "got skipped". The
+  stale clone happened to hold 78 operations, the exact number the server CLAUDE.md
+  records for 2026-09-01, which made the wrong conclusion look confirmed.
+- **Rule**: A cross-repo claim needs a `git fetch` in that repo first, and the
+  comparison runs against `origin/main`, never against whatever the local checkout
+  happens to be. This applies to every sibling repo (`hanmaum-dn-ops`,
+  `-mobile-app`, `-web-app`), whose clones are only current by coincidence. Two
+  further guards: a count matching a number written in a doc is not corroboration —
+  the doc records a past state and drifts the same way the clone does; and before
+  opening a sync PR, diff the generated file against the remote (`git diff
+  origin/main -- api/openapi.yaml`) and skip the PR when it is empty.
