@@ -11,15 +11,20 @@ import org.springframework.context.annotation.Configuration
  * an APK or IPA, and it lets the holder create applications in anyone's name. That is the
  * reason the app goes through this server instead of calling the API itself.
  *
- * [apiKey] defaults to blank so a deployment — and every test — boots without it. An
- * unconfigured deployment answers 503 on the 양육 endpoints, which the app shows as
- * 준비중입니다, rather than a course list without registration status.
+ * Both keys default to blank so a deployment — and every test — boots without them. Without
+ * [clientApiKey] the 양육 endpoints answer 503, which the app shows as 준비중입니다, rather
+ * than a course list without registration status.
  */
 @ConfigurationProperties("hanmaum.course-application-api")
 data class CourseApplicationApiProperties(
     val baseUrl: String = "https://application.hanmaum.de/api/v1",
-    /** A `client` key. The `admin` key is not needed for anything this server does. */
-    val apiKey: String = "",
+    /** The `client` key every call is made with. It only sees applications it created. */
+    val clientApiKey: String = "",
+    /**
+     * The `admin` key, which can read every application (GET /admin/applications). Bound so
+     * the deployment carries it, but nothing uses it yet; live remaining seats (#168) may.
+     */
+    val adminApiKey: String = "",
     /**
      * Connect and read timeouts, in milliseconds.
      *
@@ -36,11 +41,12 @@ data class CourseApplicationApiProperties(
      */
     val courseCacheSeconds: Long = 60,
 ) {
-    fun isConfigured(): Boolean = apiKey.isNotBlank()
+    fun isConfigured(): Boolean = clientApiKey.isNotBlank()
 
-    // The generated toString would print the key into any log line that renders the
+    // The generated toString would print both keys into any log line that renders the
     // properties object.
-    override fun toString(): String = "CourseApplicationApiProperties(baseUrl=$baseUrl, configured=${isConfigured()})"
+    override fun toString(): String =
+        "CourseApplicationApiProperties(baseUrl=$baseUrl, configured=${isConfigured()}, adminKeySet=${adminApiKey.isNotBlank()})"
 }
 
 @Configuration(proxyBeanMethods = false)

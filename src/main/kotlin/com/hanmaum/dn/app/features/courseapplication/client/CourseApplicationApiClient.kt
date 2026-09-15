@@ -144,7 +144,7 @@ class HttpCourseApplicationApiClient(
         val outcome =
             try {
                 request()
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${properties.apiKey}")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${properties.clientApiKey}")
                     .accept(MediaType.APPLICATION_JSON)
                     .exchange { _, response ->
                         val status = response.statusCode.value()
