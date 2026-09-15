@@ -1,12 +1,18 @@
 package com.hanmaum.dn.app.features.training.api.v1
 
+import com.hanmaum.dn.app.common.api.ErrorResponse
 import com.hanmaum.dn.app.common.dto.ApiResponse
+import com.hanmaum.dn.app.features.courseapplication.service.CourseApplicationService
+import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingApplicationRequest
 import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingCatalogDto
 import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingCohortDto
 import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingDetailDto
 import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingDto
 import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingRegistrationDto
 import com.hanmaum.dn.app.features.training.service.TrainingService
+import io.swagger.v3.oas.annotations.media.Content
+import io.swagger.v3.oas.annotations.media.Schema
+import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
@@ -14,57 +20,130 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
+import io.swagger.v3.oas.annotations.responses.ApiResponse as OpenApiResponse
 
 @RestController
 @RequestMapping("/trainings")
 class TrainingController(
     private val trainingService: TrainingService,
+    private val courseApplicationService: CourseApplicationService,
 ) {
     /**
      * GET /api/v1/trainings?activeOnly=false
      * Role: MEMBER — the course list behind the 양육 tab, and the catalog that populates
      * the admin member edit form.
      *
-     * activeOnly defaults to false so the admin form keeps seeing the discontinued Kairos
-     * courses; the 양육 list passes true.
+     * activeOnly=true is the 양육 list: active trainings that have at least one course in
+     * application.hanmaum.de, those open for the caller first, each with its registration
+     * window and the caller's own application. 503 when that API cannot be reached.
+     *
+     * activeOnly defaults to false, the stored catalog the admin form has always seen,
+     * discontinued Kairos courses included and without asking the external API.
      */
     @GetMapping
     @PreAuthorize("isAuthenticated()")
+    @OpenApiResponse(responseCode = "200", description = "The training list.")
+    @OpenApiResponse(
+        responseCode = "503",
+        description = "activeOnly=true only: application.hanmaum.de could not be reached (code COURSE_APPLICATION_UNAVAILABLE).",
+        content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+    )
     fun listTrainings(
         @RequestParam(defaultValue = "false") activeOnly: Boolean,
-    ): ResponseEntity<ApiResponse<List<TrainingDto>>> =
-        ResponseEntity.ok(ApiResponse.success(data = trainingService.getTrainings(activeOnly)))
+        authentication: JwtAuthenticationToken,
+    ): ResponseEntity<ApiResponse<List<TrainingDto>>> {
+        val trainings =
+            if (activeOnly) {
+                courseApplicationService.listTrainings(authentication.token.subject)
+            } else {
+                trainingService.getTrainings(activeOnly = false)
+            }
+        return ResponseEntity.ok(ApiResponse.success(data = trainings))
+    }
 
     /**
      * GET /api/v1/trainings/{publicId}
-     * Role: MEMBER — the 양육 detail page: schedule, location, leader, seat counter,
-     * application deadline and who the course is meant for.
+     * Role: MEMBER — the 양육 detail page: schedule, location, leader, who the course is
+     * meant for, the courses open for application right now, the caller's own application
+     * and the data the application form starts from.
      */
     @GetMapping("/{publicId}")
     @PreAuthorize("isAuthenticated()")
+    @OpenApiResponse(responseCode = "200", description = "The training detail.")
+    @OpenApiResponse(
+        responseCode = "404",
+        description = "No training with that id.",
+        content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+    )
+    @OpenApiResponse(
+        responseCode = "503",
+        description = "application.hanmaum.de could not be reached (code COURSE_APPLICATION_UNAVAILABLE).",
+        content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+    )
     fun getTraining(
         @PathVariable publicId: UUID,
-    ): ResponseEntity<ApiResponse<TrainingDetailDto>> = ResponseEntity.ok(ApiResponse.success(data = trainingService.getTraining(publicId)))
+        authentication: JwtAuthenticationToken,
+    ): ResponseEntity<ApiResponse<TrainingDetailDto>> =
+        ResponseEntity.ok(
+            ApiResponse.success(data = courseApplicationService.getTrainingDetail(publicId, authentication.token.subject)),
+        )
 
     /**
      * POST /api/v1/trainings/{publicId}/registrations
-     * Role: MEMBER — the 신청하기 button. Signs the caller up for the course, never
-     * anyone else; admin assignment stays on PUT /members/{publicId}/trainings.
+     * Role: MEMBER — the 신청하기 button. Applies the caller, never anyone else, to the
+     * chosen external course through application.hanmaum.de and records it here.
      *
-     * 400 when the course is not taking applications or the deadline has passed,
-     * 409 when the caller already applied or the course is full.
+     * Safe to retry: a repeat for the same course returns the application already made
+     * instead of creating a second one.
      */
     @PostMapping("/{publicId}/registrations")
     @PreAuthorize("isAuthenticated()")
+    @OpenApiResponse(responseCode = "201", description = "Applied, or the existing application for a retry.")
+    @OpenApiResponse(
+        responseCode = "400",
+        description =
+            "A required applicant field is missing from both the request and the profile " +
+                "(code COURSE_APPLICATION_INVALID, fieldErrors).",
+        content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+    )
+    @OpenApiResponse(
+        responseCode = "403",
+        description = "The caller may not apply to this course, e.g. a 여자반 (code COURSE_APPLICATION_NOT_ELIGIBLE).",
+        content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+    )
+    @OpenApiResponse(
+        responseCode = "404",
+        description = "No such training, or the course does not belong to it (code COURSE_APPLICATION_COURSE_NOT_FOUND).",
+        content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+    )
+    @OpenApiResponse(
+        responseCode = "409",
+        description =
+            "Registration closed (COURSE_APPLICATION_CLOSED), course full (COURSE_APPLICATION_FULL), " +
+                "or already applied to or taking this training (COURSE_APPLICATION_ALREADY_APPLIED).",
+        content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+    )
+    @OpenApiResponse(
+        responseCode = "422",
+        description = "Rejected by application.hanmaum.de (code COURSE_APPLICATION_INVALID, fieldErrors).",
+        content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+    )
+    @OpenApiResponse(
+        responseCode = "503",
+        description = "application.hanmaum.de could not be reached (code COURSE_APPLICATION_UNAVAILABLE).",
+        content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+    )
     fun register(
         @PathVariable publicId: UUID,
+        @Valid @RequestBody request: TrainingApplicationRequest,
         authentication: JwtAuthenticationToken,
     ): ResponseEntity<ApiResponse<TrainingRegistrationDto>> {
-        val registration = trainingService.registerCurrentMember(publicId, authentication.token.subject)
+        val registration = courseApplicationService.apply(publicId, authentication.token.subject, request)
         return ResponseEntity
             .status(HttpStatus.CREATED)
             .body(ApiResponse.success(data = registration, message = "신청이 완료되었습니다."))

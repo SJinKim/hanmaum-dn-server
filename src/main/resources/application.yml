@@ -49,6 +49,15 @@ hanmaum:
     secret: ${QT_SECRET:}
     # 92 is 개역개정, the upstream default and what the Home card shows.
     default-translation-id: ${QT_DEFAULT_TRANSLATION_ID:92}
+  course-application-api:
+    # application.hanmaum.de, where 양육 applications are recorded. The app never calls it;
+    # this server holds the key and proxies.
+    #
+    # The key defaults to blank so a deployment — and every test — boots without it. An
+    # unconfigured deployment answers 503 on the 양육 endpoints, shown as 준비중입니다.
+    base-url: ${APPLICATION_API_BASE_URL:https://application.hanmaum.de/api/v1}
+    api-key: ${APPLICATION_API_KEY:}
+    course-cache-seconds: ${APPLICATION_API_COURSE_CACHE_SECONDS:60}
   rsvp:
     reminder-offsets: ${HANMAUM_RSVP_REMINDEROFFSETS:P7D}
 

@@ -1,0 +1,542 @@
+package com.hanmaum.dn.app.features.courseapplication.service
+
+import com.hanmaum.dn.app.common.api.ApiErrorCode
+import com.hanmaum.dn.app.common.domainvalue.Gender
+import com.hanmaum.dn.app.features.courseapplication.client.CourseApplicationApiClient
+import com.hanmaum.dn.app.features.courseapplication.client.CourseApplicationApiRejectedException
+import com.hanmaum.dn.app.features.courseapplication.client.CourseApplicationApiUnavailableException
+import com.hanmaum.dn.app.features.courseapplication.client.ExternalApplication
+import com.hanmaum.dn.app.features.courseapplication.client.ExternalCourse
+import com.hanmaum.dn.app.features.courseapplication.client.ExternalCreateApplicationRequest
+import com.hanmaum.dn.app.features.courseapplication.client.ExternalCreatedApplication
+import com.hanmaum.dn.app.features.courseapplication.domain.CourseApplicationAttempt
+import com.hanmaum.dn.app.features.courseapplication.domain.CourseApplicationAttemptStatus
+import com.hanmaum.dn.app.features.courseapplication.repository.CourseApplicationAttemptRepository
+import com.hanmaum.dn.app.features.members.domain.Member
+import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.members.service.CurrentMemberResolver
+import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingApplicationRequest
+import com.hanmaum.dn.app.features.training.domain.Training
+import com.hanmaum.dn.app.features.training.domain.TrainingCode
+import com.hanmaum.dn.app.features.training.domain.TrainingStatus
+import com.hanmaum.dn.app.features.training.domain.UserTraining
+import com.hanmaum.dn.app.features.training.repository.TrainingRepository
+import com.hanmaum.dn.app.features.training.repository.UserTrainingRepository
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.api.extension.ExtendWith
+import org.mockito.Mock
+import org.mockito.Mockito.never
+import org.mockito.Mockito.verify
+import org.mockito.Mockito.`when`
+import org.mockito.junit.jupiter.MockitoExtension
+import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.TransactionDefinition
+import org.springframework.transaction.TransactionStatus
+import org.springframework.transaction.support.SimpleTransactionStatus
+import java.time.Clock
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.Optional
+import java.util.UUID
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+@ExtendWith(MockitoExtension::class)
+class CourseApplicationServiceTest {
+    @Mock private lateinit var trainingRepo: TrainingRepository
+
+    @Mock private lateinit var userTrainingRepo: UserTrainingRepository
+
+    @Mock private lateinit var attemptRepo: CourseApplicationAttemptRepository
+
+    @Mock private lateinit var memberRepo: MemberRepository
+
+    /** Runs every callback directly: these tests are about the steps, not transaction boundaries. */
+    private val transactionManager =
+        object : PlatformTransactionManager {
+            override fun getTransaction(definition: TransactionDefinition?): TransactionStatus = SimpleTransactionStatus()
+
+            override fun commit(status: TransactionStatus) = Unit
+
+            override fun rollback(status: TransactionStatus) = Unit
+        }
+
+    private val client = FakeClient()
+
+    private lateinit var service: CourseApplicationService
+
+    private val zone = ZoneId.of("Europe/Berlin")
+
+    // 2026-09-14 12:00 in Berlin.
+    private val now = Instant.parse("2026-09-14T10:00:00Z")
+    private val clock = Clock.fixed(now, zone)
+    private val today = LocalDate.of(2026, 9, 14)
+
+    private val oneOnOne = course(3, "일대일 제자양육", "0000-00-00 00:00:00", "2099-03-12 23:59:59")
+    private val qtWomen = course(105, "큐베세 여자반", "2026-09-01 00:00:00", "2026-09-30 23:59:59")
+    private val qtYouth = course(106, "큐베세 직장인/청년 반", "2026-09-01 00:00:00", "2026-09-20 23:59:59")
+    private val qtYouthPast = course(98, "큐베세 직장인/청년 반", "2025-09-21 07:00:00", "2025-10-12 23:59:59")
+    private val motherwise = course(95, "마더와이즈 \"회복\" 13기", "2026-09-01 00:00:00", "2026-09-30 23:59:59")
+
+    @BeforeEach
+    fun setUp() {
+        service =
+            CourseApplicationService(
+                client = client,
+                trainingRepository = trainingRepo,
+                userTrainingRepository = userTrainingRepo,
+                attemptRepository = attemptRepo,
+                currentMemberResolver = CurrentMemberResolver(memberRepo),
+                transactionManager = transactionManager,
+                clock = clock,
+            )
+        client.courses = listOf(oneOnOne, qtWomen, qtYouth, qtYouthPast, motherwise)
+    }
+
+    // ─── listTrainings ────────────────────────────────────────────────────────
+
+    @Test
+    fun `the list holds trainings with external courses only, open ones first`() {
+        givenMember(member(gender = Gender.M))
+        val qtBasic = training(1L, TrainingCode.QT_BASIC_SEMINAR, "큐티베이직세미나", 20, "큐베세")
+        val one = training(2L, TrainingCode.ONE_ON_ONE, "일대일제자양육", 40)
+        val ministry = training(3L, TrainingCode.MINISTRY_CLASS, "사역반", 70)
+        `when`(trainingRepo.findActiveWithAliases()).thenReturn(listOf(qtBasic, one, ministry))
+        client.courses = listOf(oneOnOne, qtWomen, qtYouthPast, motherwise)
+
+        val result = service.listTrainings("kc-001")
+
+        // 사역반 has no external course; 큐베세 is only open as 여자반, which a man cannot take.
+        assertEquals(listOf(one.publicId.toString(), qtBasic.publicId.toString()), result.map { it.publicId })
+        assertTrue(result[0].openForRegistration)
+        assertTrue(result[0].isAlwaysOpen)
+        assertEquals(false, result[1].openForRegistration)
+        assertEquals(false, result[1].isAlwaysOpen)
+    }
+
+    @Test
+    fun `a woman sees 큐베세 open through the 여자반 and its window`() {
+        givenMember(member(gender = Gender.F))
+        val qtBasic = training(1L, TrainingCode.QT_BASIC_SEMINAR, "큐티베이직세미나", 20, "큐베세")
+        `when`(trainingRepo.findActiveWithAliases()).thenReturn(listOf(qtBasic))
+        client.courses = listOf(qtWomen, qtYouthPast)
+
+        val result = service.listTrainings("kc-001").single()
+
+        assertTrue(result.openForRegistration)
+        assertEquals(LocalDate.of(2026, 9, 30), result.registrationEndsAt?.toLocalDate())
+    }
+
+    @Test
+    fun `the list is a 503 with a code when the application API is down`() {
+        givenMember(member())
+        client.unavailable = true
+
+        val e = assertThrows<CourseApplicationException> { service.listTrainings("kc-001") }
+
+        assertEquals(503, e.status.value())
+        assertEquals(ApiErrorCode.COURSE_APPLICATION_UNAVAILABLE, e.code)
+        assertEquals("준비중입니다.", e.message)
+    }
+
+    // ─── getTrainingDetail ────────────────────────────────────────────────────
+
+    @Test
+    fun `the detail offers the open courses, flags the ineligible one and prefills from the profile`() {
+        val member = member(gender = Gender.M)
+        givenMember(member)
+        val qtBasic = training(1L, TrainingCode.QT_BASIC_SEMINAR, "큐티베이직세미나", 20, "큐베세")
+        `when`(trainingRepo.findWithAliasesByPublicId(qtBasic.publicId)).thenReturn(qtBasic)
+
+        val detail = service.getTrainingDetail(qtBasic.publicId, "kc-001")
+
+        assertEquals(listOf(105, 106), detail.courses.map { it.externalCourseId })
+        assertEquals(listOf(false, true), detail.courses.map { it.isEligible })
+        assertTrue(detail.openForRegistration)
+        assertEquals("김철수", detail.applicantPrefill?.name)
+        assertEquals("M", detail.applicantPrefill?.gender)
+        assertTrue(
+            detail.courses
+                .single { it.externalCourseId == 106 }
+                .formFields
+                .any { it.name == "phone" },
+        )
+    }
+
+    // ─── apply ────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `an application is sent with the profile data and recorded as created and applied`() {
+        val member = member()
+        givenMember(member)
+        val qtBasic = givenTraining()
+        givenInsertedAttempt()
+        `when`(userTrainingRepo.save(any<UserTraining>())).thenAnswer { it.arguments[0] }
+
+        val result = service.apply(qtBasic.publicId, "kc-001", TrainingApplicationRequest(externalCourseId = 106, history = "없음"))
+
+        val sent = client.created.single()
+        assertEquals(member.publicId.toString(), sent.clientUserId)
+        assertEquals(106, sent.courseId)
+        assertEquals("김철수", sent.aName)
+        assertEquals("1995-05-01", sent.aBirthdate)
+        assertEquals("chulsoo@example.com", sent.aEmail)
+        assertEquals("+49 170 1234567", sent.aHandy)
+        assertEquals("M", sent.aGender)
+        assertEquals("Frankfurt", sent.aResidence)
+        assertEquals("4", sent.aGroup)
+        assertEquals("없음", sent.aHistory)
+
+        val attempt = savedAttempt()
+        assertEquals(attempt.clientApplicationId, sent.clientApplicationId)
+        assertEquals(CourseApplicationAttemptStatus.CREATED, attempt.status)
+        assertEquals(123L, attempt.externalApplicationId)
+
+        val participation = argumentCaptor<UserTraining>()
+        verify(userTrainingRepo).save(participation.capture())
+        assertEquals(TrainingStatus.APPLIED, participation.firstValue.status)
+        assertEquals(today, participation.firstValue.appliedOn)
+
+        assertEquals("APPLIED", result.status)
+        assertEquals(today, result.appliedOn)
+        assertEquals("큐베세 직장인/청년 반", result.courseName)
+    }
+
+    @Test
+    fun `values in the request win over the profile`() {
+        givenMember(member())
+        val qtBasic = givenTraining()
+        givenInsertedAttempt()
+        `when`(userTrainingRepo.save(any<UserTraining>())).thenAnswer { it.arguments[0] }
+
+        service.apply(qtBasic.publicId, "kc-001", TrainingApplicationRequest(externalCourseId = 106, phone = " +49 151 000 ", name = ""))
+
+        val sent = client.created.single()
+        assertEquals("+49 151 000", sent.aHandy)
+        // A blank value is no value: the profile fills it.
+        assertEquals("김철수", sent.aName)
+    }
+
+    @Test
+    fun `a retry after the application was recorded answers without calling out again`() {
+        val member = member()
+        givenMember(member)
+        val qtBasic = givenTraining()
+        val created =
+            attempt(member, qtBasic, 106).apply {
+                setId(this, 7L)
+                markCreated(55L)
+            }
+        `when`(attemptRepo.findLive(1L, 106)).thenReturn(created)
+        `when`(attemptRepo.findById(7L)).thenReturn(Optional.of(created))
+        `when`(userTrainingRepo.findByMemberIdAndTrainingIdAndVariantAndDeletedAtIsNull(1L, 1L, null)).thenReturn(
+            Optional.of(UserTraining(member = member, training = qtBasic, status = TrainingStatus.APPLIED, appliedOn = today)),
+        )
+
+        val result = service.apply(qtBasic.publicId, "kc-001", TrainingApplicationRequest(externalCourseId = 106))
+
+        assertTrue(client.created.isEmpty())
+        assertEquals("APPLIED", result.status)
+    }
+
+    @Test
+    fun `a pending attempt the external API already has is recorded without sending it again`() {
+        val member = member()
+        givenMember(member)
+        val qtBasic = givenTraining()
+        val pending = attempt(member, qtBasic, 106).also { setId(it, 7L) }
+        `when`(attemptRepo.findLive(1L, 106)).thenReturn(pending)
+        `when`(attemptRepo.findById(7L)).thenReturn(Optional.of(pending))
+        `when`(userTrainingRepo.save(any<UserTraining>())).thenAnswer { it.arguments[0] }
+        client.byClientId = ExternalApplication(id = 88L, courseId = 106, status = "active")
+
+        service.apply(qtBasic.publicId, "kc-001", TrainingApplicationRequest(externalCourseId = 106))
+
+        assertTrue(client.created.isEmpty())
+        assertEquals(88L, pending.externalApplicationId)
+        assertEquals(CourseApplicationAttemptStatus.CREATED, pending.status)
+    }
+
+    @Test
+    fun `an idempotency conflict means the application exists and it is recorded`() {
+        givenMember(member())
+        val qtBasic = givenTraining()
+        givenInsertedAttempt()
+        `when`(userTrainingRepo.save(any<UserTraining>())).thenAnswer { it.arguments[0] }
+        client.rejectCreateWith = CourseApplicationApiRejectedException(409, "idempotency_conflict", "x")
+        client.byClientId = ExternalApplication(id = 77L, courseId = 106, status = "active")
+
+        service.apply(qtBasic.publicId, "kc-001", TrainingApplicationRequest(externalCourseId = 106))
+
+        assertEquals(77L, savedAttempt().externalApplicationId)
+    }
+
+    @Test
+    fun `a full course is a 409 and the attempt stays pending for a later try`() {
+        givenMember(member())
+        val qtBasic = givenTraining()
+        givenInsertedAttempt(finished = false)
+        client.rejectCreateWith = CourseApplicationApiRejectedException(409, "capacity_full", "정원이 마감되었습니다.")
+
+        val e = assertThrows<CourseApplicationException> { service.apply(qtBasic.publicId, "kc-001", TrainingApplicationRequest(106)) }
+
+        assertEquals(409, e.status.value())
+        assertEquals(ApiErrorCode.COURSE_APPLICATION_FULL, e.code)
+        assertEquals(CourseApplicationAttemptStatus.PENDING, savedAttempt().status)
+        verify(userTrainingRepo, never()).save(any<UserTraining>())
+    }
+
+    @Test
+    fun `external field errors are renamed to request fields`() {
+        givenMember(member())
+        val qtBasic = givenTraining()
+        givenInsertedAttempt(finished = false)
+        client.rejectCreateWith =
+            CourseApplicationApiRejectedException(422, "validation_failed", "x", mapOf("aEmail" to "올바른 이메일 주소여야 합니다."))
+
+        val e = assertThrows<CourseApplicationException> { service.apply(qtBasic.publicId, "kc-001", TrainingApplicationRequest(106)) }
+
+        assertEquals(422, e.status.value())
+        assertEquals(mapOf("email" to "올바른 이메일 주소여야 합니다."), e.fieldErrors)
+    }
+
+    @Test
+    fun `an outage while sending is a 503`() {
+        givenMember(member())
+        val qtBasic = givenTraining()
+        givenInsertedAttempt(finished = false)
+        client.unavailableOnCreate = true
+
+        val e = assertThrows<CourseApplicationException> { service.apply(qtBasic.publicId, "kc-001", TrainingApplicationRequest(106)) }
+
+        assertEquals(ApiErrorCode.COURSE_APPLICATION_UNAVAILABLE, e.code)
+    }
+
+    @Test
+    fun `a man cannot apply to a 여자반`() {
+        givenMember(member(gender = Gender.M))
+        val qtBasic = givenTraining()
+
+        val e = assertThrows<CourseApplicationException> { service.apply(qtBasic.publicId, "kc-001", TrainingApplicationRequest(105)) }
+
+        assertEquals(403, e.status.value())
+        assertEquals(ApiErrorCode.COURSE_APPLICATION_NOT_ELIGIBLE, e.code)
+        assertTrue(client.created.isEmpty())
+        verify(attemptRepo, never()).saveAndFlush(any<CourseApplicationAttempt>())
+    }
+
+    @Test
+    fun `a closed course is a 409`() {
+        givenMember(member())
+        val qtBasic = givenTraining()
+
+        val e = assertThrows<CourseApplicationException> { service.apply(qtBasic.publicId, "kc-001", TrainingApplicationRequest(98)) }
+
+        assertEquals(ApiErrorCode.COURSE_APPLICATION_CLOSED, e.code)
+        assertTrue(client.created.isEmpty())
+    }
+
+    @Test
+    fun `a course of another training is a 404`() {
+        givenMember(member())
+        val qtBasic = givenTraining()
+
+        val e = assertThrows<CourseApplicationException> { service.apply(qtBasic.publicId, "kc-001", TrainingApplicationRequest(95)) }
+
+        assertEquals(404, e.status.value())
+        assertEquals(ApiErrorCode.COURSE_APPLICATION_COURSE_NOT_FOUND, e.code)
+    }
+
+    @Test
+    fun `a member already taking the training cannot apply again`() {
+        val member = member()
+        givenMember(member)
+        val qtBasic = givenTraining()
+        `when`(userTrainingRepo.findByMemberIdAndTrainingIdAndVariantAndDeletedAtIsNull(1L, 1L, null)).thenReturn(
+            Optional.of(UserTraining(member = member, training = qtBasic, status = TrainingStatus.IN_PROGRESS)),
+        )
+
+        val e = assertThrows<CourseApplicationException> { service.apply(qtBasic.publicId, "kc-001", TrainingApplicationRequest(106)) }
+
+        assertEquals(ApiErrorCode.COURSE_APPLICATION_ALREADY_APPLIED, e.code)
+        assertTrue(client.created.isEmpty())
+    }
+
+    @Test
+    fun `missing contact data in both request and profile is a 400 naming the fields`() {
+        givenMember(member(email = null, phone = null))
+        val qtBasic = givenTraining()
+
+        val e = assertThrows<CourseApplicationException> { service.apply(qtBasic.publicId, "kc-001", TrainingApplicationRequest(106)) }
+
+        assertEquals(400, e.status.value())
+        assertEquals(setOf("email", "phone"), e.fieldErrors?.keys)
+        verify(attemptRepo, never()).saveAndFlush(any<CourseApplicationAttempt>())
+    }
+
+    @Test
+    fun `a dropped participation is reopened for the new application`() {
+        val member = member()
+        givenMember(member)
+        val qtBasic = givenTraining()
+        givenInsertedAttempt()
+        val dropped =
+            UserTraining(
+                member = member,
+                training = qtBasic,
+                status = TrainingStatus.DROPPED,
+                appliedOn = LocalDate.of(2024, 3, 1),
+                startedOn = LocalDate.of(2024, 3, 10),
+            )
+        `when`(userTrainingRepo.findByMemberIdAndTrainingIdAndVariantAndDeletedAtIsNull(1L, 1L, null)).thenReturn(Optional.of(dropped))
+
+        service.apply(qtBasic.publicId, "kc-001", TrainingApplicationRequest(106))
+
+        assertEquals(TrainingStatus.APPLIED, dropped.status)
+        assertEquals(today, dropped.appliedOn)
+        assertNull(dropped.startedOn)
+    }
+
+    // ─── myTrainingApplications ───────────────────────────────────────────────
+
+    @Test
+    fun `나의 신청 shows the participation status only when it belongs to the application`() {
+        val member = member()
+        givenMember(member)
+        val qtBasic = training(1L, TrainingCode.QT_BASIC_SEMINAR, "큐티베이직세미나", 20)
+        val one = training(2L, TrainingCode.ONE_ON_ONE, "일대일제자양육", 40)
+        val qtAttempt = attempt(member, qtBasic, 106).apply { markCreated(1L) }
+        val oneAttempt = attempt(member, one, 3).apply { markCreated(2L) }
+        `when`(attemptRepo.findByMember(1L, setOf(CourseApplicationAttemptStatus.CREATED))).thenReturn(listOf(qtAttempt, oneAttempt))
+        `when`(userTrainingRepo.findByMemberId(1L)).thenReturn(
+            listOf(
+                // Completed years before this application: says nothing about it.
+                UserTraining(member = member, training = qtBasic, status = TrainingStatus.COMPLETED, appliedOn = LocalDate.of(2019, 3, 1)),
+                UserTraining(member = member, training = one, status = TrainingStatus.ENROLLED, appliedOn = today),
+            ),
+        )
+
+        val result = service.myTrainingApplications("kc-001")
+
+        assertEquals(listOf("APPLIED", "ENROLLED"), result.map { it.status })
+        assertEquals(listOf("큐베세 직장인/청년 반", "일대일 제자양육"), result.map { it.courseName })
+    }
+
+    // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    private class FakeClient : CourseApplicationApiClient {
+        var courses: List<ExternalCourse> = emptyList()
+        var unavailable = false
+        var unavailableOnCreate = false
+        var rejectCreateWith: CourseApplicationApiRejectedException? = null
+        var byClientId: ExternalApplication? = null
+        val created = mutableListOf<ExternalCreateApplicationRequest>()
+
+        override fun listCourses(): List<ExternalCourse> {
+            if (unavailable) throw CourseApplicationApiUnavailableException("down")
+            return courses
+        }
+
+        override fun createApplication(request: ExternalCreateApplicationRequest): ExternalCreatedApplication {
+            if (unavailableOnCreate) throw CourseApplicationApiUnavailableException("down")
+            rejectCreateWith?.let { throw it }
+            created += request
+            return ExternalCreatedApplication(ExternalApplication(id = 123L, courseId = request.courseId, status = "active"), false)
+        }
+
+        override fun findApplicationByClientId(clientApplicationId: UUID): ExternalApplication? = byClientId
+    }
+
+    private fun course(
+        id: Int,
+        name: String,
+        startsAt: String,
+        endsAt: String,
+    ) = ExternalCourse(id = id, name = name, registrationStartsAt = startsAt, registrationEndsAt = endsAt)
+
+    private fun member(
+        gender: Gender? = Gender.M,
+        email: String? = "chulsoo@example.com",
+        phone: String? = "+49 170 1234567",
+    ) = Member(
+        lastName = "김",
+        firstName = "철수",
+        gender = gender,
+        birthDate = LocalDate.of(1995, 5, 1),
+        phoneNumber = phone,
+        email = email,
+        city = "Frankfurt",
+    ).also { setId(it, 1L) }
+
+    private fun training(
+        id: Long,
+        code: TrainingCode,
+        nameKo: String,
+        sortOrder: Int,
+        vararg aliases: String,
+    ) = Training(code = code, name = code.name, sortOrder = sortOrder, nameKo = nameKo).also {
+        setId(it, id)
+        it.aliases.addAll(aliases)
+    }
+
+    private fun attempt(
+        member: Member,
+        training: Training,
+        courseId: Int,
+    ) = CourseApplicationAttempt(
+        member = member,
+        training = training,
+        externalCourseId = courseId,
+        externalCourseName = client.courses.single { it.id == courseId }.name,
+    ).also { it.createdAt = now }
+
+    private fun givenMember(member: Member) {
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
+    }
+
+    private fun givenTraining(): Training {
+        val qtBasic = training(1L, TrainingCode.QT_BASIC_SEMINAR, "큐티베이직세미나", 20, "큐베세")
+        `when`(trainingRepo.findWithAliasesByPublicId(qtBasic.publicId)).thenReturn(qtBasic)
+        return qtBasic
+    }
+
+    /** A fresh PENDING insert with id 7; [finished] also stubs the lookup the finishing step does. */
+    private fun givenInsertedAttempt(finished: Boolean = true) {
+        `when`(attemptRepo.saveAndFlush(any<CourseApplicationAttempt>())).thenAnswer { invocation ->
+            (invocation.arguments[0] as CourseApplicationAttempt).also {
+                setId(it, 7L)
+                it.createdAt = now
+                if (finished) `when`(attemptRepo.findById(7L)).thenReturn(Optional.of(it))
+            }
+        }
+    }
+
+    private fun savedAttempt(): CourseApplicationAttempt {
+        val captor = argumentCaptor<CourseApplicationAttempt>()
+        verify(attemptRepo).saveAndFlush(captor.capture())
+        return captor.firstValue
+    }
+
+    private fun setId(
+        entity: Any,
+        id: Long,
+    ) {
+        var type: Class<*>? = entity.javaClass
+        while (type != null) {
+            val field = type.declaredFields.firstOrNull { it.name == "id" }
+            if (field != null) {
+                field.isAccessible = true
+                field.set(entity, id)
+                return
+            }
+            type = type.superclass
+        }
+        error("No id field on ${entity.javaClass}")
+    }
+}
