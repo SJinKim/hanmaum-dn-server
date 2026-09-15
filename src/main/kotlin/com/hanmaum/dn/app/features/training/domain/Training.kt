@@ -86,6 +86,18 @@ class Training(
     @Column(name = "description", nullable = false, columnDefinition = "TEXT")
     val targetAudience: MutableList<String> = mutableListOf()
 
+    /**
+     * Other names this course is published under in application.hanmaum.de, e.g. 큐베세 for
+     * 큐티베이직세미나. Together with [nameKo] they decide which external courses belong here.
+     */
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(
+        name = "training_alias",
+        joinColumns = [JoinColumn(name = "training_id")],
+    )
+    @Column(name = "alias", nullable = false, length = 100)
+    val aliases: MutableSet<String> = mutableSetOf()
+
     fun replaceTargetAudience(newTargetAudience: List<String>) {
         targetAudience.clear()
         targetAudience.addAll(newTargetAudience)
