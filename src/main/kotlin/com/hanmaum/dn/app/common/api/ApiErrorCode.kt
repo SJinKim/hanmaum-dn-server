@@ -17,4 +17,28 @@ enum class ApiErrorCode {
      * than showing an error and offering a retry that cannot succeed.
      */
     MEMBER_PROFILE_NOT_FOUND,
+
+    /**
+     * application.hanmaum.de could not be asked: unreachable, unconfigured, or answering in
+     * a way this server cannot use. Nothing the applicant did; the app shows 준비중입니다.
+     */
+    COURSE_APPLICATION_UNAVAILABLE,
+
+    /** The course is not taking applications right now. */
+    COURSE_APPLICATION_CLOSED,
+
+    /** The course has no seats left. */
+    COURSE_APPLICATION_FULL,
+
+    /** The caller already applied to, or is taking, this training. */
+    COURSE_APPLICATION_ALREADY_APPLIED,
+
+    /** The caller may not apply to this course, e.g. a 여자반 for a member who is not a woman. */
+    COURSE_APPLICATION_NOT_ELIGIBLE,
+
+    /** The application data is incomplete or was rejected; details are in fieldErrors where known. */
+    COURSE_APPLICATION_INVALID,
+
+    /** The external course does not exist or does not belong to this training. */
+    COURSE_APPLICATION_COURSE_NOT_FOUND,
 }

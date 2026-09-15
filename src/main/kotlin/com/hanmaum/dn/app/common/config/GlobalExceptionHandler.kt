@@ -2,6 +2,7 @@ package com.hanmaum.dn.app.common.config
 
 import com.hanmaum.dn.app.common.api.ApiErrorCode
 import com.hanmaum.dn.app.common.api.ErrorResponse
+import com.hanmaum.dn.app.features.courseapplication.service.CourseApplicationException
 import com.hanmaum.dn.app.features.members.service.MemberProfileNotFoundException
 import jakarta.persistence.EntityNotFoundException
 import org.slf4j.LoggerFactory
@@ -59,6 +60,26 @@ class GlobalExceptionHandler {
                 code = ApiErrorCode.MEMBER_PROFILE_NOT_FOUND,
             )
         return ResponseEntity(response, HttpStatus.NOT_FOUND)
+    }
+
+    /**
+     * A 양육 application that could not be listed or made, with the reason as a code.
+     *
+     * Only the field names are logged: the messages next to them are harmless, but a field
+     * list is all an operator needs, and it keeps the log free of anything an applicant typed.
+     */
+    @ExceptionHandler(CourseApplicationException::class)
+    fun handleCourseApplication(e: CourseApplicationException): ResponseEntity<ErrorResponse> {
+        logger.warn("Course application rejected: status={} code={} fields={}", e.status.value(), e.code, e.fieldErrors?.keys)
+        val response =
+            ErrorResponse(
+                status = e.status.value(),
+                error = e.status.reasonPhrase,
+                message = e.message ?: e.status.reasonPhrase,
+                code = e.code,
+                fieldErrors = e.fieldErrors,
+            )
+        return ResponseEntity(response, e.status)
     }
 
     @ExceptionHandler(MethodArgumentNotValidException::class)

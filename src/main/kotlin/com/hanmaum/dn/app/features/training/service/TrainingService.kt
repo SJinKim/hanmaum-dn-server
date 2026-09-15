@@ -1,49 +1,38 @@
 package com.hanmaum.dn.app.features.training.service
 
-import com.hanmaum.dn.app.features.members.repository.MemberRepository
-import com.hanmaum.dn.app.features.members.service.CurrentMemberResolver
-import com.hanmaum.dn.app.features.training.api.toDetailDto
 import com.hanmaum.dn.app.features.training.api.toDto
-import com.hanmaum.dn.app.features.training.api.toRegistrationDto
 import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingCatalogDto
 import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingCohortDto
-import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingDetailDto
 import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingDto
-import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingRegistrationDto
 import com.hanmaum.dn.app.features.training.domain.Training
 import com.hanmaum.dn.app.features.training.domain.TrainingStatus
-import com.hanmaum.dn.app.features.training.domain.UserTraining
 import com.hanmaum.dn.app.features.training.repository.TrainingCohortRepository
 import com.hanmaum.dn.app.features.training.repository.TrainingRepository
-import com.hanmaum.dn.app.features.training.repository.UserTrainingRepository
-import org.slf4j.LoggerFactory
-import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.ErrorResponseException
-import org.springframework.web.server.ResponseStatusException
-import java.time.Clock
-import java.time.LocalDate
 import java.util.UUID
 
+/**
+ * The training catalog as stored.
+ *
+ * The 양육 list, detail page and application live in
+ * [com.hanmaum.dn.app.features.courseapplication.service.CourseApplicationService]: their
+ * registration state comes from application.hanmaum.de, not from these rows.
+ */
 @Service
 class TrainingService(
     private val trainingRepository: TrainingRepository,
     private val cohortRepository: TrainingCohortRepository,
-    private val userTrainingRepository: UserTrainingRepository,
-    private val memberRepository: MemberRepository,
-    private val currentMemberResolver: CurrentMemberResolver,
-    private val clock: Clock,
 ) {
-    private val log = LoggerFactory.getLogger(TrainingService::class.java)
-
     /**
-     * The training catalog, ordered by progression (sort order).
+     * The training catalog, ordered by progression (sort order), without registration state
+     * from the external API.
      *
      * [activeOnly] defaults to false so the admin member-edit form keeps seeing the
-     * discontinued Kairos courses it has always seen; the 양육 list passes true.
+     * discontinued Kairos courses it has always seen.
      */
     @Transactional(readOnly = true)
     fun getTrainings(activeOnly: Boolean = false): List<TrainingDto> = findCatalogEntries(activeOnly).map { it.toDto() }
@@ -70,80 +59,6 @@ class TrainingService(
                 prerequisiteCode = training.prerequisite?.code?.name,
             )
         }
-
-    /** Everything the 양육 detail page renders, including the seat counter. */
-    @Transactional(readOnly = true)
-    fun getTraining(publicId: UUID): TrainingDetailDto {
-        val training = requireTraining(publicId)
-        return training.toDetailDto(countRegistered(training))
-    }
-
-    /**
-     * Signs the authenticated member up for a course — the 신청하기 button.
-     *
-     * Unlike `POST /members/{publicId}/trainings`, which is an admin assignment, this
-     * writes exactly one row for the caller and never for anyone else. The row starts at
-     * [TrainingStatus.APPLIED]; moving it to ENROLLED and onwards stays an admin action.
-     *
-     * The capacity check is not serialized against concurrent callers: two members
-     * applying for the last seat in the same instant can both pass it and overfill the
-     * course by one. Locking the catalog row on every application is not worth it for
-     * twelve-seat courses that a leader can rebalance by hand; the duplicate check, which
-     * would corrupt data rather than inconvenience someone, is backed by a unique index.
-     */
-    @Transactional
-    fun registerCurrentMember(
-        publicId: UUID,
-        keycloakSub: String,
-    ): TrainingRegistrationDto {
-        val member = currentMemberResolver.require(keycloakSub)
-        val training = requireTraining(publicId)
-        val today = LocalDate.now(clock)
-
-        if (!training.openForRegistration) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "현재 신청을 받고 있지 않은 과정입니다.")
-        }
-        // No explicit deadline means applications close when the course starts.
-        val deadline = training.registrationDeadline ?: training.startDate
-        if (deadline != null && today.isAfter(deadline)) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "신청 마감일이 지났습니다.")
-        }
-        // Matches uq_user_training_member_training_variant exactly (variant IS NULL for a
-        // self-registration), so a duplicate is reported as a conflict rather than
-        // surfacing as a constraint violation.
-        val existing =
-            userTrainingRepository.findByMemberIdAndTrainingIdAndVariantAndDeletedAtIsNull(
-                memberId = member.id!!,
-                trainingId = training.id!!,
-                variant = null,
-            )
-        if (existing.isPresent) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "이미 신청한 과정입니다.")
-        }
-        val registeredBefore = countRegistered(training)
-        val capacity = training.capacity
-        if (capacity != null && registeredBefore >= capacity) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "정원이 모두 찼습니다.")
-        }
-
-        val saved =
-            try {
-                userTrainingRepository.saveAndFlush(
-                    UserTraining(
-                        member = member,
-                        training = training,
-                        status = TrainingStatus.APPLIED,
-                        appliedOn = today,
-                    ),
-                )
-            } catch (e: DataIntegrityViolationException) {
-                // uq_user_training_member_training_variant: the member got a row in
-                // between the check above and this insert. Same outcome, same message.
-                throw ResponseStatusException(HttpStatus.CONFLICT, "이미 신청한 과정입니다.", e)
-            }
-        log.info("Registered member for training memberId={} trainingCode={}", member.id, training.code)
-        return saved.toRegistrationDto(registeredBefore + 1)
-    }
 
     @Transactional(readOnly = true)
     fun getCohorts(trainingPublicId: UUID): List<TrainingCohortDto> {
@@ -179,9 +94,6 @@ class TrainingService(
                 null,
             )
         }
-
-    private fun countRegistered(training: Training): Int =
-        userTrainingRepository.countByTrainingIdAndStatusInAndDeletedAtIsNull(training.id!!, REGISTERED_STATUSES)
 
     companion object {
         /**

@@ -14,4 +14,9 @@ data class ErrorResponse(
      * may change; this is what a client is allowed to branch on.
      */
     val code: ApiErrorCode? = null,
+    /**
+     * Per-field messages keyed by request property name, where the error concerns specific
+     * fields — e.g. {"email": "올바른 이메일 주소여야 합니다."}. Null otherwise.
+     */
+    val fieldErrors: Map<String, String>? = null,
 )
