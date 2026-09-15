@@ -28,7 +28,7 @@ class HttpCourseApplicationApiClientTest {
     // credential-shaped field assigned a quoted string.
     private val bearerFixture = "test-bearer-value"
 
-    private val properties = CourseApplicationApiProperties(baseUrl = baseUrl, apiKey = bearerFixture)
+    private val properties = CourseApplicationApiProperties(baseUrl = baseUrl, clientApiKey = bearerFixture)
 
     private fun client(props: CourseApplicationApiProperties = properties): Pair<HttpCourseApplicationApiClient, MockRestServiceServer> {
         val builder = RestClient.builder()
@@ -203,10 +203,10 @@ class HttpCourseApplicationApiClientTest {
 
     @Test
     fun `an unconfigured key never reaches the network`() {
-        val (client, server) = client(properties.copy(apiKey = ""))
+        val (client, server) = client(properties.copy(clientApiKey = ""))
 
         assertThrows<CourseApplicationApiUnavailableException> { client.listCourses() }
         server.verify()
-        assertFalse(properties.copy(apiKey = "").isConfigured())
+        assertFalse(properties.copy(clientApiKey = "").isConfigured())
     }
 }

@@ -18,6 +18,10 @@
 #   QT_API_KEY_ID, QT_SECRET — congregation bible API credentials; without them
 #     the verse endpoints answer 503. QT_API_BASE_URL and QT_READER_BASE_URL are
 #     optional, their defaults point at the live service.
+#   TRAINING_APPLICATION_CLIENT_API_KEY — client key for application.hanmaum.de (양육
+#     applications); without it the 양육 endpoints answer 503.
+#   TRAINING_APPLICATION_ADMIN_API_KEY — admin key for the same API; bound, not used yet.
+#   TRAINING_APPLICATION_API_BASE_URL is optional, its default points at the live service.
 # Server-local monitoring credentials (never commit these files):
 #   ./secrets/staging-postgres-exporter-user
 #   ./secrets/staging-postgres-exporter-password
