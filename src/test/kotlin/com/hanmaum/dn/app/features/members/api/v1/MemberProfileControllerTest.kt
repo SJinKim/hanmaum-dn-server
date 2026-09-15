@@ -2,7 +2,9 @@ package com.hanmaum.dn.app.features.members.api.v1
 
 import com.hanmaum.dn.app.common.config.SecurityConfig
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
+import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
+import com.hanmaum.dn.app.features.members.api.v1.dto.UserTrainingDto
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.members.service.MemberService
 import org.mockito.Mockito.`when`
@@ -22,6 +24,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.time.LocalDate
+import java.util.UUID
 import kotlin.test.Test
 
 /**
@@ -76,6 +79,35 @@ class MemberProfileControllerTest {
             // A redacted date field must still serialize; birthDate is the existing proof.
             .andExpect(jsonPath("$.data.birthDate").value("1992-12-07"))
             .andExpect(jsonPath("$.data.publicId").value("pub-1"))
+    }
+
+    @Test
+    fun `GET member detail carries the Korean training name next to the catalog name`() {
+        val publicId = UUID.randomUUID()
+        `when`(memberService.getMemberByPublicId(publicId)).thenReturn(
+            MemberDto(
+                publicId = publicId.toString(),
+                lastName = "김",
+                firstName = "철수",
+                memberStatus = "ACTIVE",
+                trainings =
+                    listOf(
+                        UserTrainingDto(
+                            trainingPublicId = "t-1",
+                            name = "Quiet Time Basic Seminar",
+                            nameKo = "큐티베이직세미나",
+                            status = "COMPLETED",
+                            completedAt = LocalDate.of(2017, 5, 1),
+                        ),
+                    ),
+            ),
+        )
+
+        mockMvc
+            .perform(get("/api/v1/members/$publicId").with(jwt().authorities(SimpleGrantedAuthority("ROLE_ADMIN"))))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.trainings[0].name").value("Quiet Time Basic Seminar"))
+            .andExpect(jsonPath("$.data.trainings[0].nameKo").value("큐티베이직세미나"))
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.courseapplication.service
 
 import com.hanmaum.dn.app.common.api.ApiErrorCode
+import com.hanmaum.dn.app.common.domainvalue.Baptism
 import com.hanmaum.dn.app.common.domainvalue.Gender
 import com.hanmaum.dn.app.features.courseapplication.client.CourseApplicationApiClient
 import com.hanmaum.dn.app.features.courseapplication.client.CourseApplicationApiRejectedException
@@ -23,6 +24,7 @@ import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingDto
 import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingRegistrationDto
 import com.hanmaum.dn.app.features.training.domain.Training
 import com.hanmaum.dn.app.features.training.domain.TrainingStatus
+import com.hanmaum.dn.app.features.training.domain.TrainingVariant
 import com.hanmaum.dn.app.features.training.domain.UserTraining
 import com.hanmaum.dn.app.features.training.repository.TrainingRepository
 import com.hanmaum.dn.app.features.training.repository.UserTrainingRepository
@@ -112,6 +114,7 @@ class CourseApplicationService(
                 readTx.execute {
                     val training = requireTraining(publicId)
                     val trainingId = requireNotNull(training.id)
+                    val participations = userTrainingRepository.findByMemberId(memberId)
                     DetailSnapshot(
                         detail =
                             training.toDetailDto(
@@ -121,7 +124,8 @@ class CourseApplicationService(
                                 ),
                             ),
                         terms = training.searchTerms(),
-                        myApplication = myApplicationsByTraining(memberId)[trainingId],
+                        myApplication = myApplicationsByTraining(memberId, participations)[trainingId],
+                        prefill = member.toPrefill(participations),
                     )
                 },
             )
@@ -136,7 +140,7 @@ class CourseApplicationService(
             isAlwaysOpen = displayed.isAlwaysOpenFor(gender),
             courses = offering.courses.filter { it.isOpen }.map { it.toDto(gender) },
             myApplication = snapshot.myApplication,
-            applicantPrefill = member.toPrefill(),
+            applicantPrefill = snapshot.prefill,
         )
     }
 
@@ -373,14 +377,15 @@ class CourseApplicationService(
     // ─── Reads ────────────────────────────────────────────────────────────────
 
     /** Must run inside a transaction: attempts and participations are read together. */
-    private fun myApplicationsByTraining(memberId: Long): Map<Long, MyTrainingApplicationDto> {
-        val participations = userTrainingRepository.findByMemberId(memberId)
-        return attemptRepository
+    private fun myApplicationsByTraining(
+        memberId: Long,
+        participations: List<UserTraining> = userTrainingRepository.findByMemberId(memberId),
+    ): Map<Long, MyTrainingApplicationDto> =
+        attemptRepository
             .findByMember(memberId, setOf(CourseApplicationAttemptStatus.CREATED))
             .groupBy { requireNotNull(it.training.id) }
             // findByMember is newest first, so the first of each group is the latest application.
             .mapValues { (_, attempts) -> attempts.first().toMyApplication(participations) }
-    }
 
     private fun CourseApplicationAttempt.toMyApplication(participations: List<UserTraining>): MyTrainingApplicationDto {
         val appliedAt = requireNotNull(createdAt)
@@ -485,20 +490,55 @@ class CourseApplicationService(
 
     private fun CourseOffering?.isAlwaysOpenFor(gender: Gender?): Boolean = this != null && isAlwaysOpen && isEligible(gender)
 
-    private fun Member.toPrefill(): ApplicantPrefillDto =
-        ApplicantPrefillDto(
+    /** Must run inside a transaction: each participation's training is read for its name. */
+    private fun Member.toPrefill(participations: List<UserTraining>): ApplicantPrefillDto {
+        val baptismCodes = baptism?.formCodes()
+        return ApplicantPrefillDto(
             name = getFullName(),
             birthDate = birthDate,
             email = email,
             phone = phoneNumber,
             gender = gender?.name,
             residence = city,
+            history =
+                participations
+                    .filter { it.status == TrainingStatus.COMPLETED }
+                    .sortedWith(compareBy(nullsLast()) { it.completedAt })
+                    .toLines { row -> row.completedAt?.let { "${row.label()} / ${it.year}년 ${it.monthValue}월" } ?: row.label() },
+            waiting = participations.filter { it.status in WAITING_STATUSES }.toLines { it.label() },
+            running = participations.filter { it.status == TrainingStatus.IN_PROGRESS }.toLines { it.label() },
+            baptized = baptismCodes?.first,
+            baptizeType = baptismCodes?.second,
         )
+    }
+
+    private fun List<UserTraining>.toLines(line: (UserTraining) -> String): String? =
+        takeIf { it.isNotEmpty() }?.joinToString("\n", transform = line)
+
+    /** The Korean name the congregation uses, with 구약 / 신약 for a repeated course. */
+    private fun UserTraining.label(): String {
+        val name = training.nameKo?.takeIf { it.isNotBlank() } ?: training.name
+        return when (variant) {
+            null -> name
+            TrainingVariant.OLD_TESTAMENT -> "$name 구약"
+            TrainingVariant.NEW_TESTAMENT -> "$name 신약"
+        }
+    }
+
+    /** 세례 여부 and 세례 구분 as the legacy form's option values; the two lists number differently. */
+    private fun Baptism.formCodes(): Pair<String, String> =
+        when (this) {
+            Baptism.INFANT_BAPTIZED -> "1" to "1"
+            Baptism.CONFIRMATION -> "2" to "3"
+            Baptism.GENERAL_BAPTIZED -> "3" to "4"
+            Baptism.UNBAPTIZED -> "4" to "5"
+        }
 
     private class DetailSnapshot(
         val detail: TrainingDetailDto,
         val terms: TrainingSearchTerms,
         val myApplication: MyTrainingApplicationDto?,
+        val prefill: ApplicantPrefillDto,
     )
 
     /** The applicant as sent to the external API: required fields resolved, the rest passed on. */
@@ -527,7 +567,7 @@ class CourseApplicationService(
             aBaptized = request.baptized.orIfBlank(null),
             aBaptizeType = request.baptizeType.orIfBlank(null),
             aResidence = residence,
-            aGroup = YOUTH_GROUP_CODE,
+            aGroup = ApplicationFormFields.YOUTH_GROUP_CODE,
             aGyogu = request.gyogu.orIfBlank(null),
             aSoon = request.soon.orIfBlank(null),
             aChildren = request.children.orIfBlank(null),
@@ -544,8 +584,8 @@ class CourseApplicationService(
         /** Participations that make a new application to the same training a duplicate. */
         val ACTIVE_STATUSES = setOf(TrainingStatus.APPLIED, TrainingStatus.ENROLLED, TrainingStatus.IN_PROGRESS)
 
-        /** The legacy form's code for 청년부. Every member of this app applies as 청년부. */
-        const val YOUTH_GROUP_CODE = "4"
+        /** 현재 신청한 양육: signed up, not started yet. */
+        val WAITING_STATUSES = setOf(TrainingStatus.APPLIED, TrainingStatus.ENROLLED)
 
         const val IDEMPOTENCY_CONFLICT = "idempotency_conflict"
 

@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.courseapplication.service
 
+import com.hanmaum.dn.app.features.courseapplication.client.ExternalApplicationField
 import com.hanmaum.dn.app.features.courseapplication.client.ExternalCourse
 import com.hanmaum.dn.app.features.training.api.v1.dto.CourseFormFieldDto
 import com.hanmaum.dn.app.features.training.api.v1.dto.CourseFormFieldOptionDto
@@ -35,8 +36,11 @@ object ApplicationFormFields {
     /** Required by the external API for every course, whatever the course lists. */
     private val ALWAYS_REQUIRED = listOf("aName", "aBirthdate", "aEmail", "aHandy")
 
-    /** Set by this server and never asked of the applicant. */
-    private val SERVER_SET = setOf("aGroup")
+    /** The legacy form's code for 청년부. Every member of this app applies as 청년부. */
+    const val YOUTH_GROUP_CODE = "4"
+
+    /** Set by this server and never asked of the applicant, with the value it sends. */
+    private val SERVER_SET = mapOf("aGroup" to YOUTH_GROUP_CODE)
 
     /** The request name for an external field; an unknown field keeps its external name. */
     fun toRequestName(externalName: String): String = EXTERNAL_TO_REQUEST[externalName] ?: externalName
@@ -59,7 +63,7 @@ object ApplicationFormFields {
                         CourseFormFieldDto(
                             name = toRequestName(field.name),
                             type = field.type,
-                            required = field.required,
+                            required = field.required || field.isRequiredByServerSetValues(),
                             label = field.label,
                             options = field.options.map { CourseFormFieldOptionDto(value = it.value, label = it.label) },
                         )
@@ -77,4 +81,13 @@ object ApplicationFormFields {
                 .map { CourseFormFieldDto(name = it, type = null, required = true, label = null) }
         return base + fields.distinctBy { it.name }
     }
+
+    /**
+     * Whether [ExternalApplicationField.requiredWhen] holds for the values this server sends.
+     * A condition on a field the applicant fills in cannot be decided here and does not count:
+     * the external API still rejects a missing value when the application is sent.
+     */
+    private fun ExternalApplicationField.isRequiredByServerSetValues(): Boolean =
+        requiredWhen.isNotEmpty() &&
+            requiredWhen.all { condition -> SERVER_SET[condition.key]?.let { sent -> sent in condition.value } == true }
 }

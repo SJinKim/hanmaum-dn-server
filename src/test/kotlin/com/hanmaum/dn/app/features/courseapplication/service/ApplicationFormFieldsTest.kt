@@ -51,6 +51,40 @@ class ApplicationFormFieldsTest {
     }
 
     @Test
+    fun `a condition on the server-set group is resolved, one on an applicant field keeps the static value`() {
+        val course =
+            ExternalCourse(
+                id = 26,
+                name = "일대일 제자양육",
+                applicationFields =
+                    listOf(
+                        ExternalApplicationField(name = "aGroup", type = "enum", required = true),
+                        ExternalApplicationField(
+                            name = "aGyogu",
+                            type = "enum",
+                            required = false,
+                            requiredWhen = mapOf("aGroup" to listOf("4", "5")),
+                        ),
+                        // 장년부 only: the server sends 청년부, so this stays optional.
+                        ExternalApplicationField(name = "aChildren", required = false, requiredWhen = mapOf("aGroup" to listOf("5"))),
+                        // Depends on what the applicant picks; not decidable here.
+                        ExternalApplicationField(name = "aSoon", required = false, requiredWhen = mapOf("aGyogu" to listOf("1"))),
+                        ExternalApplicationField(name = "aComment", required = true, requiredWhen = mapOf("aGyogu" to listOf("1"))),
+                        // dependsOn alone makes nothing required; here that is simply no requiredWhen.
+                        ExternalApplicationField(name = "aResidence", required = false),
+                    ),
+            )
+
+        val required = ApplicationFormFields.of(course).associate { it.name to it.required }
+
+        assertEquals(true, required["gyogu"])
+        assertEquals(false, required["children"])
+        assertEquals(false, required["soon"])
+        assertEquals(true, required["comment"])
+        assertEquals(false, required["residence"])
+    }
+
+    @Test
     fun `an unknown external field keeps its name`() {
         assertEquals("aVisionConference", ApplicationFormFields.toRequestName("aVisionConference"))
         assertEquals("phone", ApplicationFormFields.toRequestName("aHandy"))

@@ -10,6 +10,7 @@ fun Training.toDto(): TrainingDto =
     TrainingDto(
         publicId = this.publicId.toString(),
         name = this.name,
+        nameKo = this.nameKo,
         sortOrder = this.sortOrder,
         description = this.description,
         startDate = this.startDate,
@@ -48,6 +49,7 @@ fun UserTraining.toDto(): UserTrainingDto =
     UserTrainingDto(
         trainingPublicId = this.training.publicId.toString(),
         name = this.training.name,
+        nameKo = this.training.nameKo,
         status = this.status.name,
         completedAt = this.completedAt,
     )

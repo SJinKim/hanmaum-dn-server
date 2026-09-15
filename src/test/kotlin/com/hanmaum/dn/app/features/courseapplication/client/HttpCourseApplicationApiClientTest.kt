@@ -42,6 +42,10 @@ class HttpCourseApplicationApiClientTest {
           {"id":3,"name":"일대일 제자양육","dateText":"상시 접수","capacity":0,
            "registrationStartsAt":"0000-00-00 00:00:00","registrationEndsAt":"2099-03-12 23:59:59",
            "requiredOptionalFields":["aBaptized","aHistory"],"excludedFields":[],"targetGroups":[4,5],
+           "applicationFields":[
+             {"name":"aGyogu","type":"enum","required":false,"label":"교구/순","dependsOn":"aGroup",
+              "requiredWhen":{"aGroup":["4","5"]},"options":[{"value":"99","label":"새가족","groups":["4","5"]}]}
+           ],
            "someFieldAddedLater":{"nested":true}}
         ]}
         """.trimIndent()
@@ -78,6 +82,7 @@ class HttpCourseApplicationApiClientTest {
         assertEquals("일대일 제자양육", courses[0].name)
         assertEquals("2099-03-12 23:59:59", courses[0].registrationEndsAt)
         assertEquals(listOf(4, 5), courses[0].targetGroups)
+        assertEquals(mapOf("aGroup" to listOf("4", "5")), courses[0].applicationFields?.single()?.requiredWhen)
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.courseapplication.service
 
 import com.hanmaum.dn.app.common.api.ApiErrorCode
+import com.hanmaum.dn.app.common.domainvalue.Baptism
 import com.hanmaum.dn.app.common.domainvalue.Gender
 import com.hanmaum.dn.app.features.courseapplication.client.CourseApplicationApiClient
 import com.hanmaum.dn.app.features.courseapplication.client.CourseApplicationApiRejectedException
@@ -19,6 +20,7 @@ import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingApplicationReques
 import com.hanmaum.dn.app.features.training.domain.Training
 import com.hanmaum.dn.app.features.training.domain.TrainingCode
 import com.hanmaum.dn.app.features.training.domain.TrainingStatus
+import com.hanmaum.dn.app.features.training.domain.TrainingVariant
 import com.hanmaum.dn.app.features.training.domain.UserTraining
 import com.hanmaum.dn.app.features.training.repository.TrainingRepository
 import com.hanmaum.dn.app.features.training.repository.UserTrainingRepository
@@ -167,6 +169,90 @@ class CourseApplicationServiceTest {
                 .formFields
                 .any { it.name == "phone" },
         )
+    }
+
+    @Test
+    fun `the prefill lists 양육 by status in the form's wording`() {
+        val member = member()
+        givenMember(member)
+        val qtBasic = givenTraining()
+        val overview = training(4L, TrainingCode.BIBLE_OVERVIEW, "성경개관", 60)
+        val one = training(2L, TrainingCode.ONE_ON_ONE, "일대일제자양육", 40)
+        val ministry =
+            Training(code = TrainingCode.MINISTRY_CLASS, name = "Ministry Class", sortOrder = 70, nameKo = null)
+                .also { setId(it, 3L) }
+        val kairos = training(5L, TrainingCode.KAIROS, "카이로스", 80)
+        val panorama = training(6L, TrainingCode.BIBLE_PANORAMA, "성경파노라마", 50)
+        `when`(userTrainingRepo.findByMemberId(1L)).thenReturn(
+            listOf(
+                UserTraining(
+                    member = member,
+                    training = overview,
+                    status = TrainingStatus.COMPLETED,
+                    variant = TrainingVariant.OLD_TESTAMENT,
+                ),
+                UserTraining(
+                    member = member,
+                    training = overview,
+                    status = TrainingStatus.COMPLETED,
+                    variant = TrainingVariant.NEW_TESTAMENT,
+                    completedAt = LocalDate.of(2019, 3, 1),
+                ),
+                UserTraining(
+                    member = member,
+                    training = qtBasic,
+                    status = TrainingStatus.COMPLETED,
+                    completedAt = LocalDate.of(2017, 5, 1),
+                ),
+                UserTraining(member = member, training = one, status = TrainingStatus.APPLIED),
+                UserTraining(member = member, training = ministry, status = TrainingStatus.ENROLLED),
+                UserTraining(member = member, training = kairos, status = TrainingStatus.IN_PROGRESS),
+                UserTraining(member = member, training = panorama, status = TrainingStatus.DROPPED),
+                UserTraining(member = member, training = panorama, status = TrainingStatus.UNKNOWN),
+            ),
+        )
+
+        val prefill = requireNotNull(service.getTrainingDetail(qtBasic.publicId, "kc-001").applicantPrefill)
+
+        // By completion date, the undated one last.
+        assertEquals("큐티베이직세미나 / 2017년 5월\n성경개관 신약 / 2019년 3월\n성경개관 구약", prefill.history)
+        // No Korean name recorded: the catalog name stands in.
+        assertEquals("일대일제자양육\nMinistry Class", prefill.waiting)
+        assertEquals("카이로스", prefill.running)
+    }
+
+    @Test
+    fun `without matching 양육 or baptism the prefill fields are null, not empty`() {
+        givenMember(member())
+        val qtBasic = givenTraining()
+
+        val prefill = requireNotNull(service.getTrainingDetail(qtBasic.publicId, "kc-001").applicantPrefill)
+
+        assertNull(prefill.history)
+        assertNull(prefill.waiting)
+        assertNull(prefill.running)
+        assertNull(prefill.baptized)
+        assertNull(prefill.baptizeType)
+    }
+
+    @Test
+    fun `the baptism is prefilled as the form's 세례 여부 and 세례 구분 codes`() {
+        val qtBasic = givenTraining()
+        val expected =
+            mapOf(
+                Baptism.INFANT_BAPTIZED to ("1" to "1"),
+                Baptism.CONFIRMATION to ("2" to "3"),
+                Baptism.GENERAL_BAPTIZED to ("3" to "4"),
+                Baptism.UNBAPTIZED to ("4" to "5"),
+            )
+
+        expected.forEach { (baptism, codes) ->
+            givenMember(member().apply { this.baptism = baptism })
+
+            val prefill = requireNotNull(service.getTrainingDetail(qtBasic.publicId, "kc-001").applicantPrefill)
+
+            assertEquals(codes, prefill.baptized to prefill.baptizeType, "for $baptism")
+        }
     }
 
     // ─── apply ────────────────────────────────────────────────────────────────

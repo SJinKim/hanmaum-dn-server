@@ -113,6 +113,7 @@ data class SummaryTrainingDto(
 data class UserTrainingDto(
     val trainingPublicId: String,
     val name: String,
+    val nameKo: String? = null,
     val status: String,
     val completedAt: LocalDate? = null,
 )
