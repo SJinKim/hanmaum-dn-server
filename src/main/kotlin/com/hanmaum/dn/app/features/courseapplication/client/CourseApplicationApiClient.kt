@@ -50,6 +50,12 @@ interface CourseApplicationApiClient {
 
     /** The application created with [clientApplicationId] by this key, or null if there is none. */
     fun findApplicationByClientId(clientApplicationId: UUID): ExternalApplication?
+
+    /**
+     * Cancels an application. The API keeps the row as `cancelled` rather than deleting it,
+     * and answers the same for a repeat.
+     */
+    fun cancelApplication(externalApplicationId: Long): ExternalApplication
 }
 
 private fun timeoutedBuilder(properties: CourseApplicationApiProperties): RestClient.Builder =
@@ -124,6 +130,14 @@ class HttpCourseApplicationApiClient(
             }
         if (outcome.status == 404 && outcome.envelope?.error?.code == APPLICATION_NOT_FOUND) return null
         return requireData(outcome, BY_CLIENT_ID_PATH)
+    }
+
+    override fun cancelApplication(externalApplicationId: Long): ExternalApplication {
+        val outcome =
+            send(APPLICATION_PATH, object : ParameterizedTypeReference<ExternalEnvelope<ExternalApplication>>() {}) {
+                restClient.delete().uri(APPLICATION_PATH, externalApplicationId)
+            }
+        return requireData(outcome, APPLICATION_PATH)
     }
 
     /**
@@ -204,6 +218,7 @@ class HttpCourseApplicationApiClient(
     private companion object {
         const val COURSES_PATH = "/courses"
         const val APPLICATIONS_PATH = "/applications"
+        const val APPLICATION_PATH = "/applications/{id}"
         const val BY_CLIENT_ID_PATH = "/applications/by-client-id/{id}"
         const val APPLICATION_NOT_FOUND = "application_not_found"
     }

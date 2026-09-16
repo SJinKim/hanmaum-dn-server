@@ -207,6 +207,44 @@ class HttpCourseApplicationApiClientTest {
     }
 
     @Test
+    fun `a cancellation is a delete on the application with the bearer key`() {
+        val (client, server) = client()
+        server
+            .expect(requestTo("$baseUrl/applications/42"))
+            .andExpect(method(HttpMethod.DELETE))
+            .andExpect(header("Authorization", "Bearer $bearerFixture"))
+            .andRespond(
+                withSuccess(
+                    """{"data":{"id":42,"courseId":3,"status":"cancelled","cancelledAt":"2026-09-16 20:00:00"}}""",
+                    MediaType.APPLICATION_JSON,
+                ),
+            )
+
+        val cancelled = client.cancelApplication(42L)
+
+        assertEquals(42L, cancelled.id)
+        assertEquals("cancelled", cancelled.status)
+        server.verify()
+    }
+
+    @Test
+    fun `a cancellation of an application the key does not own is a rejection`() {
+        val (client, server) = client()
+        server
+            .expect(requestTo("$baseUrl/applications/42"))
+            .andRespond(
+                withStatus(HttpStatus.NOT_FOUND)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body("""{"error":{"code":"application_not_found","message":"x"}}"""),
+            )
+
+        val e = assertThrows<CourseApplicationApiRejectedException> { client.cancelApplication(42L) }
+
+        assertEquals("application_not_found", e.code)
+        server.verify()
+    }
+
+    @Test
     fun `an unconfigured key never reaches the network`() {
         val (client, server) = client(properties.copy(clientApiKey = ""))
 

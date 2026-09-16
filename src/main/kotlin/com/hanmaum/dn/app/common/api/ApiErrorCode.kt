@@ -41,4 +41,10 @@ enum class ApiErrorCode {
 
     /** The external course does not exist or does not belong to this training. */
     COURSE_APPLICATION_COURSE_NOT_FOUND,
+
+    /** The caller has no application to this training that could be cancelled. */
+    COURSE_APPLICATION_NOT_FOUND,
+
+    /** The application belongs to a training the caller has already completed. */
+    COURSE_APPLICATION_NOT_CANCELLABLE,
 }

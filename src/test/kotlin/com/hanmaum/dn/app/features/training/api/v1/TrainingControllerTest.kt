@@ -32,6 +32,7 @@ import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequ
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
@@ -320,6 +321,63 @@ class TrainingControllerTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"externalCourseId":106}"""),
             ).andExpect(status().isUnauthorized)
+    }
+
+    // ─── DELETE /trainings/{publicId}/registrations ───────────────────────────
+
+    @Test
+    fun `DELETE registrations cancels the caller's application and returns 200`() {
+        `when`(courseApplicationService.cancel(trainingId, "kc-001")).thenReturn(
+            MyTrainingApplicationDto(
+                trainingPublicId = trainingId.toString(),
+                trainingName = "Quiet Time Basic Seminar",
+                trainingNameKo = "큐티베이직세미나",
+                externalCourseId = 106,
+                courseName = "큐베세 직장인/청년 반",
+                appliedAt = Instant.parse("2026-09-14T10:00:00Z"),
+                status = "DROPPED",
+            ),
+        )
+
+        mockMvc
+            .perform(delete("/api/v1/trainings/$trainingId/registrations").with(member))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.status").value("DROPPED"))
+            .andExpect(jsonPath("$.data.externalCourseId").value(106))
+            .andExpect(jsonPath("$.message").value("신청이 취소되었습니다."))
+    }
+
+    @Test
+    fun `DELETE registrations without an application is a 404 with its code`() {
+        `when`(courseApplicationService.cancel(trainingId, "kc-001")).thenThrow(
+            CourseApplicationException(HttpStatus.NOT_FOUND, ApiErrorCode.COURSE_APPLICATION_NOT_FOUND, "취소할 신청 내역이 없습니다."),
+        )
+
+        mockMvc
+            .perform(delete("/api/v1/trainings/$trainingId/registrations").with(member))
+            .andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.code").value("COURSE_APPLICATION_NOT_FOUND"))
+    }
+
+    @Test
+    fun `DELETE registrations answers 503 with a code when the application API is down`() {
+        `when`(courseApplicationService.cancel(trainingId, "kc-001")).thenThrow(
+            CourseApplicationException(HttpStatus.SERVICE_UNAVAILABLE, ApiErrorCode.COURSE_APPLICATION_UNAVAILABLE, "준비중입니다."),
+        )
+
+        mockMvc
+            .perform(delete("/api/v1/trainings/$trainingId/registrations").with(member))
+            .andExpect(status().isServiceUnavailable)
+            .andExpect(jsonPath("$.code").value("COURSE_APPLICATION_UNAVAILABLE"))
+    }
+
+    @Test
+    fun `DELETE registrations returns 401 without a token`() {
+        mockMvc
+            .perform(delete("/api/v1/trainings/$trainingId/registrations"))
+            .andExpect(status().isUnauthorized)
+
+        verify(courseApplicationService, never()).cancel(any(), any())
     }
 
     // ─── Admin-only endpoints stay admin-only ─────────────────────────────────
