@@ -225,6 +225,80 @@ class CourseApplicationService(
         return finish(attemptId, member, training, course, externalId)
     }
 
+    /**
+     * Cancels the caller's latest application to a training.
+     *
+     * The external API first, this database second: when the call fails nothing changes here
+     * and the member stays applied on both sides. The attempt becomes CANCELLED, which takes it
+     * out of findLive, so applying again mints a new clientApplicationId instead of replaying
+     * the cancelled application. A repeat answers from the cancelled attempt without calling out.
+     */
+    fun cancel(
+        publicId: UUID,
+        keycloakSubject: String,
+    ): MyTrainingApplicationDto {
+        val memberId = requireNotNull(currentMemberResolver.require(keycloakSubject).id)
+        val (training, attempt) =
+            requireNotNull(
+                readTx.execute {
+                    val training = requireTraining(publicId)
+                    // findByMember is newest first: an older attempt belongs to an earlier round.
+                    training to
+                        attemptRepository
+                            .findByMember(memberId, CourseApplicationAttemptStatus.entries.toSet())
+                            .firstOrNull { it.training.id == training.id }
+                },
+            )
+        if (attempt == null) throw noApplication()
+        if (attempt.status == CourseApplicationAttemptStatus.CANCELLED) return attempt.toCancelledApplication()
+
+        val participation = participationOf(memberId, requireNotNull(training.id))
+        if (participation?.status == TrainingStatus.COMPLETED && participation.isFor(attempt.appliedOn())) {
+            throw CourseApplicationException(
+                HttpStatus.CONFLICT,
+                ApiErrorCode.COURSE_APPLICATION_NOT_CANCELLABLE,
+                "이미 수료한 과정은 취소할 수 없습니다.",
+            )
+        }
+
+        val externalId =
+            attempt.externalApplicationId
+                // PENDING: the create call timed out, so the external API may or may not have it.
+                ?: unavailableAs503 { client.findApplicationByClientId(attempt.clientApplicationId) }?.id
+                ?: throw noApplication()
+        val cancelled =
+            try {
+                unavailableAs503 { client.cancelApplication(externalId) }
+            } catch (e: CourseApplicationApiRejectedException) {
+                throw e.toApplicationException()
+            }
+        if (cancelled.status != EXTERNAL_CANCELLED) {
+            log.error("Course application API did not cancel externalApplicationId={} status={}", externalId, cancelled.status)
+            throw unavailable(IllegalStateException("Cancellation answered with status ${cancelled.status}"))
+        }
+
+        return requireNotNull(
+            writeTx.execute {
+                val row = attemptRepository.findById(requireNotNull(attempt.id)).orElseThrow()
+                if (row.status != CourseApplicationAttemptStatus.CANCELLED) row.markCancelled(externalId)
+                userTrainingRepository
+                    .findByMemberIdAndTrainingIdAndVariantAndDeletedAtIsNull(memberId, requireNotNull(training.id), null)
+                    .orElse(null)
+                    // A row applied for before this application is older history, e.g. a
+                    // 큐베세 completed years ago, and stays as it is.
+                    ?.takeIf { it.isFor(row.appliedOn()) && it.status != TrainingStatus.COMPLETED }
+                    ?.status = TrainingStatus.DROPPED
+                log.info(
+                    "Course application cancelled memberId={} trainingCode={} externalCourseId={}",
+                    memberId,
+                    training.code,
+                    row.externalCourseId,
+                )
+                row.toCancelledApplication()
+            },
+        )
+    }
+
     // ─── Application steps ────────────────────────────────────────────────────
 
     private fun insertPending(
@@ -264,7 +338,7 @@ class CourseApplicationService(
             writeTx.execute {
                 val attempt = attemptRepository.findById(attemptId).orElseThrow()
                 if (attempt.status != CourseApplicationAttemptStatus.CREATED) attempt.markCreated(externalApplicationId)
-                val appliedOn = LocalDate.ofInstant(requireNotNull(attempt.createdAt), clock.zone)
+                val appliedOn = attempt.appliedOn()
                 val participation = recordParticipation(member, training, appliedOn)
                 log.info(
                     "Course application recorded memberId={} trainingCode={} externalCourseId={}",
@@ -326,10 +400,7 @@ class CourseApplicationService(
         memberId: Long,
         trainingId: Long,
     ) {
-        val row =
-            readTx.execute {
-                userTrainingRepository.findByMemberIdAndTrainingIdAndVariantAndDeletedAtIsNull(memberId, trainingId, null).orElse(null)
-            }
+        val row = participationOf(memberId, trainingId)
         if (row != null && row.status in ACTIVE_STATUSES) {
             throw CourseApplicationException(
                 HttpStatus.CONFLICT,
@@ -407,9 +478,37 @@ class CourseApplicationService(
      */
     private fun UserTraining?.statusFor(appliedOn: LocalDate): TrainingStatus =
         this
-            ?.takeIf { row -> row.appliedOn?.let { !it.isBefore(appliedOn) } == true }
+            ?.takeIf { it.isFor(appliedOn) }
             ?.status
             ?: TrainingStatus.APPLIED
+
+    /** Whether this participation was recorded for an application made on [appliedOn], not for an earlier one. */
+    private fun UserTraining.isFor(appliedOn: LocalDate): Boolean = this.appliedOn?.let { !it.isBefore(appliedOn) } == true
+
+    private fun CourseApplicationAttempt.appliedOn(): LocalDate = LocalDate.ofInstant(requireNotNull(createdAt), clock.zone)
+
+    /** Must run inside a transaction, or on an attempt whose training was fetched with it. */
+    private fun CourseApplicationAttempt.toCancelledApplication(): MyTrainingApplicationDto =
+        MyTrainingApplicationDto(
+            trainingPublicId = training.publicId.toString(),
+            trainingName = training.name,
+            trainingNameKo = training.nameKo,
+            externalCourseId = externalCourseId,
+            courseName = externalCourseName,
+            appliedAt = requireNotNull(createdAt),
+            status = TrainingStatus.DROPPED.name,
+        )
+
+    private fun participationOf(
+        memberId: Long,
+        trainingId: Long,
+    ): UserTraining? =
+        readTx.execute {
+            userTrainingRepository.findByMemberIdAndTrainingIdAndVariantAndDeletedAtIsNull(memberId, trainingId, null).orElse(null)
+        }
+
+    private fun noApplication(): CourseApplicationException =
+        CourseApplicationException(HttpStatus.NOT_FOUND, ApiErrorCode.COURSE_APPLICATION_NOT_FOUND, "취소할 신청 내역이 없습니다.")
 
     private fun requireTraining(publicId: UUID): Training =
         trainingRepository.findWithAliasesByPublicId(publicId)
@@ -588,6 +687,8 @@ class CourseApplicationService(
         val WAITING_STATUSES = setOf(TrainingStatus.APPLIED, TrainingStatus.ENROLLED)
 
         const val IDEMPOTENCY_CONFLICT = "idempotency_conflict"
+
+        const val EXTERNAL_CANCELLED = "cancelled"
 
         const val CLOSED_MESSAGE = "신청 기간이 아닙니다."
 

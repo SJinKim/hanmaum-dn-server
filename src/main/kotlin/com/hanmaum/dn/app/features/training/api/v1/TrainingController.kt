@@ -3,6 +3,7 @@ package com.hanmaum.dn.app.features.training.api.v1
 import com.hanmaum.dn.app.common.api.ErrorResponse
 import com.hanmaum.dn.app.common.dto.ApiResponse
 import com.hanmaum.dn.app.features.courseapplication.service.CourseApplicationService
+import com.hanmaum.dn.app.features.training.api.v1.dto.MyTrainingApplicationDto
 import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingApplicationRequest
 import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingCatalogDto
 import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingCohortDto
@@ -17,6 +18,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -148,6 +150,46 @@ class TrainingController(
             .status(HttpStatus.CREATED)
             .body(ApiResponse.success(data = registration, message = "신청이 완료되었습니다."))
     }
+
+    /**
+     * DELETE /api/v1/trainings/{publicId}/registrations
+     * Role: MEMBER — the 신청 취소 button. Cancels the caller's latest application to this
+     * training at application.hanmaum.de, then marks the participation DROPPED here.
+     *
+     * The app sends no application id; the server resolves the caller's own. Safe to retry:
+     * a repeat answers 200 with the cancelled application. Applying again afterwards creates
+     * a new application.
+     */
+    @DeleteMapping("/{publicId}/registrations")
+    @PreAuthorize("isAuthenticated()")
+    @OpenApiResponse(responseCode = "200", description = "Cancelled, or already cancelled by an earlier call.")
+    @OpenApiResponse(
+        responseCode = "404",
+        description = "No such training, or the caller has no application to it (code COURSE_APPLICATION_NOT_FOUND).",
+        content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+    )
+    @OpenApiResponse(
+        responseCode = "409",
+        description = "The caller already completed this training (code COURSE_APPLICATION_NOT_CANCELLABLE).",
+        content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+    )
+    @OpenApiResponse(
+        responseCode = "503",
+        description =
+            "application.hanmaum.de could not be reached (code COURSE_APPLICATION_UNAVAILABLE); " +
+                "nothing was changed.",
+        content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+    )
+    fun cancelRegistration(
+        @PathVariable publicId: UUID,
+        authentication: JwtAuthenticationToken,
+    ): ResponseEntity<ApiResponse<MyTrainingApplicationDto>> =
+        ResponseEntity.ok(
+            ApiResponse.success(
+                data = courseApplicationService.cancel(publicId, authentication.token.subject),
+                message = "신청이 취소되었습니다.",
+            ),
+        )
 
     /**
      * GET /api/v1/trainings/catalog?activeOnly=true

@@ -63,5 +63,14 @@ class CourseApplicationAttempt(
         status = CourseApplicationAttemptStatus.CREATED
     }
 
+    /**
+     * Cancelled on the external side. No longer live, so uq_course_application_attempt_member_course
+     * lets the member apply to the course again under a new [clientApplicationId].
+     */
+    fun markCancelled(externalId: Long) {
+        externalApplicationId = externalId
+        status = CourseApplicationAttemptStatus.CANCELLED
+    }
+
     override fun toString(): String = "CourseApplicationAttempt(id=$id, externalCourseId=$externalCourseId, status=$status)"
 }

@@ -489,6 +489,175 @@ class CourseApplicationServiceTest {
         assertNull(dropped.startedOn)
     }
 
+    // ─── cancel ───────────────────────────────────────────────────────────────
+
+    @Test
+    fun `a cancellation goes out first, then drops the participation here`() {
+        val member = member()
+        givenMember(member)
+        val qtBasic = givenTraining()
+        val created = givenLatestAttempt(member, qtBasic) { markCreated(55L) }
+        val participation = givenParticipation(member, qtBasic, TrainingStatus.APPLIED)
+
+        val result = service.cancel(qtBasic.publicId, "kc-001")
+
+        assertEquals(listOf(55L), client.cancelled)
+        assertEquals(CourseApplicationAttemptStatus.CANCELLED, created.status)
+        assertEquals(TrainingStatus.DROPPED, participation.status)
+        assertEquals("DROPPED", result.status)
+        assertEquals(106, result.externalCourseId)
+    }
+
+    @Test
+    fun `a pending attempt is resolved by its client id before it is cancelled`() {
+        val member = member()
+        givenMember(member)
+        val qtBasic = givenTraining()
+        val pending = givenLatestAttempt(member, qtBasic)
+        givenParticipation(member, qtBasic, TrainingStatus.APPLIED)
+        client.byClientId = ExternalApplication(id = 88L, courseId = 106, status = "active")
+
+        service.cancel(qtBasic.publicId, "kc-001")
+
+        assertEquals(listOf(88L), client.cancelled)
+        assertEquals(88L, pending.externalApplicationId)
+        assertEquals(CourseApplicationAttemptStatus.CANCELLED, pending.status)
+    }
+
+    @Test
+    fun `a pending attempt the external API never received is a 404 without cancelling anything`() {
+        val member = member()
+        givenMember(member)
+        val qtBasic = givenTraining()
+        val pending = givenLatestAttempt(member, qtBasic, stubLookup = false)
+
+        val e = assertThrows<CourseApplicationException> { service.cancel(qtBasic.publicId, "kc-001") }
+
+        assertEquals(404, e.status.value())
+        assertEquals(ApiErrorCode.COURSE_APPLICATION_NOT_FOUND, e.code)
+        assertTrue(client.cancelled.isEmpty())
+        assertEquals(CourseApplicationAttemptStatus.PENDING, pending.status)
+    }
+
+    @Test
+    fun `a member without an application to the training gets a 404`() {
+        val member = member()
+        givenMember(member)
+        val qtBasic = givenTraining()
+        val otherTraining = training(2L, TrainingCode.ONE_ON_ONE, "일대일제자양육", 40)
+        `when`(attemptRepo.findByMember(1L, CourseApplicationAttemptStatus.entries.toSet())).thenReturn(
+            listOf(attempt(member, otherTraining, 3).apply { markCreated(9L) }),
+        )
+
+        val e = assertThrows<CourseApplicationException> { service.cancel(qtBasic.publicId, "kc-001") }
+
+        assertEquals(ApiErrorCode.COURSE_APPLICATION_NOT_FOUND, e.code)
+        assertTrue(client.cancelled.isEmpty())
+    }
+
+    @Test
+    fun `a repeated cancellation answers 200 again without calling out`() {
+        val member = member()
+        givenMember(member)
+        val qtBasic = givenTraining()
+        givenLatestAttempt(member, qtBasic, stubLookup = false) {
+            markCreated(55L)
+            markCancelled(55L)
+        }
+
+        val result = service.cancel(qtBasic.publicId, "kc-001")
+
+        assertTrue(client.cancelled.isEmpty())
+        assertEquals("DROPPED", result.status)
+    }
+
+    @Test
+    fun `an outage while cancelling is a 503 and nothing changes here`() {
+        val member = member()
+        givenMember(member)
+        val qtBasic = givenTraining()
+        val created = givenLatestAttempt(member, qtBasic, stubLookup = false) { markCreated(55L) }
+        val participation = givenParticipation(member, qtBasic, TrainingStatus.APPLIED)
+        client.unavailableOnCancel = true
+
+        val e = assertThrows<CourseApplicationException> { service.cancel(qtBasic.publicId, "kc-001") }
+
+        assertEquals(503, e.status.value())
+        assertEquals(ApiErrorCode.COURSE_APPLICATION_UNAVAILABLE, e.code)
+        assertEquals(CourseApplicationAttemptStatus.CREATED, created.status)
+        assertEquals(TrainingStatus.APPLIED, participation.status)
+    }
+
+    @Test
+    fun `a completed training cannot be cancelled`() {
+        val member = member()
+        givenMember(member)
+        val qtBasic = givenTraining()
+        givenLatestAttempt(member, qtBasic, stubLookup = false) { markCreated(55L) }
+        givenParticipation(member, qtBasic, TrainingStatus.COMPLETED)
+
+        val e = assertThrows<CourseApplicationException> { service.cancel(qtBasic.publicId, "kc-001") }
+
+        assertEquals(409, e.status.value())
+        assertEquals(ApiErrorCode.COURSE_APPLICATION_NOT_CANCELLABLE, e.code)
+        assertTrue(client.cancelled.isEmpty())
+    }
+
+    @Test
+    fun `an older completion is history and stays completed when the new application is cancelled`() {
+        val member = member()
+        givenMember(member)
+        val qtBasic = givenTraining()
+        givenLatestAttempt(member, qtBasic) { markCreated(55L) }
+        val history =
+            givenParticipation(member, qtBasic, TrainingStatus.COMPLETED).apply {
+                appliedOn = LocalDate.of(2019, 3, 1)
+            }
+
+        service.cancel(qtBasic.publicId, "kc-001")
+
+        assertEquals(listOf(55L), client.cancelled)
+        assertEquals(TrainingStatus.COMPLETED, history.status)
+    }
+
+    @Test
+    fun `applying again after a cancellation creates a new external application, not a replay`() {
+        val member = member()
+        givenMember(member)
+        val qtBasic = givenTraining()
+        val attempts = mutableListOf<CourseApplicationAttempt>()
+        `when`(attemptRepo.saveAndFlush(any<CourseApplicationAttempt>())).thenAnswer { invocation ->
+            (invocation.arguments[0] as CourseApplicationAttempt).also {
+                setId(it, attempts.size + 7L)
+                it.createdAt = now
+                attempts.add(0, it)
+            }
+        }
+        `when`(attemptRepo.findById(any())).thenAnswer { invocation ->
+            Optional.ofNullable(attempts.firstOrNull { it.id == invocation.arguments[0] })
+        }
+        // Keyed like uq_course_application_attempt_member_course: a cancelled attempt is not live.
+        `when`(attemptRepo.findLive(1L, 106)).thenAnswer { attempts.firstOrNull { it.status != CourseApplicationAttemptStatus.CANCELLED } }
+        `when`(attemptRepo.findByMember(1L, CourseApplicationAttemptStatus.entries.toSet())).thenAnswer { attempts.toList() }
+        var participation: UserTraining? = null
+        `when`(userTrainingRepo.findByMemberIdAndTrainingIdAndVariantAndDeletedAtIsNull(1L, 1L, null)).thenAnswer {
+            Optional.ofNullable(participation)
+        }
+        `when`(userTrainingRepo.save(any<UserTraining>())).thenAnswer { invocation ->
+            (invocation.arguments[0] as UserTraining).also { participation = it }
+        }
+
+        service.apply(qtBasic.publicId, "kc-001", TrainingApplicationRequest(106))
+        service.cancel(qtBasic.publicId, "kc-001")
+        val again = service.apply(qtBasic.publicId, "kc-001", TrainingApplicationRequest(106))
+
+        assertEquals(2, client.created.size)
+        assertTrue(client.created[0].clientApplicationId != client.created[1].clientApplicationId)
+        assertEquals(listOf(CourseApplicationAttemptStatus.CREATED, CourseApplicationAttemptStatus.CANCELLED), attempts.map { it.status })
+        assertEquals(TrainingStatus.APPLIED, participation?.status)
+        assertEquals("APPLIED", again.status)
+    }
+
     // ─── myTrainingApplications ───────────────────────────────────────────────
 
     @Test
@@ -522,7 +691,9 @@ class CourseApplicationServiceTest {
         var unavailableOnCreate = false
         var rejectCreateWith: CourseApplicationApiRejectedException? = null
         var byClientId: ExternalApplication? = null
+        var unavailableOnCancel = false
         val created = mutableListOf<ExternalCreateApplicationRequest>()
+        val cancelled = mutableListOf<Long>()
 
         override fun listCourses(): List<ExternalCourse> {
             if (unavailable) throw CourseApplicationApiUnavailableException("down")
@@ -537,6 +708,12 @@ class CourseApplicationServiceTest {
         }
 
         override fun findApplicationByClientId(clientApplicationId: UUID): ExternalApplication? = byClientId
+
+        override fun cancelApplication(externalApplicationId: Long): ExternalApplication {
+            if (unavailableOnCancel) throw CourseApplicationApiUnavailableException("down")
+            cancelled += externalApplicationId
+            return ExternalApplication(id = externalApplicationId, courseId = 106, status = "cancelled")
+        }
     }
 
     private fun course(
@@ -601,6 +778,32 @@ class CourseApplicationServiceTest {
                 if (finished) `when`(attemptRepo.findById(7L)).thenReturn(Optional.of(it))
             }
         }
+    }
+
+    /**
+     * The member's latest attempt at 큐베세, course 106, id 7. [stubLookup] also stubs the
+     * lookup the recording step does, which a test that stops before it must leave out.
+     */
+    private fun givenLatestAttempt(
+        member: Member,
+        training: Training,
+        stubLookup: Boolean = true,
+        state: CourseApplicationAttempt.() -> Unit = {},
+    ): CourseApplicationAttempt {
+        val attempt = attempt(member, training, 106).also { setId(it, 7L) }.apply(state)
+        `when`(attemptRepo.findByMember(1L, CourseApplicationAttemptStatus.entries.toSet())).thenReturn(listOf(attempt))
+        if (stubLookup) `when`(attemptRepo.findById(7L)).thenReturn(Optional.of(attempt))
+        return attempt
+    }
+
+    private fun givenParticipation(
+        member: Member,
+        training: Training,
+        status: TrainingStatus,
+    ): UserTraining {
+        val row = UserTraining(member = member, training = training, status = status, appliedOn = today)
+        `when`(userTrainingRepo.findByMemberIdAndTrainingIdAndVariantAndDeletedAtIsNull(1L, 1L, null)).thenReturn(Optional.of(row))
+        return row
     }
 
     private fun savedAttempt(): CourseApplicationAttempt {
