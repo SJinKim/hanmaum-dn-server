@@ -54,6 +54,16 @@ data class ApplicantPrefillDto(
     /** "M" or "F". */
     val gender: String?,
     val residence: String?,
+    /** 양육 받은 경험: one line per completed training, e.g. "큐티베이직세미나 / 2017년 5월". */
+    val history: String? = null,
+    /** 현재 신청한 양육: one line per training applied or enrolled for. */
+    val waiting: String? = null,
+    /** 현재 진행 중인 양육: one line per training in progress. */
+    val running: String? = null,
+    /** 세례 여부 as the form's option value: 1 유아세례, 2 입교, 3 세례, 4 미세례. */
+    val baptized: String? = null,
+    /** 세례 구분 as the form's option value: 1 유아세례, 3 입교, 4 세례, 5 미세례 (2 아동세례 is never prefilled). */
+    val baptizeType: String? = null,
 ) {
     // Hand-written: the generated toString would render every field of a person's profile.
     override fun toString(): String = "ApplicantPrefillDto(<redacted>)"

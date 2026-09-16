@@ -66,6 +66,7 @@ class TrainingControllerTest {
         TrainingDto(
             publicId = trainingId.toString(),
             name = "One-to-One Discipleship Training",
+            nameKo = "일대일제자양육",
             sortOrder = 40,
             description = null,
             startDate = null,
@@ -131,6 +132,9 @@ class TrainingControllerTest {
                     phone = null,
                     gender = "M",
                     residence = null,
+                    history = "큐티베이직세미나 / 2017년 5월",
+                    baptized = "3",
+                    baptizeType = "4",
                 ),
         )
 
@@ -138,11 +142,13 @@ class TrainingControllerTest {
 
     @Test
     fun `GET trainings defaults to the stored catalog the admin form expects`() {
-        `when`(trainingService.getTrainings(false)).thenReturn(emptyList())
+        `when`(trainingService.getTrainings(false)).thenReturn(listOf(sampleDto().copy(myApplication = null)))
 
         mockMvc
             .perform(get("/api/v1/trainings").with(jwt().authorities(SimpleGrantedAuthority("ROLE_ADMIN"))))
             .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data[0].name").value("One-to-One Discipleship Training"))
+            .andExpect(jsonPath("$.data[0].nameKo").value("일대일제자양육"))
 
         verify(trainingService).getTrainings(false)
         verify(courseApplicationService, never()).listTrainings(any())
@@ -155,6 +161,7 @@ class TrainingControllerTest {
         mockMvc
             .perform(get("/api/v1/trainings").param("activeOnly", "true").with(member))
             .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data[0].nameKo").value("일대일제자양육"))
             .andExpect(jsonPath("$.data[0].openForRegistration").value(true))
             .andExpect(jsonPath("$.data[0].isAlwaysOpen").value(true))
             .andExpect(jsonPath("$.data[0].registrationEndsAt").value(startsWith("2099-03-12T")))
@@ -194,6 +201,10 @@ class TrainingControllerTest {
             .andExpect(jsonPath("$.data.courses[0].externalCourseId").value(105))
             .andExpect(jsonPath("$.data.courses[0].isEligible").value(false))
             .andExpect(jsonPath("$.data.applicantPrefill.name").value("김철수"))
+            .andExpect(jsonPath("$.data.applicantPrefill.history").value("큐티베이직세미나 / 2017년 5월"))
+            .andExpect(jsonPath("$.data.applicantPrefill.baptized").value("3"))
+            .andExpect(jsonPath("$.data.applicantPrefill.baptizeType").value("4"))
+            .andExpect(jsonPath("$.data.applicantPrefill.running").doesNotExist())
     }
 
     @Test

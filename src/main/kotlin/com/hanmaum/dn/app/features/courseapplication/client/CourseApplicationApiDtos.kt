@@ -64,6 +64,8 @@ data class ExternalApplicationField(
     val label: String? = null,
     val supported: Boolean = true,
     val options: List<ExternalFieldOption> = emptyList(),
+    /** Required on top of [required] when every named field holds one of its values, e.g. aGroup ∈ {4, 5}. */
+    val requiredWhen: Map<String, List<String>> = emptyMap(),
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)

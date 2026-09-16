@@ -18,7 +18,10 @@ import java.time.OffsetDateTime
  */
 data class TrainingDto(
     val publicId: String,
+    /** English catalog name. */
     val name: String,
+    /** The name the congregation uses, e.g. 큐티베이직세미나; null when none is recorded. */
+    val nameKo: String? = null,
     val sortOrder: Int,
     /** One-line blurb under the name. */
     val description: String?,
