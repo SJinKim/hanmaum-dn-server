@@ -55,6 +55,8 @@ class MemberPurgeService(
     }
 
     private fun purgeMemberRows(memberId: Long) {
+        jdbcTemplate.update("UPDATE newcomer_profiles SET caregiver_member_id = NULL WHERE caregiver_member_id = ?", memberId)
+        jdbcTemplate.update("DELETE FROM newcomer_profiles WHERE member_id = ?", memberId)
         jdbcTemplate.update(
             "DELETE FROM car_passengers WHERE car_id IN (SELECT id FROM cars WHERE driver_member_id = ?)",
             memberId,

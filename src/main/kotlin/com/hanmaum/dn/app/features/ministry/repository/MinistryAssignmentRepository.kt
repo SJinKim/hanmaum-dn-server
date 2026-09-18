@@ -42,6 +42,21 @@ interface MinistryAssignmentRepository :
         @Param("memberId") memberId: Long,
     ): Boolean
 
+    @Query(
+        """
+        SELECT COUNT(a) > 0 FROM MinistryAssignment a
+        WHERE a.member.id = :memberId
+          AND a.ministry.isMinistryActive = true
+          AND a.ministry.name LIKE CONCAT('%', :ministryName, '%')
+          AND a.endDate IS NULL
+          AND a.deletedAt IS NULL
+        """,
+    )
+    fun existsActiveAssignmentByMemberAndMinistryName(
+        @Param("memberId") memberId: Long,
+        @Param("ministryName") ministryName: String,
+    ): Boolean
+
     /**
      * All active assignments (endDate IS NULL) for the given members, projected flat.
      */
