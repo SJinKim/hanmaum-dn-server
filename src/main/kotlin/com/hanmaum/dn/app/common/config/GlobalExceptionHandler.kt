@@ -5,6 +5,7 @@ import com.hanmaum.dn.app.common.api.ErrorResponse
 import com.hanmaum.dn.app.common.security.securityProblemDetail
 import com.hanmaum.dn.app.features.courseapplication.service.CourseApplicationException
 import com.hanmaum.dn.app.features.members.service.MemberProfileNotFoundException
+import com.hanmaum.dn.app.features.newcomers.service.NewcomerException
 import jakarta.persistence.EntityNotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -162,6 +163,14 @@ class GlobalExceptionHandler {
     fun handleAuthorizationDenied(e: AuthorizationDeniedException): ResponseEntity<ProblemDetail> {
         logger.warn("Authorization denied: {}", e.message)
         return ResponseEntity(securityProblemDetail(HttpStatus.FORBIDDEN), HttpStatus.FORBIDDEN)
+    }
+
+    @ExceptionHandler(NewcomerException::class)
+    fun handleNewcomerException(e: NewcomerException): ResponseEntity<ProblemDetail> {
+        logger.warn("Newcomer request rejected: status={}", e.status.value())
+        val problem = ProblemDetail.forStatusAndDetail(e.status, e.safeDetail)
+        problem.title = e.status.reasonPhrase
+        return ResponseEntity(problem, e.status)
     }
 
     @ExceptionHandler(ResponseStatusException::class)

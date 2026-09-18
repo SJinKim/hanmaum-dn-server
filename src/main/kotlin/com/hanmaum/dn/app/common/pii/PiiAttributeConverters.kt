@@ -104,3 +104,30 @@ class EncryptedUserTrainingNoteConverter : EncryptedStringConverter("user_traini
 // Graduation notes are written by an admin and may name a spouse or another member.
 @Converter
 class EncryptedGraduationNoteConverter : EncryptedStringConverter("member_graduations.note")
+
+@Converter
+class EncryptedNewcomerWorkOrSchoolConverter : EncryptedStringConverter("newcomer_profiles.work_or_school")
+
+@Converter
+class EncryptedNewcomerAssignmentReasonConverter : EncryptedStringConverter("newcomer_profiles.assignment_reason")
+
+@Converter
+class EncryptedNewcomerOverallNotesConverter : EncryptedStringConverter("newcomer_profiles.overall_notes")
+
+@Converter
+class EncryptedNewcomerEnglishNameConverter : EncryptedStringConverter("newcomer_profiles.english_name")
+
+@Converter
+class EncryptedNewcomerKakaoIdConverter : EncryptedStringConverter("newcomer_profiles.kakao_id")
+
+@Converter
+class EncryptedNewcomerPreviousChurchConverter : EncryptedStringConverter("newcomer_profiles.previous_church")
+
+@Converter
+class EncryptedNewcomerVisitMotivesConverter : EncryptedStringConverter("newcomer_profiles.visit_motives")
+
+@Converter
+class EncryptedNewcomerAdditionalNotesConverter : EncryptedStringConverter("newcomer_profiles.additional_notes")
+
+@Converter
+class EncryptedNewcomerFirstVisitDateConverter : EncryptedLocalDateConverter("newcomer_profiles.first_visit_date")
