@@ -33,7 +33,7 @@
   "verifyEmail": false,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
-  "resetPasswordAllowed": false,
+  "resetPasswordAllowed": true,
   "editUsernameAllowed": false,
   "bruteForceProtected": false,
   "permanentLockout": false,
@@ -78,6 +78,24 @@
         "id": "b2c3d4e5-f6a7-8901-bcde-f23456789012",
         "name": "ministry_leader",
         "description": "Sachbereichsleiter: kann bestehende Mitglieder einem Sachbereich hinzufügen",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "313538da-5813-430e-ab02-16db69fc5746",
+        "attributes": {}
+      },
+      {
+        "id": "c6ce0707-4291-4b50-8716-8110f8d83e98",
+        "name": "NEWCOMER_VIEWER",
+        "description": "Darf personenbezogene Daten im Neuzugangsprozess lesen",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "313538da-5813-430e-ab02-16db69fc5746",
+        "attributes": {}
+      },
+      {
+        "id": "2177e4ce-b76d-4480-b107-f2222b7b9c3a",
+        "name": "NEWCOMER_EDITOR",
+        "description": "Darf personenbezogene Daten im Neuzugangsprozess bearbeiten",
         "composite": false,
         "clientRole": false,
         "containerId": "313538da-5813-430e-ab02-16db69fc5746",
@@ -442,7 +460,51 @@
       "hanmaum-dashboard": []
     }
   },
-  "groups": [],
+  "groups": [
+    {
+      "id": "376e6247-ed55-4cca-b196-f9d1ecb6f830",
+      "name": "ministries",
+      "path": "/ministries",
+      "attributes": {},
+      "realmRoles": [],
+      "clientRoles": {},
+      "subGroups": [
+        {
+          "id": "b598fca7-f448-465c-9d36-9aa2466076bf",
+          "name": "newcomer",
+          "path": "/ministries/newcomer",
+          "attributes": {},
+          "realmRoles": [],
+          "clientRoles": {},
+          "subGroups": [
+            {
+              "id": "c66d5616-33d5-4fd9-913e-4577c3508599",
+              "name": "viewers",
+              "path": "/ministries/newcomer/viewers",
+              "attributes": {},
+              "realmRoles": [
+                "NEWCOMER_VIEWER"
+              ],
+              "clientRoles": {},
+              "subGroups": []
+            },
+            {
+              "id": "4dd71533-4bf9-46db-9e4b-7b044817e61a",
+              "name": "editors",
+              "path": "/ministries/newcomer/editors",
+              "attributes": {},
+              "realmRoles": [
+                "NEWCOMER_VIEWER",
+                "NEWCOMER_EDITOR"
+              ],
+              "clientRoles": {},
+              "subGroups": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
   "defaultRole": {
     "id": "3d884f2b-5366-479e-81a3-57d947b32927",
     "name": "default-roles-hanmaum",
@@ -1762,7 +1824,18 @@
     "contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
     "strictTransportSecurity": "max-age=31536000; includeSubDomains"
   },
-  "smtpServer": {},
+  "smtpServer": {
+    "from": "${KEYCLOAK_SMTP_FROM}",
+    "fromDisplayName": "${KEYCLOAK_SMTP_FROM_DISPLAY_NAME}",
+    "replyTo": "${KEYCLOAK_SMTP_REPLY_TO}",
+    "host": "${KEYCLOAK_SMTP_HOST}",
+    "port": "${KEYCLOAK_SMTP_PORT}",
+    "ssl": "${KEYCLOAK_SMTP_SSL}",
+    "starttls": "${KEYCLOAK_SMTP_STARTTLS}",
+    "auth": "${KEYCLOAK_SMTP_AUTH}",
+    "user": "${KEYCLOAK_SMTP_USER}",
+    "password": "${KEYCLOAK_SMTP_PASSWORD}"
+  },
   "eventsEnabled": false,
   "eventsListeners": [
     "jboss-logging"

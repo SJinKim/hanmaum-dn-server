@@ -312,6 +312,14 @@ class MemberMappersTest {
     // --- Member.toResponse() ---
 
     @Test
+    fun `toResponse exposes the Keycloak email verification state`() {
+        val member = memberWithId(1L)
+
+        assertEquals(true, member.toResponse(emailVerified = true).emailVerified)
+        assertEquals(false, member.toResponse(emailVerified = false).emailVerified)
+    }
+
+    @Test
     fun `toResponse uses publicId not internal id`() {
         val member = memberWithId(42L, "철수", "김")
         val response = member.toResponse()

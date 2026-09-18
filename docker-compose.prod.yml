@@ -8,6 +8,7 @@
 #   DB_HANMAUM_DN_URL              — e.g. jdbc:postgresql://hanmaumApp-db:5432
 #   KEYCLOAK_ADMIN_USER, KEYCLOAK_ADMIN_PASSWORD, KEYCLOAK_REALM
 #   KEYCLOAK_BACKEND_CLIENT_SECRET — backend service account client secret
+#   KEYCLOAK_SMTP_*                — see KEYCLOAK_RUNBOOK.md; credentials stay server-local
 #   BACKEND_IMAGE                  — set by CI: ghcr.io/sjinkim/hanmaum-dn-server:sha-<short>
 #   API_DOMAIN, AUTH_DOMAIN        — public hostnames (used by Caddy, sourced from .env)
 #   HANMAUM_CHURCH_LOCATION_LATITUDE, HANMAUM_CHURCH_LOCATION_LONGITUDE
@@ -69,6 +70,18 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       KEYCLOAK_BACKEND_CLIENT_SECRET: ${KEYCLOAK_BACKEND_CLIENT_SECRET:?KEYCLOAK_BACKEND_CLIENT_SECRET must be set}
+      # Realm imports resolve these placeholders. Existing realms still need the same
+      # values applied through the Admin Console; startup import never overwrites them.
+      KEYCLOAK_SMTP_HOST: ${KEYCLOAK_SMTP_HOST:-}
+      KEYCLOAK_SMTP_PORT: ${KEYCLOAK_SMTP_PORT:-587}
+      KEYCLOAK_SMTP_FROM: ${KEYCLOAK_SMTP_FROM:-}
+      KEYCLOAK_SMTP_FROM_DISPLAY_NAME: ${KEYCLOAK_SMTP_FROM_DISPLAY_NAME:-Hanmaum DN}
+      KEYCLOAK_SMTP_REPLY_TO: ${KEYCLOAK_SMTP_REPLY_TO:-}
+      KEYCLOAK_SMTP_SSL: ${KEYCLOAK_SMTP_SSL:-false}
+      KEYCLOAK_SMTP_STARTTLS: ${KEYCLOAK_SMTP_STARTTLS:-true}
+      KEYCLOAK_SMTP_AUTH: ${KEYCLOAK_SMTP_AUTH:-true}
+      KEYCLOAK_SMTP_USER: ${KEYCLOAK_SMTP_USER:-}
+      KEYCLOAK_SMTP_PASSWORD: ${KEYCLOAK_SMTP_PASSWORD:-}
       KC_DB: postgres
       KC_DB_URL: ${DB_HANMAUM_DN_URL}/hanmaum_keycloak_db
       KC_DB_USERNAME: ${DB_HANMAUM_DN_USER}

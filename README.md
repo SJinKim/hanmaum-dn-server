@@ -155,6 +155,9 @@ Integration tests require the test database container (`test-db` on port `5434`)
 
 On a fresh volume Keycloak auto-imports the realm from `infrastructure/docker/keycloak/export/`. No manual setup is needed.
 
+SMTP, non-blocking e-mail verification, password reset, and the newcomer
+viewer/editor group mappings are documented in [`KEYCLOAK_RUNBOOK.md`](KEYCLOAK_RUNBOOK.md).
+
 Realm imports do not update a realm that already exists. If
 `KEYCLOAK_BACKEND_CLIENT_SECRET` changes, either rotate the
 `dn-backend-admin` client secret in the Keycloak Admin Console and restart the

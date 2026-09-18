@@ -26,6 +26,7 @@ import com.hanmaum.dn.app.features.training.repository.TrainingRepository
 import com.hanmaum.dn.app.features.training.repository.UserTrainingRepository
 import jakarta.persistence.EntityNotFoundException
 import jakarta.ws.rs.ProcessingException
+import jakarta.ws.rs.WebApplicationException
 import jakarta.ws.rs.core.Response
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -36,6 +37,7 @@ import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.keycloak.admin.client.Keycloak
 import org.keycloak.admin.client.resource.RealmResource
+import org.keycloak.admin.client.resource.UserResource
 import org.keycloak.admin.client.resource.UsersResource
 import org.keycloak.representations.idm.UserRepresentation
 import org.mockito.Mock
@@ -49,6 +51,7 @@ import org.mockito.kotlin.eq
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
 import org.springframework.web.server.ResponseStatusException
+import java.net.URI
 import java.time.Instant
 import java.time.LocalDate
 import java.util.Optional
@@ -79,6 +82,8 @@ class MemberServiceTest {
     @Mock private lateinit var realmResource: RealmResource
 
     @Mock private lateinit var usersResource: UsersResource
+
+    @Mock private lateinit var userResource: UserResource
 
     @Mock private lateinit var kcResponse: Response
 
@@ -122,13 +127,19 @@ class MemberServiceTest {
         return g
     }
 
-    private fun setupKeycloakMock(statusCode: Int = 201) {
+    private fun setupKeycloakMock(
+        statusCode: Int = 201,
+        keycloakId: String? = null,
+    ) {
         `when`(keycloak.realm("test-realm")).thenReturn(realmResource)
         `when`(realmResource.users()).thenReturn(usersResource)
         `when`(usersResource.create(any<UserRepresentation>())).thenReturn(kcResponse)
         `when`(kcResponse.status).thenReturn(statusCode)
         if (statusCode == 201) {
-            `when`(kcResponse.location).thenReturn(null)
+            `when`(kcResponse.location).thenReturn(keycloakId?.let { URI.create("http://keycloak/users/$it") })
+            keycloakId?.let {
+                `when`(usersResource.get(it)).thenReturn(userResource)
+            }
         }
     }
 
@@ -629,6 +640,61 @@ class MemberServiceTest {
         assertEquals("12a", result.houseNumber)
     }
 
+    @Test
+    fun `registerMember sends a verification email after linking the Keycloak user`() {
+        val req = registerReq()
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
+        `when`(memberRepository.findSimilarNames(req.firstName, req.lastName)).thenReturn(emptyList())
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+        setupKeycloakMock(keycloakId = "kc-123")
+
+        val result = memberService.registerMember(req)
+
+        assertEquals("kc-123", result.keycloakId)
+        verify(userResource).sendVerifyEmail()
+        verify(operationalMetrics)
+            .recordExternalCall(eq("keycloak"), eq("send_verify_email"), eq(ExternalCallOutcome.SUCCESS), any())
+    }
+
+    @Test
+    fun `registerMember succeeds when the verification email cannot be sent`() {
+        val req = registerReq()
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
+        `when`(memberRepository.findSimilarNames(req.firstName, req.lastName)).thenReturn(emptyList())
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+        setupKeycloakMock(keycloakId = "kc-123")
+        `when`(userResource.sendVerifyEmail()).thenThrow(ProcessingException("smtp unavailable"))
+
+        val result = memberService.registerMember(req)
+
+        assertEquals("kc-123", result.keycloakId)
+        verify(operationalMetrics)
+            .recordExternalCall(
+                eq("keycloak"),
+                eq("send_verify_email"),
+                eq(ExternalCallOutcome.TRANSPORT_ERROR),
+                any(),
+            )
+    }
+
+    @Test
+    fun `registerMember classifies a verification endpoint failure without failing registration`() {
+        val req = registerReq()
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
+        `when`(memberRepository.findSimilarNames(req.firstName, req.lastName)).thenReturn(emptyList())
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+        setupKeycloakMock(keycloakId = "kc-123")
+        val response = Response.status(503).build()
+        `when`(userResource.sendVerifyEmail()).thenThrow(WebApplicationException(response))
+
+        val result = memberService.registerMember(req)
+
+        assertEquals("kc-123", result.keycloakId)
+        verify(operationalMetrics)
+            .recordExternalCall(eq("keycloak"), eq("send_verify_email"), eq(ExternalCallOutcome.SERVER_ERROR), any())
+        response.close()
+    }
+
     // --- getMemberProfile ---
 
     @Test
@@ -652,12 +718,13 @@ class MemberServiceTest {
         member.keycloakId = keycloakSub
         `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(member)
 
-        val response = memberService.getMemberProfile(keycloakSub, "found@example.com")
+        val response = memberService.getMemberProfile(keycloakSub, "found@example.com", emailVerified = true)
 
         assertEquals(member.publicId.toString(), response.publicId)
         assertEquals("철수", response.firstName)
         assertEquals("김", response.lastName)
         assertEquals("서울", response.city)
+        assertEquals(true, response.emailVerified)
     }
 
     @Test

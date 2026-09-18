@@ -38,6 +38,7 @@ import com.hanmaum.dn.app.features.training.repository.TrainingRepository
 import com.hanmaum.dn.app.features.training.repository.UserTrainingRepository
 import jakarta.persistence.EntityNotFoundException
 import jakarta.ws.rs.ProcessingException
+import jakarta.ws.rs.WebApplicationException
 import org.keycloak.admin.client.Keycloak
 import org.keycloak.representations.idm.CredentialRepresentation
 import org.keycloak.representations.idm.UserRepresentation
@@ -308,7 +309,7 @@ class MemberService(
         emailVerified: Boolean = false,
     ): MemberResponse {
         val member = resolveAndLinkMember(keycloakSubject, email, emailVerified)
-        return member.toResponse(activeMinistryNames(member.id))
+        return member.toResponse(activeMinistryNames(member.id), emailVerified)
     }
 
     /**
@@ -352,7 +353,7 @@ class MemberService(
         request.zipCode?.let { member.zipCode = it }
         request.city?.let { member.city = it }
         val saved = memberRepository.save(member)
-        return saved.toResponse(activeMinistryNames(saved.id))
+        return saved.toResponse(activeMinistryNames(saved.id), emailVerified)
     }
 
     // ─── Write ─────────────────────────────────────────────────────────────────
@@ -552,12 +553,7 @@ class MemberService(
         val keycloakId =
             kcResponse.use { response ->
                 if (response.status != 201) {
-                    val outcome =
-                        when (response.status) {
-                            in 400..499 -> ExternalCallOutcome.CLIENT_ERROR
-                            in 500..599 -> ExternalCallOutcome.SERVER_ERROR
-                            else -> ExternalCallOutcome.INVALID_RESPONSE
-                        }
+                    val outcome = keycloakHttpOutcome(response.status)
                     recordKeycloakCall(outcome, keycloakCallStartedAt)
                     log
                         .atError()
@@ -579,6 +575,7 @@ class MemberService(
             recordKeycloakCall(ExternalCallOutcome.SUCCESS, keycloakCallStartedAt)
             savedMember.keycloakId = keycloakId
             memberRepository.save(savedMember)
+            sendVerificationEmail(keycloakId)
         } else {
             recordKeycloakCall(ExternalCallOutcome.INVALID_RESPONSE, keycloakCallStartedAt)
             log
@@ -603,14 +600,73 @@ class MemberService(
     private fun recordKeycloakCall(
         outcome: ExternalCallOutcome,
         startedAt: Long,
+        operation: String = "create_user",
     ) {
         operationalMetrics.recordExternalCall(
             dependency = "keycloak",
-            operation = "create_user",
+            operation = operation,
             outcome = outcome,
             elapsedNanos = System.nanoTime() - startedAt,
         )
     }
+
+    /**
+     * Verification is advisory and runs alongside manual approval. A mail outage must not
+     * roll back the member and Keycloak user that were already created successfully.
+     */
+    private fun sendVerificationEmail(keycloakId: String) {
+        val startedAt = System.nanoTime()
+        try {
+            keycloak
+                .realm(realm)
+                .users()
+                .get(keycloakId)
+                .sendVerifyEmail()
+            recordKeycloakCall(ExternalCallOutcome.SUCCESS, startedAt, "send_verify_email")
+        } catch (e: ProcessingException) {
+            recordKeycloakCall(ExternalCallOutcome.TRANSPORT_ERROR, startedAt, "send_verify_email")
+            log
+                .atWarn()
+                .setCause(e)
+                .addKeyValue("event.action", "keycloak.user.send_verify_email")
+                .addKeyValue("event.outcome", "failure")
+                .addKeyValue("dependency.name", "keycloak")
+                .addKeyValue("error.type", "transport")
+                .addKeyValue("realm", realm)
+                .log("Keycloak verification email could not be sent")
+        } catch (e: WebApplicationException) {
+            val status = e.response.status
+            recordKeycloakCall(keycloakHttpOutcome(status), startedAt, "send_verify_email")
+            log
+                .atWarn()
+                .setCause(e)
+                .addKeyValue("event.action", "keycloak.user.send_verify_email")
+                .addKeyValue("event.outcome", "failure")
+                .addKeyValue("dependency.name", "keycloak")
+                .addKeyValue("error.type", "http")
+                .addKeyValue("http.response.status_code", status)
+                .addKeyValue("realm", realm)
+                .log("Keycloak verification email could not be sent")
+        } catch (e: RuntimeException) {
+            recordKeycloakCall(ExternalCallOutcome.UNEXPECTED_ERROR, startedAt, "send_verify_email")
+            log
+                .atWarn()
+                .setCause(e)
+                .addKeyValue("event.action", "keycloak.user.send_verify_email")
+                .addKeyValue("event.outcome", "failure")
+                .addKeyValue("dependency.name", "keycloak")
+                .addKeyValue("error.type", "unexpected")
+                .addKeyValue("realm", realm)
+                .log("Keycloak verification email could not be sent")
+        }
+    }
+
+    private fun keycloakHttpOutcome(status: Int): ExternalCallOutcome =
+        when (status) {
+            in 400..499 -> ExternalCallOutcome.CLIENT_ERROR
+            in 500..599 -> ExternalCallOutcome.SERVER_ERROR
+            else -> ExternalCallOutcome.INVALID_RESPONSE
+        }
 
     // Delegates rather than reimplements: this used to be the only self-healing resolution
     // in the codebase, which is exactly why the other readers behaved differently.
