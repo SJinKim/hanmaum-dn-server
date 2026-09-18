@@ -54,6 +54,7 @@ class MemberProfileControllerTest {
             firstName = "철수",
             lastName = "김",
             email = "chulsoo@example.com",
+            emailVerified = true,
             status = MemberStatus.ACTIVE,
             churchRole = "청년부원",
             registrationDate = registrationDate,
@@ -79,6 +80,7 @@ class MemberProfileControllerTest {
             // A redacted date field must still serialize; birthDate is the existing proof.
             .andExpect(jsonPath("$.data.birthDate").value("1992-12-07"))
             .andExpect(jsonPath("$.data.publicId").value("pub-1"))
+            .andExpect(jsonPath("$.data.emailVerified").value(true))
     }
 
     @Test

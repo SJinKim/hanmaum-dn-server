@@ -137,6 +137,8 @@ data class MemberResponse(
     val firstName: String,
     val lastName: String,
     val email: String? = null,
+    /** Keycloak's current verification state from the authenticated user's JWT. */
+    @Unredacted val emailVerified: Boolean = false,
     @Unredacted val status: MemberStatus,
     val churchRole: String? = null,
     /**

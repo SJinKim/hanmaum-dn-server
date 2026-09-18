@@ -1,10 +1,14 @@
 package com.hanmaum.dn.app.common.config
 
+import com.hanmaum.dn.app.common.security.securityProblemDetail
+import jakarta.servlet.http.HttpServletResponse
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.convert.converter.Converter
 import org.springframework.http.HttpMethod
+import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.security.authentication.AbstractAuthenticationToken
 import org.springframework.security.config.Customizer
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
@@ -22,10 +26,13 @@ import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.oauth2.jwt.JwtTimestampValidator
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
+import org.springframework.security.web.AuthenticationEntryPoint
 import org.springframework.security.web.SecurityFilterChain
+import org.springframework.security.web.access.AccessDeniedHandler
 import org.springframework.web.cors.CorsConfiguration
 import org.springframework.web.cors.CorsConfigurationSource
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource
+import tools.jackson.databind.ObjectMapper
 
 @Configuration
 @EnableWebSecurity
@@ -48,7 +55,11 @@ class SecurityConfig(
     private val allowedOrigins: List<String>,
 ) {
     @Bean
-    fun filterChain(http: HttpSecurity): SecurityFilterChain {
+    fun filterChain(
+        http: HttpSecurity,
+        problemAuthenticationEntryPoint: AuthenticationEntryPoint,
+        problemAccessDeniedHandler: AccessDeniedHandler,
+    ): SecurityFilterChain {
         http
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .csrf { it.disable() }
@@ -68,12 +79,39 @@ class SecurityConfig(
                     .anyRequest()
                     .authenticated()
             }.oauth2ResourceServer { oauth2 ->
+                oauth2.authenticationEntryPoint(problemAuthenticationEntryPoint)
+                oauth2.accessDeniedHandler(problemAccessDeniedHandler)
                 oauth2.jwt { jwt ->
                     jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())
                 }
+            }.exceptionHandling { exceptions ->
+                exceptions.authenticationEntryPoint(problemAuthenticationEntryPoint)
+                exceptions.accessDeniedHandler(problemAccessDeniedHandler)
             }
 
         return http.build()
+    }
+
+    @Bean
+    fun problemAuthenticationEntryPoint(objectMapper: ObjectMapper): AuthenticationEntryPoint =
+        AuthenticationEntryPoint { _, response, _ ->
+            writeSecurityProblem(response, HttpStatus.UNAUTHORIZED, objectMapper)
+        }
+
+    @Bean
+    fun problemAccessDeniedHandler(objectMapper: ObjectMapper): AccessDeniedHandler =
+        AccessDeniedHandler { _, response, _ ->
+            writeSecurityProblem(response, HttpStatus.FORBIDDEN, objectMapper)
+        }
+
+    private fun writeSecurityProblem(
+        response: HttpServletResponse,
+        status: HttpStatus,
+        objectMapper: ObjectMapper,
+    ) {
+        response.status = status.value()
+        response.contentType = MediaType.APPLICATION_PROBLEM_JSON_VALUE
+        objectMapper.writeValue(response.outputStream, securityProblemDetail(status))
     }
 
     @Bean

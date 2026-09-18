@@ -198,12 +198,16 @@ fun Member.toNameDto(): MemberNameDto =
  * Own-profile mapper. [activeMinistries] is derived by the service (the assignment lives in
  * another aggregate) and passed in, the same way [toDto] takes its trainings and ministries.
  */
-fun Member.toResponse(activeMinistries: List<String> = emptyList()): MemberResponse =
+fun Member.toResponse(
+    activeMinistries: List<String> = emptyList(),
+    emailVerified: Boolean = false,
+): MemberResponse =
     MemberResponse(
         publicId = this.publicId.toString(),
         firstName = this.firstName,
         lastName = this.lastName,
         email = this.email,
+        emailVerified = emailVerified,
         status = this.memberStatus,
         churchRole = this.churchRole,
         registrationDate = this.registrationDate,

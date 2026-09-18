@@ -2,11 +2,13 @@ package com.hanmaum.dn.app.common.config
 
 import com.hanmaum.dn.app.common.api.ApiErrorCode
 import com.hanmaum.dn.app.common.api.ErrorResponse
+import com.hanmaum.dn.app.common.security.securityProblemDetail
 import com.hanmaum.dn.app.features.courseapplication.service.CourseApplicationException
 import com.hanmaum.dn.app.features.members.service.MemberProfileNotFoundException
 import jakarta.persistence.EntityNotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
+import org.springframework.http.ProblemDetail
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.security.authorization.AuthorizationDeniedException
@@ -157,15 +159,9 @@ class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(AuthorizationDeniedException::class)
-    fun handleAuthorizationDenied(e: AuthorizationDeniedException): ResponseEntity<ErrorResponse> {
+    fun handleAuthorizationDenied(e: AuthorizationDeniedException): ResponseEntity<ProblemDetail> {
         logger.warn("Authorization denied: {}", e.message)
-        val response =
-            ErrorResponse(
-                status = HttpStatus.FORBIDDEN.value(),
-                error = "Forbidden",
-                message = "Access denied.",
-            )
-        return ResponseEntity(response, HttpStatus.FORBIDDEN)
+        return ResponseEntity(securityProblemDetail(HttpStatus.FORBIDDEN), HttpStatus.FORBIDDEN)
     }
 
     @ExceptionHandler(ResponseStatusException::class)
