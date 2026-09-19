@@ -9,6 +9,10 @@
 ## Lessons
 <!-- Claude appends here after each correction -->
 
+### Update retry tests when the workflow gains a follow-up action
+- **Mistake**: Left the claim-retry test asserting that a pre-existing conflict must skip the candidate lookup after reconciliation reviews were introduced.
+- **Rule**: When a workflow adds an audit or review step after a previously terminal state, revisit retry assertions: distinguish “do not duplicate the original record” from “skip all later reconciliation work.”
+
 ### Distinguish a merged implementation from an issue's GitHub state
 - **Mistake**: Treated Issue #181's still-open GitHub state as proof that its implementation had not been merged.
 - **Rule**: When checking delivery status, inspect `origin/main` and the relevant merged PR diff first. An open issue can be a ticket-hygiene problem; state that distinction explicitly before concluding work is absent.

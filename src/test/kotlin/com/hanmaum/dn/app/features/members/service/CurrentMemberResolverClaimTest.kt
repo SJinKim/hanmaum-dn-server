@@ -4,6 +4,7 @@ import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberClaimConflictRepository
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.newcomers.repository.MemberReconciliationRepository
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
@@ -61,13 +62,20 @@ class CurrentMemberResolverClaimTest {
     }
 
     @Test
-    fun `existing conflict skips the candidate lock on retry`() {
+    fun `existing conflict creates a reconciliation review without duplicating the conflict`() {
         val registration = member(1, "Kim", "Saebom", LocalDate.of(1998, 2, 3)).apply { keycloakId = "kc-1" }
+        val candidate = member(2, "Kim", "Saebom", LocalDate.of(1998, 2, 4)).apply { email = "same@example.com" }
+        val reviews = mock<MemberReconciliationRepository>()
+        val resolverWithReviews = CurrentMemberResolver(members, conflicts, reviews)
         whenever(members.findByKeycloakIdAndDeletedAtIsNull("kc-1")).thenReturn(registration)
         whenever(conflicts.existsByRegistrationMemberIdAndDeletedAtIsNull(1)).thenReturn(true)
+        whenever(members.findByEmailAndDeletedAtIsNullForUpdate("same@example.com")).thenReturn(candidate)
+        whenever(reviews.findAllByRegistrationMemberIdAndDeletedAtIsNull(1)).thenReturn(emptyList())
 
-        assertEquals(registration, resolver.resolveAndLink("kc-1", "same@example.com", true))
-        verify(members, org.mockito.kotlin.never()).findByEmailAndDeletedAtIsNullForUpdate("same@example.com")
+        assertEquals(registration, resolverWithReviews.resolveAndLink("kc-1", "same@example.com", true))
+        verify(members).findByEmailAndDeletedAtIsNullForUpdate("same@example.com")
+        verify(conflicts, org.mockito.kotlin.never()).save(org.mockito.kotlin.any())
+        verify(reviews).save(org.mockito.kotlin.any())
     }
 
     @Test
