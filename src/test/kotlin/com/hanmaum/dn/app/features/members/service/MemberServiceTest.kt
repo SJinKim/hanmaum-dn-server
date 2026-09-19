@@ -102,7 +102,7 @@ class MemberServiceTest {
                 ministryAssignmentRepository,
                 ministryRepository,
                 keycloak,
-                CurrentMemberResolver(memberRepository),
+                CurrentMemberResolver(memberRepository, org.mockito.kotlin.mock()),
                 operationalMetrics,
                 "test-realm",
             )
@@ -514,13 +514,16 @@ class MemberServiceTest {
     // --- registerMember ---
 
     @Test
-    fun `registerMember throws conflict when email already exists`() {
+    fun `registerMember stages a separate account when an unclaimed email already exists`() {
         val existing = memberWithId(1L)
         `when`(memberRepository.findByEmailAndDeletedAtIsNull("test@example.com")).thenReturn(existing)
+        `when`(memberRepository.findSimilarNames("철수", "김")).thenReturn(emptyList())
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+        setupKeycloakMock()
 
-        assertThrows<ResponseStatusException> {
-            memberService.registerMember(registerReq(email = "test@example.com"))
-        }
+        val staged = memberService.registerMember(registerReq(email = "test@example.com"))
+
+        assertNull(staged.email)
     }
 
     @Test
@@ -702,7 +705,6 @@ class MemberServiceTest {
         val keycloakSub = UUID.randomUUID().toString()
         val email = "notfound@example.com"
         `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(null)
-        `when`(memberRepository.findByEmailAndDeletedAtIsNull(email)).thenReturn(null)
 
         assertThrows<MemberProfileNotFoundException> {
             memberService.getMemberProfile(keycloakSub, email, emailVerified = true)
@@ -780,22 +782,15 @@ class MemberServiceTest {
     }
 
     @Test
-    fun `getMemberProfile falls back to email lookup for legacy records`() {
+    fun `getMemberProfile does not claim a legacy record without a staged registration`() {
         val keycloakSub = UUID.randomUUID().toString()
         val email = "legacy@example.com"
-        val member = memberWithId(1L, "영희", "이")
-        member.email = email
-        member.city = "부산"
         `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(null)
-        `when`(memberRepository.findByEmailAndDeletedAtIsNull(email)).thenReturn(member)
-        `when`(memberRepository.save(member)).thenReturn(member)
 
-        val response = memberService.getMemberProfile(keycloakSub, email, emailVerified = true)
-
-        assertEquals(member.publicId.toString(), response.publicId)
-        assertEquals("영희", response.firstName)
-        assertEquals(keycloakSub, member.keycloakId)
-        verify(memberRepository).save(member)
+        assertThrows<MemberProfileNotFoundException> {
+            memberService.getMemberProfile(keycloakSub, email, emailVerified = true)
+        }
+        verify(memberRepository, never()).findByEmailAndDeletedAtIsNullForUpdate(email)
     }
 
     @Test
