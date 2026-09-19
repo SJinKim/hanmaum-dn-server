@@ -2,6 +2,7 @@ package com.hanmaum.dn.app.features.newcomers.api.v1
 
 import com.hanmaum.dn.app.common.config.SecurityConfig
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.newcomers.api.v1.dto.NewcomerGraduationResponse
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.NewcomerResponse
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerLifecycle
 import com.hanmaum.dn.app.features.newcomers.service.NewcomerGraduationService
@@ -103,5 +104,54 @@ class NewcomerControllerTest {
         mockMvc
             .perform(get("/api/v1/newcomers/${UUID.randomUUID()}"))
             .andExpect(status().isUnauthorized)
+    }
+
+    @Test
+    fun `only newcomer editors and admins can graduate a newcomer`() {
+        val newcomerId = UUID.randomUUID()
+        val groupId = UUID.randomUUID()
+        whenever(graduationService.graduate(any(), any(), any())).thenReturn(
+            NewcomerGraduationResponse(
+                publicId = UUID.randomUUID().toString(),
+                newcomerPublicId = newcomerId.toString(),
+                memberPublicId = UUID.randomUUID().toString(),
+                groupPublicId = groupId.toString(),
+                cohortNumber = 3,
+                cohortLabel = "2027-3기",
+                graduatedOn = java.time.LocalDate.of(2027, 1, 5),
+                assignmentReason = null,
+            ),
+        )
+        val request = """{"groupPublicId":"$groupId","cohortNumber":3,"graduatedAt":"2027-01-05"}"""
+
+        mockMvc
+            .perform(
+                post(
+                    "/api/v1/newcomers/$newcomerId/graduate",
+                ).contentType("application/json").content(request).with(token("NEWCOMER_VIEWER")),
+            ).andExpect(status().isForbidden)
+        mockMvc
+            .perform(post("/api/v1/newcomers/$newcomerId/graduate").contentType("application/json").content(request).with(token("MEMBER")))
+            .andExpect(status().isForbidden)
+        mockMvc
+            .perform(
+                post(
+                    "/api/v1/newcomers/$newcomerId/graduate",
+                ).contentType("application/json").content(request).with(token("NEWCOMER_EDITOR")),
+            ).andExpect(status().isOk)
+        mockMvc
+            .perform(post("/api/v1/newcomers/$newcomerId/graduate").contentType("application/json").content(request).with(token("ADMIN")))
+            .andExpect(status().isOk)
+    }
+
+    @Test
+    fun `graduation rejects an out of range cohort number`() {
+        mockMvc
+            .perform(
+                post("/api/v1/newcomers/${UUID.randomUUID()}/graduate")
+                    .contentType("application/json")
+                    .content("""{"groupPublicId":"${UUID.randomUUID()}","cohortNumber":11}""")
+                    .with(token("NEWCOMER_EDITOR")),
+            ).andExpect(status().isBadRequest)
     }
 }
