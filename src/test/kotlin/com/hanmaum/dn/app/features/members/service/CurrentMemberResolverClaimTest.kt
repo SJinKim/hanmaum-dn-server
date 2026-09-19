@@ -2,8 +2,8 @@ package com.hanmaum.dn.app.features.members.service
 
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.members.domain.Member
-import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.members.repository.MemberClaimConflictRepository
+import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
@@ -72,8 +72,16 @@ class CurrentMemberResolverClaimTest {
 
     @Test
     fun `successful claim records conflicting non-empty profile values`() {
-        val registration = member(1, "Kim", "Saebom", LocalDate.of(1998, 2, 3)).apply { keycloakId = "kc-1"; phoneNumber = "new" }
-        val existing = member(2, "KIM", "saebom", LocalDate.of(1998, 2, 3)).apply { email = "same@example.com"; phoneNumber = "old" }
+        val registration =
+            member(1, "Kim", "Saebom", LocalDate.of(1998, 2, 3)).apply {
+                keycloakId = "kc-1"
+                phoneNumber = "new"
+            }
+        val existing =
+            member(2, "KIM", "saebom", LocalDate.of(1998, 2, 3)).apply {
+                email = "same@example.com"
+                phoneNumber = "old"
+            }
         whenever(members.findByKeycloakIdAndDeletedAtIsNull("kc-1")).thenReturn(registration)
         whenever(conflicts.existsByRegistrationMemberIdAndDeletedAtIsNull(1)).thenReturn(false)
         whenever(members.findByEmailAndDeletedAtIsNullForUpdate("same@example.com")).thenReturn(existing)
@@ -86,6 +94,10 @@ class CurrentMemberResolverClaimTest {
         assertEquals("old", existing.phoneNumber)
     }
 
-    private fun member(id: Long, lastName: String, firstName: String, birthDate: LocalDate) =
-        Member(lastName = lastName, firstName = firstName, birthDate = birthDate).apply { this.id = id }
+    private fun member(
+        id: Long,
+        lastName: String,
+        firstName: String,
+        birthDate: LocalDate,
+    ) = Member(lastName = lastName, firstName = firstName, birthDate = birthDate).apply { this.id = id }
 }

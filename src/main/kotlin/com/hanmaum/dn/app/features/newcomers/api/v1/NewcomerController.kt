@@ -4,12 +4,15 @@ import com.hanmaum.dn.app.common.dto.ApiResponse
 import com.hanmaum.dn.app.common.security.NewcomerReadAccess
 import com.hanmaum.dn.app.common.security.NewcomerWriteAccess
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.CreateNewcomerRequest
+import com.hanmaum.dn.app.features.newcomers.api.v1.dto.GraduateNewcomerRequest
+import com.hanmaum.dn.app.features.newcomers.api.v1.dto.NewcomerGraduationResponse
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.NewcomerOptionsResponse
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.NewcomerResponse
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.UpdateNewcomerRequest
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerIdentityStatus
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerLifecycle
 import com.hanmaum.dn.app.features.newcomers.domain.PostAssignmentAttendance
+import com.hanmaum.dn.app.features.newcomers.service.NewcomerGraduationService
 import com.hanmaum.dn.app.features.newcomers.service.NewcomerService
 import jakarta.validation.Valid
 import org.springframework.data.domain.Page
@@ -17,6 +20,8 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
+import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.GetMapping
@@ -36,6 +41,7 @@ import java.util.UUID
 @RequestMapping("/newcomers")
 class NewcomerController(
     private val service: NewcomerService,
+    private val graduationService: NewcomerGraduationService,
 ) {
     @GetMapping
     @NewcomerReadAccess
@@ -104,6 +110,15 @@ class NewcomerController(
     fun delete(
         @PathVariable publicId: UUID,
     ) = service.softDelete(publicId)
+
+    @PostMapping("/{publicId}/graduate")
+    @NewcomerWriteAccess
+    fun graduate(
+        @PathVariable publicId: UUID,
+        @Valid @RequestBody request: GraduateNewcomerRequest,
+        @AuthenticationPrincipal jwt: Jwt,
+    ): ResponseEntity<ApiResponse<NewcomerGraduationResponse>> =
+        ResponseEntity.ok(ApiResponse.success(graduationService.graduate(publicId, request, jwt.subject)))
 
     @ExceptionHandler(HttpMessageNotReadableException::class, MethodArgumentTypeMismatchException::class)
     fun invalidNewcomerValue(): ResponseEntity<ProblemDetail> {

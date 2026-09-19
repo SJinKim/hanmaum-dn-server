@@ -5,11 +5,17 @@ import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.domain.MemberClaimConflict
 import com.hanmaum.dn.app.features.members.repository.MemberClaimConflictRepository
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.newcomers.domain.MemberReconciliation
+import com.hanmaum.dn.app.features.newcomers.domain.ReconciliationReason
+import com.hanmaum.dn.app.features.newcomers.domain.ReconciliationStatus
+import com.hanmaum.dn.app.features.newcomers.repository.MemberReconciliationRepository
+import com.hanmaum.dn.app.features.newcomers.repository.NewcomerProfileRepository
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
-import org.slf4j.LoggerFactory
 import java.text.Normalizer
 import java.time.Instant
+import java.time.LocalDate
 
 /**
  * The caller is authenticated but owns no member row.
@@ -36,6 +42,8 @@ class MemberProfileNotFoundException(
 class CurrentMemberResolver(
     private val memberRepository: MemberRepository,
     private val conflictRepository: MemberClaimConflictRepository,
+    private val reconciliationRepository: MemberReconciliationRepository? = null,
+    private val newcomerProfileRepository: NewcomerProfileRepository? = null,
 ) {
     private val log = LoggerFactory.getLogger(CurrentMemberResolver::class.java)
 
@@ -62,19 +70,26 @@ class CurrentMemberResolver(
         keycloakSubject: String,
         email: String?,
         emailVerified: Boolean,
+        firstName: String? = null,
+        lastName: String? = null,
+        birthDate: LocalDate? = null,
     ): Member {
         val registration =
             memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSubject)
                 ?: throw MemberProfileNotFoundException()
         if (!emailVerified || email.isNullOrBlank() || registration.email != null) return registration
-        registration.id
-            ?.takeIf { conflictRepository.existsByRegistrationMemberIdAndDeletedAtIsNull(it) }
-            ?.let { return registration }
-
         val candidate = memberRepository.findByEmailAndDeletedAtIsNullForUpdate(email) ?: return registration
         if (candidate.id == registration.id || candidate.keycloakId != null || !sameIdentity(registration, candidate)) {
             recordConflict(registration, candidate, "IDENTITY_MISMATCH")
+            createReview(registration, listOf(candidate), ReconciliationReason.EMAIL_MATCH_IDENTITY_MISMATCH)
             log.info("Member claim skipped registrationId={} candidateId={} reason={}", registration.id, candidate.id, "identity_mismatch")
+            return registration
+        }
+
+        val conflicts = conflictingFields(registration, candidate)
+        if (conflicts.isNotEmpty()) {
+            recordConflict(registration, candidate, "PROFILE_VALUE_CONFLICT", conflicts)
+            createReview(registration, listOf(candidate), ReconciliationReason.PROFILE_VALUE_CONFLICT, conflicts)
             return registration
         }
 
@@ -88,15 +103,22 @@ class CurrentMemberResolver(
 
         candidate.keycloakId = keycloakSubject
         copyRegisteredValues(registration, candidate)
+        moveNewcomerProfile(registration, candidate)
         return memberRepository.save(candidate)
     }
 
-    private fun sameIdentity(registration: Member, candidate: Member): Boolean =
+    private fun sameIdentity(
+        registration: Member,
+        candidate: Member,
+    ): Boolean =
         registration.birthDate != null &&
             registration.birthDate == candidate.birthDate &&
             normalizeName(registration.lastName, registration.firstName) == normalizeName(candidate.lastName, candidate.firstName)
 
-    private fun normalizeName(lastName: String, firstName: String): String {
+    private fun normalizeName(
+        lastName: String,
+        firstName: String,
+    ): String {
         val normalized = Normalizer.normalize("$lastName $firstName", Normalizer.Form.NFC)
         return if (normalized.all { it.isWhitespace() || Character.UnicodeScript.of(it.code) == Character.UnicodeScript.HANGUL }) {
             normalized.filterNot(Char::isWhitespace)
@@ -105,7 +127,10 @@ class CurrentMemberResolver(
         }
     }
 
-    private fun copyRegisteredValues(registration: Member, candidate: Member) {
+    private fun copyRegisteredValues(
+        registration: Member,
+        candidate: Member,
+    ) {
         candidate.gender = candidate.gender ?: registration.gender
         candidate.phoneNumber = candidate.phoneNumber ?: registration.phoneNumber
         candidate.street = candidate.street ?: registration.street
@@ -113,13 +138,44 @@ class CurrentMemberResolver(
         candidate.zipCode = candidate.zipCode ?: registration.zipCode
         candidate.city = candidate.city ?: registration.city
         candidate.baptism = candidate.baptism ?: registration.baptism
-        conflictingFields(registration, candidate).takeIf(Set<String>::isNotEmpty)?.let { fields ->
-            recordConflict(registration, candidate, "PROFILE_VALUE_CONFLICT", fields)
-            log.info("Member claim preserved canonical values registrationId={} candidateId={} fields={}", registration.id, candidate.id, fields)
+    }
+
+    private fun moveNewcomerProfile(
+        registration: Member,
+        candidate: Member,
+    ) {
+        val profiles = newcomerProfileRepository ?: return
+        val source = registration.id?.let(profiles::findByMemberIdAndDeletedAtIsNull) ?: return
+        if (candidate.id?.let(profiles::findByMemberIdAndDeletedAtIsNull) == null) {
+            source.member = candidate
+            profiles.save(source)
         }
     }
 
-    private fun conflictingFields(registration: Member, candidate: Member): Set<String> =
+    private fun createReview(
+        registration: Member,
+        candidates: List<Member>,
+        reason: ReconciliationReason,
+        conflicts: Set<String> = emptySet(),
+    ) {
+        val registrationId = registration.id ?: return
+        val reviews = reconciliationRepository ?: return
+        if (reviews.findAllByRegistrationMemberIdAndDeletedAtIsNull(registrationId).any {
+                it.status in
+                    setOf(ReconciliationStatus.OPEN, ReconciliationStatus.DISMISSED)
+            }
+        ) {
+            return
+        }
+        val review = MemberReconciliation(registration, reason.name, conflicts.sorted().joinToString(",").ifBlank { null })
+        review.candidateMemberIds += candidates.mapNotNull(Member::id)
+        reviews.save(review)
+    }
+
+    private fun conflictingFields(
+        registration: Member,
+        candidate: Member,
+    ): Set<String> =
         buildSet {
             conflict("gender", registration.gender, candidate.gender)
             conflict("phoneNumber", registration.phoneNumber, candidate.phoneNumber)
@@ -130,14 +186,25 @@ class CurrentMemberResolver(
             conflict("baptism", registration.baptism, candidate.baptism)
         }
 
-    private fun MutableSet<String>.conflict(field: String, submitted: Any?, canonical: Any?) {
+    private fun MutableSet<String>.conflict(
+        field: String,
+        submitted: Any?,
+        canonical: Any?,
+    ) {
         if (submitted != null && canonical != null && submitted != canonical) add(field)
     }
 
-    private fun recordConflict(registration: Member, candidate: Member, reason: String, fields: Set<String> = emptySet()) {
+    private fun recordConflict(
+        registration: Member,
+        candidate: Member,
+        reason: String,
+        fields: Set<String> = emptySet(),
+    ) {
         val registrationId = registration.id ?: return
         if (!conflictRepository.existsByRegistrationMemberIdAndDeletedAtIsNull(registrationId)) {
-            conflictRepository.save(MemberClaimConflict(registration, candidate, reason, fields.sorted().joinToString(",").ifBlank { null }))
+            conflictRepository.save(
+                MemberClaimConflict(registration, candidate, reason, fields.sorted().joinToString(",").ifBlank { null }),
+            )
         }
     }
 

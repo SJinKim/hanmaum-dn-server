@@ -4,9 +4,11 @@ import com.hanmaum.dn.app.common.domainvalue.Baptism
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.statistics.api.v1.dto.ChartDataDto
+import jakarta.persistence.LockModeType
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Lock
 import org.springframework.stereotype.Repository
 import java.time.Instant
 import java.util.Optional
@@ -17,6 +19,9 @@ interface MemberRepository :
     JpaRepository<Member, Long>,
     MemberRepositorySecureQueries {
     fun findByPublicIdAndDeletedAtIsNull(publicId: UUID): Optional<Member>
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    fun findForUpdateByPublicIdAndDeletedAtIsNull(publicId: UUID): Optional<Member>
 
     fun findByEmailLookupHashAndDeletedAtIsNull(emailLookupHash: String): Member?
 

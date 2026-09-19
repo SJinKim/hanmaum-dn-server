@@ -4,6 +4,7 @@ import com.hanmaum.dn.app.common.config.SecurityConfig
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.NewcomerResponse
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerLifecycle
+import com.hanmaum.dn.app.features.newcomers.service.NewcomerGraduationService
 import com.hanmaum.dn.app.features.newcomers.service.NewcomerService
 import org.mockito.kotlin.any
 import org.mockito.kotlin.whenever
@@ -32,6 +33,8 @@ class NewcomerControllerTest {
     @Autowired private lateinit var mockMvc: MockMvc
 
     @MockitoBean private lateinit var service: NewcomerService
+
+    @MockitoBean private lateinit var graduationService: NewcomerGraduationService
 
     @MockitoBean private lateinit var memberRepository: MemberRepository
 

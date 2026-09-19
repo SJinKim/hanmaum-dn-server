@@ -59,7 +59,15 @@ class AttendanceServiceTest {
 
     @BeforeEach
     fun setUp() {
-        service = AttendanceService(definitionRepo, logRepo, memberRepo, CurrentMemberResolver(memberRepo, org.mockito.kotlin.mock()), churchGeofenceService, clock)
+        service =
+            AttendanceService(
+                definitionRepo,
+                logRepo,
+                memberRepo,
+                CurrentMemberResolver(memberRepo, org.mockito.kotlin.mock()),
+                churchGeofenceService,
+                clock,
+            )
         // The real evaluator never returns null: with no position, no geofence, or a fix it
         // cannot judge, it answers UNCONFIRMED. Lenient because most tests here are about
         // the window and the duplicate guard and never reach it.

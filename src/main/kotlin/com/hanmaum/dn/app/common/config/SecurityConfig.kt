@@ -76,6 +76,10 @@ class SecurityConfig(
                     .permitAll()
                     .requestMatchers(HttpMethod.GET, "$apiPrefix/albums")
                     .permitAll()
+                    .requestMatchers(HttpMethod.GET, "$apiPrefix/newcomer-forms/*")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.POST, "$apiPrefix/newcomer-forms/*/submissions")
+                    .permitAll()
                     .anyRequest()
                     .authenticated()
             }.oauth2ResourceServer { oauth2 ->
