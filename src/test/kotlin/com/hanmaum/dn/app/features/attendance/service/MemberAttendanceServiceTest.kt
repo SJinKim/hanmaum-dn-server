@@ -51,7 +51,7 @@ class MemberAttendanceServiceTest {
 
     @BeforeEach
     fun setUp() {
-        service = MemberAttendanceService(definitionRepo, logRepo, memberRepo, CurrentMemberResolver(memberRepo), clock)
+        service = MemberAttendanceService(definitionRepo, logRepo, memberRepo, CurrentMemberResolver(memberRepo, org.mockito.kotlin.mock()), clock)
         sundayService = makeDefinition(id = 1L, title = "주일예배", dayOfWeek = DayOfWeek.SUNDAY)
     }
 

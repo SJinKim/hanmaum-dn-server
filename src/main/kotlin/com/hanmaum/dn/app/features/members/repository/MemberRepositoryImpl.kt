@@ -8,6 +8,7 @@ import com.hanmaum.dn.app.common.pii.PiiProperties
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.statistics.api.v1.dto.ChartDataDto
 import jakarta.persistence.EntityManager
+import jakarta.persistence.LockModeType
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
@@ -20,6 +21,9 @@ class MemberRepositoryImpl(
 ) : MemberRepositorySecureQueries {
     override fun findByEmailAndDeletedAtIsNull(email: String): Member? =
         findByLookupHash("emailLookupHash", PiiCryptoContext.lookupHash(email))
+
+    override fun findByEmailAndDeletedAtIsNullForUpdate(email: String): Member? =
+        findByLookupHash("emailLookupHash", PiiCryptoContext.lookupHash(email), LockModeType.PESSIMISTIC_WRITE)
 
     override fun findByKeycloakIdAndDeletedAtIsNull(keycloakId: String): Member? =
         findByLookupHash("keycloakLookupHash", PiiCryptoContext.lookupHash(keycloakId))
@@ -120,11 +124,12 @@ class MemberRepositoryImpl(
     private fun findByLookupHash(
         property: String,
         lookupHash: String?,
+        lockMode: LockModeType? = null,
     ): Member? {
         if (lookupHash == null) {
             return null
         }
-        return entityManager
+        val query = entityManager
             .createQuery(
                 """
                 SELECT m FROM Member m
@@ -133,8 +138,8 @@ class MemberRepositoryImpl(
                 """.trimIndent(),
                 Member::class.java,
             ).setParameter("lookupHash", lookupHash)
-            .resultList
-            .singleOrNull()
+        lockMode?.let(query::setLockMode)
+        return query.resultList.singleOrNull()
     }
 
     private fun activeMembers(status: MemberStatus? = null): List<Member> {

@@ -66,7 +66,7 @@ class VerseRecordServiceTest {
     private fun service(instant: String = "2026-09-08T09:00:00Z"): VerseRecordService =
         VerseRecordService(
             recordRepository,
-            CurrentMemberResolver(memberRepository),
+            CurrentMemberResolver(memberRepository, org.mockito.kotlin.mock()),
             verseService,
             client,
             Clock.fixed(Instant.parse(instant), zone),
@@ -98,7 +98,6 @@ class VerseRecordServiceTest {
     @Test
     fun `an account without a member profile fails distinguishably`() {
         `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(null)
-        `when`(memberRepository.findByEmailAndDeletedAtIsNull("a@example.com")).thenReturn(null)
 
         // Not a bare 404: a missing route and a person who is not a member of this
         // congregation are different problems and the client does different things about
@@ -107,19 +106,10 @@ class VerseRecordServiceTest {
     }
 
     @Test
-    fun `a legacy account is adopted here exactly as it is on the profile endpoint`() {
-        val legacy = Member(lastName = "김", firstName = "영희").apply { id = 2L }
+    fun `a legacy account without a staged registration is not adopted`() {
         `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(null)
-        `when`(memberRepository.findByEmailAndDeletedAtIsNull("a@example.com")).thenReturn(legacy)
-        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
-        `when`(verseService.currentWeeklyVerse()).thenReturn(weeklyVerse())
-        `when`(client.quietTime(tuesday)).thenReturn(QuietTimeItem(book = 5, chapterStart = 3, verseStart = 1))
 
-        // The two readers used to disagree: an account that worked on /members/me threw
-        // here, which is the whole reason the bars stayed invisible.
-        service().getRecords(caller)
-
-        assertEquals("kc-001", legacy.keycloakId)
+        assertThrows<MemberProfileNotFoundException> { service().getRecords(caller) }
     }
 
     // ─── Query shape ───────────────────────────────────────────────────────────

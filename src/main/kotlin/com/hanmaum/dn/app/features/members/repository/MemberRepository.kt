@@ -36,6 +36,8 @@ interface MemberRepository :
 interface MemberRepositorySecureQueries {
     fun findByEmailAndDeletedAtIsNull(email: String): Member?
 
+    fun findByEmailAndDeletedAtIsNullForUpdate(email: String): Member?
+
     fun findByKeycloakIdAndDeletedAtIsNull(keycloakId: String): Member?
 
     fun findActiveMembers(

@@ -94,7 +94,7 @@ class CourseApplicationServiceTest {
                 trainingRepository = trainingRepo,
                 userTrainingRepository = userTrainingRepo,
                 attemptRepository = attemptRepo,
-                currentMemberResolver = CurrentMemberResolver(memberRepo),
+                currentMemberResolver = CurrentMemberResolver(memberRepo, org.mockito.kotlin.mock()),
                 transactionManager = transactionManager,
                 clock = clock,
             )

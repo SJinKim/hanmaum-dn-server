@@ -457,7 +457,8 @@ class MemberService(
      */
     @Transactional
     fun registerMember(req: RegisterMemberRequest): Member {
-        if (memberRepository.findByEmailAndDeletedAtIsNull(req.email) != null) {
+        val existingMember = memberRepository.findByEmailAndDeletedAtIsNull(req.email)
+        if (existingMember?.keycloakId != null) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "이미 가입된 이메일입니다.")
         }
 
@@ -478,7 +479,9 @@ class MemberService(
                 lastName = req.lastName,
                 firstName = req.firstName,
                 discriminator = discriminator,
-                email = req.email,
+                // The existing person retains the unique active email hash until a verified
+                // first login proves ownership and atomically claims that row.
+                email = if (existingMember == null) req.email else null,
                 gender =
                     try {
                         req.gender?.let { Gender.valueOf(it.uppercase()) }
