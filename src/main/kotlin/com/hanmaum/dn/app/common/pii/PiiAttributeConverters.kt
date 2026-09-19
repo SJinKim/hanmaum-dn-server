@@ -131,3 +131,6 @@ class EncryptedNewcomerAdditionalNotesConverter : EncryptedStringConverter("newc
 
 @Converter
 class EncryptedNewcomerFirstVisitDateConverter : EncryptedLocalDateConverter("newcomer_profiles.first_visit_date")
+
+@Converter
+class EncryptedNewcomerGraduationReasonConverter : EncryptedStringConverter("newcomer_graduations.assignment_reason")

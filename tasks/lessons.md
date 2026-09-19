@@ -9,6 +9,10 @@
 ## Lessons
 <!-- Claude appends here after each correction -->
 
+### Distinguish a merged implementation from an issue's GitHub state
+- **Mistake**: Treated Issue #181's still-open GitHub state as proof that its implementation had not been merged.
+- **Rule**: When checking delivery status, inspect `origin/main` and the relevant merged PR diff first. An open issue can be a ticket-hygiene problem; state that distinction explicitly before concluding work is absent.
+
 ### Deploy order: staging before production
 - **Mistake**: Promoting to production without verifying staging first. (Originally phrased as "push to `dev` first" — the `dev` branch was retired in #104, but the staging-before-prod requirement stands.)
 - **Rule**: Deploys run as manual `workflow_dispatch` on `main` only. Merge the feature branch to `main`, run the staging pipeline, and verify `dn-admin-dashboard.st.graceops.de` before running the production pipeline for `dn-admin-dashboard.graceops.de`. Never skip the staging step.

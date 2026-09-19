@@ -60,7 +60,15 @@ class EventRsvpServiceTest {
 
     @BeforeEach
     fun setUp() {
-        service = EventRsvpService(eventRsvpRepo, eventRsvpLogRepo, memberRepo, CurrentMemberResolver(memberRepo, org.mockito.kotlin.mock()), announcementRepo, clock)
+        service =
+            EventRsvpService(
+                eventRsvpRepo,
+                eventRsvpLogRepo,
+                memberRepo,
+                CurrentMemberResolver(memberRepo, org.mockito.kotlin.mock()),
+                announcementRepo,
+                clock,
+            )
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────

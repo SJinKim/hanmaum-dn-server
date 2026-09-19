@@ -1,0 +1,20 @@
+CREATE TABLE newcomer_graduations (
+    id BIGSERIAL PRIMARY KEY,
+    public_id UUID NOT NULL UNIQUE,
+    newcomer_profile_id BIGINT NOT NULL UNIQUE,
+    member_id BIGINT NOT NULL UNIQUE,
+    group_id BIGINT NOT NULL,
+    cohort_number INTEGER NOT NULL,
+    cohort_label VARCHAR(30) NOT NULL,
+    graduated_on DATE NOT NULL,
+    assignment_reason TEXT,
+    graduated_by VARCHAR(64) NOT NULL,
+    version BIGINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ,
+    deleted_at TIMESTAMPTZ,
+    CONSTRAINT fk_newcomer_graduations_profile FOREIGN KEY (newcomer_profile_id) REFERENCES newcomer_profiles(id),
+    CONSTRAINT fk_newcomer_graduations_member FOREIGN KEY (member_id) REFERENCES members(id),
+    CONSTRAINT fk_newcomer_graduations_group FOREIGN KEY (group_id) REFERENCES church_groups(id),
+    CONSTRAINT ck_newcomer_graduations_cohort CHECK (cohort_number BETWEEN 1 AND 10)
+);

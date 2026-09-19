@@ -129,15 +129,16 @@ class MemberRepositoryImpl(
         if (lookupHash == null) {
             return null
         }
-        val query = entityManager
-            .createQuery(
-                """
-                SELECT m FROM Member m
-                WHERE m.$property = :lookupHash
-                  AND m.deletedAt IS NULL
-                """.trimIndent(),
-                Member::class.java,
-            ).setParameter("lookupHash", lookupHash)
+        val query =
+            entityManager
+                .createQuery(
+                    """
+                    SELECT m FROM Member m
+                    WHERE m.$property = :lookupHash
+                      AND m.deletedAt IS NULL
+                    """.trimIndent(),
+                    Member::class.java,
+                ).setParameter("lookupHash", lookupHash)
         lockMode?.let(query::setLockMode)
         return query.resultList.singleOrNull()
     }

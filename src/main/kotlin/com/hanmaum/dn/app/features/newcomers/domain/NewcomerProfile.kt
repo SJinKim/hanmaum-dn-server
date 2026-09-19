@@ -26,6 +26,7 @@ import jakarta.persistence.PrePersist
 import jakarta.persistence.PreUpdate
 import jakarta.persistence.Table
 import jakarta.persistence.Version
+import java.time.Instant
 import java.time.LocalDate
 
 enum class NewcomerLifecycle { SUBMITTED, IN_CARE, GRADUATED, ARCHIVED }
@@ -50,7 +51,7 @@ enum class ChurchExperience { FIRST_TIME, CHILDHOOD_FEW_TIMES, IRREGULAR, REGULA
 class NewcomerProfile(
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "member_id", nullable = false, unique = true)
-    val member: Member,
+    var member: Member,
     @Enumerated(EnumType.STRING)
     @Column(name = "lifecycle_status", nullable = false, length = 20)
     var lifecycleStatus: NewcomerLifecycle = NewcomerLifecycle.SUBMITTED,
@@ -100,6 +101,10 @@ class NewcomerProfile(
     @Convert(converter = EncryptedNewcomerAdditionalNotesConverter::class)
     @Column(name = "additional_notes", columnDefinition = "TEXT")
     var additionalNotes: String? = null,
+    @Column(name = "consent_version", length = 50)
+    var consentVersion: String? = null,
+    @Column(name = "consented_at")
+    var consentedAt: Instant? = null,
     @Column(name = "pii_key_id", length = 50)
     var piiKeyId: String? = null,
 ) : BaseEntity() {

@@ -9,6 +9,7 @@ import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.members.service.MemberService
 import org.mockito.Mockito.`when`
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.eq
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration
@@ -71,7 +72,9 @@ class MemberProfileControllerTest {
 
     @Test
     fun `GET members-me returns the registration date as an ISO date`() {
-        `when`(memberService.getMemberProfile(eq("kc-001"), any(), any())).thenReturn(profile())
+        `when`(
+            memberService.getMemberProfile(eq("kc-001"), anyOrNull(), any(), anyOrNull(), anyOrNull(), anyOrNull()),
+        ).thenReturn(profile())
 
         mockMvc
             .perform(get("/api/v1/members/me").with(memberToken()))
@@ -114,7 +117,7 @@ class MemberProfileControllerTest {
 
     @Test
     fun `GET members-me omits the date when the member has no registration date`() {
-        `when`(memberService.getMemberProfile(eq("kc-001"), any(), any()))
+        `when`(memberService.getMemberProfile(eq("kc-001"), anyOrNull(), any(), anyOrNull(), anyOrNull(), anyOrNull()))
             .thenReturn(
                 MemberResponse(
                     publicId = "pub-1",
@@ -133,7 +136,9 @@ class MemberProfileControllerTest {
 
     @Test
     fun `GET members-me returns the active ministries as a JSON array of names`() {
-        `when`(memberService.getMemberProfile(eq("kc-001"), any(), any())).thenReturn(profile())
+        `when`(
+            memberService.getMemberProfile(eq("kc-001"), anyOrNull(), any(), anyOrNull(), anyOrNull(), anyOrNull()),
+        ).thenReturn(profile())
 
         mockMvc
             .perform(get("/api/v1/members/me").with(memberToken()))
@@ -146,7 +151,7 @@ class MemberProfileControllerTest {
 
     @Test
     fun `GET members-me serializes an empty ministry list rather than omitting it`() {
-        `when`(memberService.getMemberProfile(eq("kc-001"), any(), any()))
+        `when`(memberService.getMemberProfile(eq("kc-001"), anyOrNull(), any(), anyOrNull(), anyOrNull(), anyOrNull()))
             .thenReturn(
                 MemberResponse(
                     publicId = "pub-1",

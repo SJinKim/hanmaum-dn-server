@@ -32,6 +32,8 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
+import java.time.LocalDate
+import java.time.format.DateTimeParseException
 import java.util.UUID
 
 @RestController
@@ -81,6 +83,9 @@ class MemberController(
                 keycloakSubject = jwt.subject,
                 email = jwt.getClaim("email"),
                 emailVerified = jwt.getClaimAsBoolean("email_verified") == true,
+                firstName = jwt.getClaimAsString("given_name"),
+                lastName = jwt.getClaimAsString("family_name"),
+                birthDate = parseBirthDate(jwt.getClaimAsString("birthdate")),
             )
         return ResponseEntity.ok(ApiResponse.success(data = profile))
     }
@@ -100,6 +105,9 @@ class MemberController(
                 keycloakSubject = jwt.subject,
                 email = jwt.getClaim("email"),
                 emailVerified = jwt.getClaimAsBoolean("email_verified") == true,
+                firstName = jwt.getClaimAsString("given_name"),
+                lastName = jwt.getClaimAsString("family_name"),
+                birthDateClaim = parseBirthDate(jwt.getClaimAsString("birthdate")),
                 request = request,
             )
         return ResponseEntity.ok(ApiResponse.success(data = updated))
@@ -203,4 +211,15 @@ class MemberController(
             .status(HttpStatus.CREATED)
             .body(ApiResponse.success(message = "등록이 완료되었습니다."))
     }
+
+    private fun parseBirthDate(value: String?): LocalDate? =
+        if (value.isNullOrBlank()) {
+            null
+        } else {
+            try {
+                LocalDate.parse(value)
+            } catch (_: DateTimeParseException) {
+                null
+            }
+        }
 }

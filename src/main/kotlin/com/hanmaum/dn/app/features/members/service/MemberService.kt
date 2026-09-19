@@ -307,8 +307,11 @@ class MemberService(
         keycloakSubject: String,
         email: String?,
         emailVerified: Boolean = false,
+        firstName: String? = null,
+        lastName: String? = null,
+        birthDate: LocalDate? = null,
     ): MemberResponse {
-        val member = resolveAndLinkMember(keycloakSubject, email, emailVerified)
+        val member = resolveAndLinkMember(keycloakSubject, email, emailVerified, firstName, lastName, birthDate)
         return member.toResponse(activeMinistryNames(member.id), emailVerified)
     }
 
@@ -342,9 +345,12 @@ class MemberService(
         keycloakSubject: String,
         email: String?,
         emailVerified: Boolean = false,
+        firstName: String? = null,
+        lastName: String? = null,
+        birthDateClaim: LocalDate? = null,
         request: UpdateMyProfileRequest,
     ): MemberResponse {
-        val member = resolveAndLinkMember(keycloakSubject, email, emailVerified)
+        val member = resolveAndLinkMember(keycloakSubject, email, emailVerified, firstName, lastName, birthDateClaim)
         request.phoneNumber?.let { member.phoneNumber = it }
         request.birthDate?.let { member.birthDate = it }
         request.profileImageUrl?.let { member.profileImageUrl = it }
@@ -457,10 +463,11 @@ class MemberService(
      */
     @Transactional
     fun registerMember(req: RegisterMemberRequest): Member {
-        val existingMember = memberRepository.findByEmailAndDeletedAtIsNull(req.email)
-        if (existingMember?.keycloakId != null) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "이미 가입된 이메일입니다.")
-        }
+        // A dashboard/newcomer record with this email is not an error. The account is
+        // created as a separate pending registration and is linked only after Keycloak has
+        // verified the email and the identity checks run on first authenticated access.
+        val existingUnclaimedMember =
+            memberRepository.findByEmailAndDeletedAtIsNull(req.email)?.takeIf { it.keycloakId == null }
 
         // Discriminator logic: if name already exists, append A, B, C…
         val existingWithSameName = memberRepository.findSimilarNames(req.firstName, req.lastName)
@@ -479,19 +486,19 @@ class MemberService(
                 lastName = req.lastName,
                 firstName = req.firstName,
                 discriminator = discriminator,
-                // The existing person retains the unique active email hash until a verified
-                // first login proves ownership and atomically claims that row.
-                email = if (existingMember == null) req.email else null,
+                // The active-email hash is unique. Keep the verified address on the
+                // pre-existing member; the JWT supplies it during first-login claiming.
+                email = if (existingUnclaimedMember == null) req.email else null,
                 gender =
                     try {
                         req.gender?.let { Gender.valueOf(it.uppercase()) }
-                    } catch (e: Exception) {
+                    } catch (e: IllegalArgumentException) {
                         null
                     },
                 baptism =
                     try {
                         req.baptism?.let { Baptism.valueOf(it.uppercase()) }
-                    } catch (e: Exception) {
+                    } catch (e: IllegalArgumentException) {
                         null
                     },
                 city = req.city,
@@ -677,5 +684,8 @@ class MemberService(
         keycloakSubject: String,
         email: String?,
         emailVerified: Boolean,
-    ): Member = currentMemberResolver.resolveAndLink(keycloakSubject, email, emailVerified)
+        firstName: String? = null,
+        lastName: String? = null,
+        birthDate: LocalDate? = null,
+    ): Member = currentMemberResolver.resolveAndLink(keycloakSubject, email, emailVerified, firstName, lastName, birthDate)
 }

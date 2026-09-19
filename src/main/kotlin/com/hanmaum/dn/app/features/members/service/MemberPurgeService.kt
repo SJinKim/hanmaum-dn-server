@@ -58,6 +58,26 @@ class MemberPurgeService(
         jdbcTemplate.update("UPDATE newcomer_profiles SET caregiver_member_id = NULL WHERE caregiver_member_id = ?", memberId)
         jdbcTemplate.update("DELETE FROM newcomer_profiles WHERE member_id = ?", memberId)
         jdbcTemplate.update(
+            "DELETE FROM newcomer_form_submissions WHERE newcomer_profile_id IN " +
+                "(SELECT id FROM newcomer_profiles WHERE member_id = ?)",
+            memberId,
+        )
+        jdbcTemplate.update("DELETE FROM newcomer_graduations WHERE member_id = ?", memberId)
+        jdbcTemplate.update("DELETE FROM member_reconciliation_candidates WHERE member_id = ?", memberId)
+        jdbcTemplate.update(
+            "DELETE FROM member_reconciliation_candidates WHERE reconciliation_id IN " +
+                "(SELECT id FROM member_reconciliations WHERE registration_member_id = ? OR selected_member_id = ?)",
+            memberId,
+            memberId,
+        )
+        jdbcTemplate.update(
+            "DELETE FROM member_reconciliations WHERE registration_member_id = ? OR selected_member_id = ?",
+            memberId,
+            memberId,
+        )
+        jdbcTemplate.update("UPDATE newcomer_profiles SET caregiver_member_id = NULL WHERE caregiver_member_id = ?", memberId)
+        jdbcTemplate.update("DELETE FROM newcomer_profiles WHERE member_id = ?", memberId)
+        jdbcTemplate.update(
             "DELETE FROM car_passengers WHERE car_id IN (SELECT id FROM cars WHERE driver_member_id = ?)",
             memberId,
         )
