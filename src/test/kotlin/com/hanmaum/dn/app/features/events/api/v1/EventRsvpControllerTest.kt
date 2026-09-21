@@ -110,12 +110,14 @@ class EventRsvpControllerTest {
                     announcementId,
                     RsvpStatus.MAYBE,
                     now,
+                    now.plusDays(2),
                 ),
                 ActiveEventRsvpDto(
                     UUID.randomUUID().toString(),
                     "독립 행사",
                     now.minusHours(1),
                     now.plusHours(2),
+                    null,
                     null,
                     null,
                     null,
@@ -132,9 +134,11 @@ class EventRsvpControllerTest {
             .andExpect(jsonPath("$.data[0].announcementId").value(announcementId.toString()))
             .andExpect(jsonPath("$.data[0].myStatus").value("MAYBE"))
             .andExpect(jsonPath("$.data[0].respondedAt").value(serializedNow))
+            .andExpect(jsonPath("$.data[0].nextReminderAt").value("2026-07-14T10:00:00+02:00"))
             .andExpect(jsonPath("$.data[1].announcementId").value(org.hamcrest.Matchers.nullValue()))
             .andExpect(jsonPath("$.data[1].myStatus").value(org.hamcrest.Matchers.nullValue()))
             .andExpect(jsonPath("$.data[1].respondedAt").value(org.hamcrest.Matchers.nullValue()))
+            .andExpect(jsonPath("$.data[1].nextReminderAt").value(org.hamcrest.Matchers.nullValue()))
     }
 
     @Test

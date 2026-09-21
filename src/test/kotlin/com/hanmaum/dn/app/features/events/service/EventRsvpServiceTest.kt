@@ -5,6 +5,7 @@ import com.hanmaum.dn.app.features.announcements.domain.Announcement
 import com.hanmaum.dn.app.features.announcements.repository.AnnouncementRepository
 import com.hanmaum.dn.app.features.events.api.v1.dto.CreateEventRsvpRequest
 import com.hanmaum.dn.app.features.events.api.v1.dto.UpdateEventRsvpRequest
+import com.hanmaum.dn.app.features.events.config.RsvpProperties
 import com.hanmaum.dn.app.features.events.domain.EventRsvp
 import com.hanmaum.dn.app.features.events.domain.EventRsvpLog
 import com.hanmaum.dn.app.features.events.domain.RsvpStatus
@@ -68,6 +69,7 @@ class EventRsvpServiceTest {
                 CurrentMemberResolver(memberRepo, org.mockito.kotlin.mock()),
                 announcementRepo,
                 clock,
+                RsvpProperties(listOf(java.time.Duration.ofDays(7), java.time.Duration.ofDays(2))),
             )
     }
 
@@ -423,6 +425,51 @@ class EventRsvpServiceTest {
 
         assertEquals(RsvpStatus.entries, result.map { it.myStatus })
         result.forEach { assertEquals(fixedInstant, it.respondedAt?.toInstant()) }
+    }
+
+    @Test
+    fun `getActiveRsvps exposes next pending reminder for MAYBE response`() {
+        val member = makeMember()
+        val active = makeRsvp(windowEnd = now.plusDays(10))
+        val response = makeLog(active, member, status = RsvpStatus.MAYBE)
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
+        `when`(eventRsvpRepo.findActiveNow(now)).thenReturn(listOf(active))
+        `when`(eventRsvpLogRepo.findAllByEventRsvpIdInAndMemberIdAndDeletedAtIsNull(listOf(1L), 1L))
+            .thenReturn(listOf(response))
+
+        val result = service.getActiveRsvps("kc-001").single()
+
+        assertEquals(now.plusDays(3), result.nextReminderAt)
+    }
+
+    @Test
+    fun `getActiveRsvps omits next reminder when response is not pending MAYBE`() {
+        val member = makeMember()
+        val active = makeRsvp(windowEnd = now.plusDays(10))
+        val response = makeLog(active, member, status = RsvpStatus.GOING)
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
+        `when`(eventRsvpRepo.findActiveNow(now)).thenReturn(listOf(active))
+        `when`(eventRsvpLogRepo.findAllByEventRsvpIdInAndMemberIdAndDeletedAtIsNull(listOf(1L), 1L))
+            .thenReturn(listOf(response))
+
+        val result = service.getActiveRsvps("kc-001").single()
+
+        assertNull(result.nextReminderAt)
+    }
+
+    @Test
+    fun `getActiveRsvps omits next reminder when all intervals are exhausted`() {
+        val member = makeMember()
+        val active = makeRsvp(windowEnd = now.plusDays(10))
+        val response = makeLog(active, member, status = RsvpStatus.MAYBE, reminderCount = 2)
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
+        `when`(eventRsvpRepo.findActiveNow(now)).thenReturn(listOf(active))
+        `when`(eventRsvpLogRepo.findAllByEventRsvpIdInAndMemberIdAndDeletedAtIsNull(listOf(1L), 1L))
+            .thenReturn(listOf(response))
+
+        val result = service.getActiveRsvps("kc-001").single()
+
+        assertNull(result.nextReminderAt)
     }
 
     // ─── checkIn ──────────────────────────────────────────────────────────────
