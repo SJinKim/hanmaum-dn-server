@@ -9,6 +9,10 @@
 ## Lessons
 <!-- Claude appends here after each correction -->
 
+### Escalated MVP priorities override a previous deferral
+- **Mistake**: Deferred issue #184 solely because the written MVP scope did not list the Newcomer cutover, even though the stakeholder needed it for the MVP.
+- **Rule**: Treat an explicit user statement that a capability is needed for MVP as an authorized scope decision: update the scope artifact and implement the minimal complete path; do not leave the work deferred based on an older scope document.
+
 ### Update retry tests when the workflow gains a follow-up action
 - **Mistake**: Left the claim-retry test asserting that a pre-existing conflict must skip the candidate lookup after reconciliation reviews were introduced.
 - **Rule**: When a workflow adds an audit or review step after a previously terminal state, revisit retry assertions: distinguish “do not duplicate the original record” from “skip all later reconciliation work.”
