@@ -138,6 +138,7 @@ class EventRsvpService(
         }
         val scheduledAt =
             rsvpProperties.reminderOffsets
+                .sortedDescending()
                 .getOrNull(response.reminderCount)
                 ?.let(rsvp.windowEnd::minus)
                 ?: return null
