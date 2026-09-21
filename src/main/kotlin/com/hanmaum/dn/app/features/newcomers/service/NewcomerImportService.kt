@@ -19,6 +19,8 @@ import java.security.MessageDigest
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.UUID
 
 data class NewcomerImportReport(
@@ -33,7 +35,15 @@ data class NewcomerImportReport(
 data class NewcomerImportIssue(
     val rowNumber: Int,
     val code: String,
+    val candidates: List<NewcomerImportCandidate> = emptyList(),
 )
+
+data class NewcomerImportCandidate(
+    val publicId: UUID,
+    val matchReasons: Set<NewcomerImportMatchReason>,
+)
+
+enum class NewcomerImportMatchReason { EMAIL, NAME, PHONE, BIRTH_DATE }
 
 @Service
 class NewcomerImportService(
@@ -82,7 +92,12 @@ class NewcomerImportService(
             }
             if (matches.isNotEmpty() && selected == null) {
                 review++
-                issues += NewcomerImportIssue(row.rowNumber, "MANUAL_RECONCILIATION_REQUIRED")
+                issues +=
+                    NewcomerImportIssue(
+                        rowNumber = row.rowNumber,
+                        code = "MANUAL_RECONCILIATION_REQUIRED",
+                        candidates = matches.map { match -> NewcomerImportCandidate(match.member.publicId, match.reasons) },
+                    )
                 return@forEach
             }
             if (dryRun) {
@@ -111,11 +126,37 @@ class NewcomerImportService(
         return NewcomerImportReport(rows.size, imported, skipped, review, invalid, issues)
     }
 
-    private fun candidateMatches(candidate: Candidate): List<Member> =
-        buildList {
-            candidate.email?.let { members.findByEmailAndDeletedAtIsNull(it)?.let(::add) }
-            addAll(members.findSimilarNames(candidate.firstName, candidate.lastName))
-        }.distinctBy { it.publicId }
+    private fun candidateMatches(candidate: Candidate): List<CandidateMatch> {
+        val matches = linkedMapOf<UUID, CandidateMatch>()
+
+        fun add(
+            member: Member,
+            reason: NewcomerImportMatchReason,
+        ) {
+            val existing = matches[member.publicId]
+            matches[member.publicId] =
+                if (existing == null) {
+                    CandidateMatch(member, setOf(reason))
+                } else {
+                    existing.copy(reasons = existing.reasons + reason)
+                }
+        }
+
+        candidate.email?.let { members.findByEmailAndDeletedAtIsNull(it)?.let { member -> add(member, NewcomerImportMatchReason.EMAIL) } }
+        members.findSimilarNames(candidate.firstName, candidate.lastName).forEach { member -> add(member, NewcomerImportMatchReason.NAME) }
+        val normalizedCandidatePhone = normalizePhone(candidate.phone)
+        members.findAllByDeletedAtIsNull().forEach { member ->
+            if (normalizedCandidatePhone != null && normalizedCandidatePhone == normalizePhone(member.phoneNumber)) {
+                add(member, NewcomerImportMatchReason.PHONE)
+            }
+            if (candidate.birthDate != null && candidate.birthDate == member.birthDate) {
+                add(member, NewcomerImportMatchReason.BIRTH_DATE)
+            }
+        }
+        return matches.values.filter { match ->
+            match.reasons.any { reason -> reason != NewcomerImportMatchReason.BIRTH_DATE } || match.reasons.size > 1
+        }
+    }
 
     private fun parse(row: NewcomerImportRow): ParseResult {
         val lastName = row.fields["lastName"].orEmpty().trim()
@@ -123,6 +164,7 @@ class NewcomerImportService(
         val issues = mutableListOf<String>()
         if (lastName.isBlank() || firstName.isBlank()) issues += "INVALID_REQUIRED_FIELD"
         val birthDate = parseOptional(row.fields["birthDate"], "INVALID_BIRTH_DATE", ::dateOrNull, issues)
+        val registrationDate = parseOptional(row.fields["registrationDate"], "INVALID_REGISTRATION_DATE", ::dateOrNull, issues)
         val firstVisitDate = parseOptional(row.fields["firstVisitDate"], "INVALID_FIRST_VISIT_DATE", ::dateOrNull, issues)
         val gender = parseOptional(row.fields["gender"], "INVALID_GENDER", ::normalizeGender, issues)
         val baptism = parseOptional(row.fields["baptism"], "INVALID_BAPTISM", ::normalizeBaptism, issues)
@@ -143,6 +185,7 @@ class NewcomerImportService(
                     ?.takeIf(String::isNotBlank),
                 row.fields["phone"]?.trim()?.takeIf(String::isNotBlank),
                 birthDate,
+                registrationDate,
                 gender,
                 baptism,
                 identityStatus,
@@ -173,6 +216,8 @@ class NewcomerImportService(
             { LocalDate.parse(value) },
             { OffsetDateTime.parse(value.replace(' ', 'T')).toLocalDate() },
             { LocalDateTime.parse(value.replace(' ', 'T')).toLocalDate() },
+            *localDateTimeFormats.map { format -> { LocalDateTime.parse(value, format).toLocalDate() } }.toTypedArray(),
+            *localDateFormats.map { format -> { LocalDate.parse(value, format) } }.toTypedArray(),
         ).mapNotNull { parser -> runCatching(parser).getOrNull() }.firstOrNull()
 
     private fun normalizeGender(value: String?) =
@@ -221,12 +266,15 @@ class NewcomerImportService(
 
     private fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
+    private fun normalizePhone(value: String?): String? = value?.filter(Char::isDigit)?.takeIf(String::isNotBlank)
+
     private data class Candidate(
         val lastName: String,
         val firstName: String,
         val email: String?,
         val phone: String?,
         val birthDate: LocalDate?,
+        val registrationDate: LocalDate?,
         val gender: Gender?,
         val baptism: Baptism?,
         val identityStatus: NewcomerIdentityStatus?,
@@ -243,6 +291,7 @@ class NewcomerImportService(
                 birthDate = birthDate,
                 phoneNumber = phone,
                 email = email,
+                registrationDate = registrationDate ?: LocalDate.now(),
                 memberStatus = MemberStatus.PENDING,
                 baptism = baptism,
             )
@@ -259,6 +308,7 @@ class NewcomerImportService(
         fun applyTo(member: Member) {
             gender?.let { member.gender = it }
             birthDate?.let { member.birthDate = it }
+            registrationDate?.let { member.registrationDate = it }
             phone?.let { member.phoneNumber = it }
             email?.let { member.email = it }
             baptism?.let { member.baptism = it }
@@ -280,4 +330,23 @@ class NewcomerImportService(
         val candidate: Candidate?,
         val issues: List<String>,
     )
+
+    private data class CandidateMatch(
+        val member: Member,
+        val reasons: Set<NewcomerImportMatchReason>,
+    )
+
+    private companion object {
+        val localDateTimeFormats =
+            listOf(
+                DateTimeFormatter.ofPattern("M/d/uuuu H:mm:ss"),
+                DateTimeFormatter.ofPattern("M/d/uuuu h:mm:ss a", Locale.US),
+                DateTimeFormatter.ofPattern("uuuu. M. d. a h:mm:ss", Locale.KOREAN),
+            )
+        val localDateFormats =
+            listOf(
+                DateTimeFormatter.ofPattern("M/d/uuuu"),
+                DateTimeFormatter.ofPattern("uuuu. M. d."),
+            )
+    }
 }

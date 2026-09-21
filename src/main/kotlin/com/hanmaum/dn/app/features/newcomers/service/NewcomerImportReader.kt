@@ -33,6 +33,9 @@ class NewcomerImportReader {
             }
         val headers = source.headers.map(::normalizeHeader)
         val mapping = headerMapping(layout)
+        val supportedHeaders = mapping.values.flatten().toSet()
+        val unmappedHeaders = headers.filter(String::isNotBlank).filterNot { it in supportedHeaders }.distinct()
+        require(unmappedHeaders.isEmpty()) { "Import file contains unmapped headers: ${unmappedHeaders.joinToString(", ")}." }
         return source.rows.map { sourceRow ->
             NewcomerImportRow(
                 sourceRow.rowNumber,
@@ -96,13 +99,18 @@ class NewcomerImportReader {
         }
 
     private fun headerMapping(layout: NewcomerImportLayout): Map<String, Set<String>> =
-        when (layout) {
-            NewcomerImportLayout.SPREADSHEET_A -> commonHeaders
-            NewcomerImportLayout.SPREADSHEET_B -> commonHeaders + mapOf("firstVisitDate" to setOf("firstvisit", "firstvisitdate", "첫방문일"))
-            NewcomerImportLayout.GOOGLE_FORMS -> commonHeaders + mapOf("firstVisitDate" to setOf("timestamp", "제출시간"))
-        }
+        commonHeaders +
+            when (layout) {
+                NewcomerImportLayout.SPREADSHEET_A -> emptyMap()
+                NewcomerImportLayout.SPREADSHEET_B -> mapOf("firstVisitDate" to setOf("firstvisit", "firstvisitdate", "첫방문일"))
+                NewcomerImportLayout.GOOGLE_FORMS -> mapOf("registrationDate" to setOf("timestamp", "제출시간"))
+            }
 
-    private fun normalizeHeader(value: String): String = value.lowercase().replace(Regex("[\\s_()/-]"), "")
+    private fun normalizeHeader(value: String): String =
+        value
+            .removePrefix("\uFEFF")
+            .lowercase()
+            .replace(Regex("[\\s_()/-]"), "")
 
     private companion object {
         val commonHeaders =
@@ -112,6 +120,7 @@ class NewcomerImportReader {
                 "email" to setOf("email", "이메일", "emailaddress"),
                 "phone" to setOf("phone", "phonenumber", "전화번호", "연락처"),
                 "birthDate" to setOf("birthdate", "birthday", "생년월일"),
+                "registrationDate" to setOf("registrationdate", "등록일"),
                 "gender" to setOf("gender", "성별"),
                 "baptism" to setOf("baptism", "세례", "세례여부"),
                 "identityStatus" to setOf("identitystatus", "신분"),

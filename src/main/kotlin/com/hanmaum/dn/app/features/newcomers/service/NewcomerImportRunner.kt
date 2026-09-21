@@ -29,7 +29,13 @@ class NewcomerImportRunner {
                 report.invalid,
             )
             report.issues.forEach { issue ->
-                logger.warn("Newcomer import issue rowNumber={} code={}", issue.rowNumber, issue.code)
+                logger.warn(
+                    "Newcomer import issue rowNumber={} code={} candidatePublicIds={} matchReasons={}",
+                    issue.rowNumber,
+                    issue.code,
+                    issue.candidates.map(NewcomerImportCandidate::publicId),
+                    issue.candidates.flatMap(NewcomerImportCandidate::matchReasons).toSet(),
+                )
             }
         }
 

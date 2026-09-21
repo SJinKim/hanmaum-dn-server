@@ -5,6 +5,7 @@ import java.nio.file.Files
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class NewcomerImportReaderTest {
     private val reader = NewcomerImportReader()
@@ -76,5 +77,26 @@ class NewcomerImportReaderTest {
         assertEquals("A", row.fields["lastName"])
         assertEquals("", row.fields["phone"])
         assertEquals("B", row.fields["firstName"])
+    }
+
+    @Test
+    fun `maps a google forms timestamp to registration date without replacing first visit date`() {
+        val file = Files.createTempFile("newcomer-import-", ".csv")
+        file.writeText("\uFEFFTimestamp,성,이름,첫방문일\n9/21/2026 6:30:00 PM,가,나,2026-09-20")
+
+        val row = reader.read(file, NewcomerImportLayout.GOOGLE_FORMS).single()
+
+        assertEquals("9/21/2026 6:30:00 PM", row.fields["registrationDate"])
+        assertEquals("2026-09-20", row.fields["firstVisitDate"])
+    }
+
+    @Test
+    fun `rejects unmapped source headers to prevent silent data loss`() {
+        val file = Files.createTempFile("newcomer-import-", ".csv")
+        file.writeText("성,이름,unknown source field\n가,나,value")
+
+        assertFailsWith<IllegalArgumentException> {
+            reader.read(file, NewcomerImportLayout.SPREADSHEET_A)
+        }
     }
 }
