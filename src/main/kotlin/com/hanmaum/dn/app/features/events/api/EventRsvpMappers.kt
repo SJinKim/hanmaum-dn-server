@@ -6,6 +6,7 @@ import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpResponseDto
 import com.hanmaum.dn.app.features.events.domain.EventRsvp
 import com.hanmaum.dn.app.features.events.domain.EventRsvpLog
+import java.time.OffsetDateTime
 import java.time.ZoneOffset
 
 fun EventRsvp.toDto(): EventRsvpDto =
@@ -18,7 +19,10 @@ fun EventRsvp.toDto(): EventRsvpDto =
         announcementPublicId = announcement?.publicId?.toString(),
     )
 
-fun EventRsvp.toActiveDto(response: EventRsvpLog?): ActiveEventRsvpDto =
+fun EventRsvp.toActiveDto(
+    response: EventRsvpLog?,
+    nextReminderAt: OffsetDateTime?,
+): ActiveEventRsvpDto =
     ActiveEventRsvpDto(
         publicId = publicId.toString(),
         title = title,
@@ -27,6 +31,7 @@ fun EventRsvp.toActiveDto(response: EventRsvpLog?): ActiveEventRsvpDto =
         announcementId = announcement?.publicId,
         myStatus = response?.status,
         respondedAt = response?.checkedInAt?.atOffset(ZoneOffset.UTC),
+        nextReminderAt = nextReminderAt,
     )
 
 fun EventRsvpLog.toResponseDto(): EventRsvpResponseDto =

@@ -29,6 +29,8 @@ data class ActiveEventRsvpDto(
     val myStatus: RsvpStatus?,
     /** Time of the authenticated member's latest status change. */
     val respondedAt: OffsetDateTime?,
+    /** When the next reminder for a MAYBE response is due, or null when none is pending. */
+    val nextReminderAt: OffsetDateTime?,
 )
 
 data class EventRsvpResponseRequest(

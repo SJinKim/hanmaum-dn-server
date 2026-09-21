@@ -13,7 +13,9 @@ import com.hanmaum.dn.app.features.events.api.v1.dto.EventCheckInResponse
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpResponseDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.UpdateEventRsvpRequest
+import com.hanmaum.dn.app.features.events.config.RsvpProperties
 import com.hanmaum.dn.app.features.events.domain.EventRsvp
+import com.hanmaum.dn.app.features.events.domain.EventRsvpLog
 import com.hanmaum.dn.app.features.events.domain.RsvpStatus
 import com.hanmaum.dn.app.features.events.repository.EventRsvpLogRepository
 import com.hanmaum.dn.app.features.events.repository.EventRsvpRepository
@@ -36,6 +38,7 @@ class EventRsvpService(
     private val currentMemberResolver: CurrentMemberResolver,
     private val announcementRepo: AnnouncementRepository,
     private val clock: Clock,
+    private val rsvpProperties: RsvpProperties,
 ) {
     @Transactional
     fun createRsvp(req: CreateEventRsvpRequest): EventRsvpDto {
@@ -107,7 +110,8 @@ class EventRsvpService(
     @Transactional(readOnly = true)
     fun getActiveRsvps(keycloakSub: String): List<ActiveEventRsvpDto> {
         val member = findMember(keycloakSub)
-        val rsvps = eventRsvpRepo.findActiveNow(OffsetDateTime.now(clock))
+        val now = OffsetDateTime.now(clock)
+        val rsvps = eventRsvpRepo.findActiveNow(now)
         if (rsvps.isEmpty()) {
             return emptyList()
         }
@@ -115,11 +119,30 @@ class EventRsvpService(
             eventRsvpLogRepo
                 .findAllByEventRsvpIdInAndMemberIdAndDeletedAtIsNull(rsvps.map { it.id!! }, member.id!!)
                 .associateBy { it.eventRsvp.id!! }
-        return rsvps.map { it.toActiveDto(responsesByRsvpId[it.id!!]) }
+        return rsvps.map { rsvp ->
+            val response = responsesByRsvpId[rsvp.id!!]
+            rsvp.toActiveDto(response, nextReminderAt(rsvp, response, now))
+        }
     }
 
     @Transactional(readOnly = true)
     fun listAllRsvps(): List<EventRsvpDto> = eventRsvpRepo.findAllNotDeleted().map { it.toDto() }
+
+    private fun nextReminderAt(
+        rsvp: EventRsvp,
+        response: EventRsvpLog?,
+        now: OffsetDateTime,
+    ): OffsetDateTime? {
+        if (response?.status != RsvpStatus.MAYBE || !rsvp.windowEnd.isAfter(now)) {
+            return null
+        }
+        val scheduledAt =
+            rsvpProperties.reminderOffsets
+                .getOrNull(response.reminderCount)
+                ?.let(rsvp.windowEnd::minus)
+                ?: return null
+        return if (scheduledAt.isAfter(now)) scheduledAt else now
+    }
 
     @Transactional
     fun checkIn(
