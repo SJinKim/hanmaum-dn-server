@@ -52,6 +52,16 @@ interface MemberRepositorySecureQueries {
         pageable: Pageable,
     ): Page<Member>
 
+    /**
+     * Loads the encrypted member fields needed by the admin list before its related-record
+     * filters and display-value sort are applied in the service layer.
+     */
+    fun findActiveMembers(
+        search: String?,
+        status: MemberStatus?,
+        baptism: Baptism?,
+    ): List<Member>
+
     fun findSimilarNames(
         firstName: String,
         lastName: String,

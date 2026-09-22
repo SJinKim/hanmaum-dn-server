@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.training.repository
 
 import com.hanmaum.dn.app.features.training.domain.TrainingStatus
+import com.hanmaum.dn.app.features.training.domain.TrainingCode
 import com.hanmaum.dn.app.features.training.domain.TrainingVariant
 import com.hanmaum.dn.app.features.training.domain.UserTraining
 import org.springframework.data.jpa.repository.JpaRepository
@@ -32,7 +33,7 @@ interface UserTrainingRepository : JpaRepository<UserTraining, Long> {
     @Query(
         """
         SELECT new com.hanmaum.dn.app.features.training.repository.MemberTrainingStatusView(
-            ut.member.id, t.name, ut.status, t.sortOrder
+            ut.member.id, t.code, t.name, ut.status, t.sortOrder
         )
         FROM UserTraining ut
         JOIN ut.training t
@@ -43,6 +44,20 @@ interface UserTrainingRepository : JpaRepository<UserTraining, Long> {
     fun findByMemberIds(
         @Param("memberIds") memberIds: Collection<Long>,
     ): List<MemberTrainingStatusView>
+
+    /** Member ids with a non-deleted participation in the catalog course identified by [trainingCode]. */
+    @Query(
+        """
+        SELECT DISTINCT ut.member.id
+        FROM UserTraining ut
+        JOIN ut.training t
+        WHERE t.code = :trainingCode
+          AND ut.deletedAt IS NULL
+        """,
+    )
+    fun findMemberIdsByTrainingCode(
+        @Param("trainingCode") trainingCode: TrainingCode,
+    ): List<Long>
 
     /**
      * Looks up one participation the way uq_user_training_member_training_variant keys

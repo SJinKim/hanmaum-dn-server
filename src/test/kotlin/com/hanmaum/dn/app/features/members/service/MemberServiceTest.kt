@@ -22,6 +22,9 @@ import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
 import com.hanmaum.dn.app.features.ministry.repository.MemberMinistryView
 import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
 import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
+import com.hanmaum.dn.app.features.training.domain.TrainingCode
+import com.hanmaum.dn.app.features.training.domain.TrainingStatus
+import com.hanmaum.dn.app.features.training.repository.MemberTrainingStatusView
 import com.hanmaum.dn.app.features.training.repository.TrainingRepository
 import com.hanmaum.dn.app.features.training.repository.UserTrainingRepository
 import jakarta.persistence.EntityNotFoundException
@@ -48,8 +51,6 @@ import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.eq
-import org.springframework.data.domain.PageImpl
-import org.springframework.data.domain.Pageable
 import org.springframework.web.server.ResponseStatusException
 import java.net.URI
 import java.time.Instant
@@ -244,12 +245,11 @@ class MemberServiceTest {
     // --- getMembers ---
 
     @Test
-    fun `getMembers delegates to repository with pageable`() {
+    fun `getMembers returns the repository members with the default name sort`() {
         val members = listOf(memberWithId(1L), memberWithId(2L))
-        `when`(memberRepository.findActiveMembers(anyOrNull(), anyOrNull(), anyOrNull(), any<Pageable>()))
-            .thenReturn(PageImpl(members))
+        `when`(memberRepository.findActiveMembers(anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(members)
 
-        val result = memberService.getMembers(null, null, null, 0, 20)
+        val result = memberService.getMembers(null, null, null, null, null, null, null, null, 0, 20)
 
         assertEquals(2, result.totalElements)
     }
@@ -257,13 +257,12 @@ class MemberServiceTest {
     @Test
     fun `getMembers maps multiple active ministries sorted for a member`() {
         val member = memberWithId(1L)
-        `when`(memberRepository.findActiveMembers(anyOrNull(), anyOrNull(), anyOrNull(), any<Pageable>()))
-            .thenReturn(PageImpl(listOf(member)))
+        `when`(memberRepository.findActiveMembers(anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(listOf(member))
         `when`(ministryAssignmentRepository.findActiveByMemberIds(listOf(1L)))
             // Returned out of order on purpose so the assertion proves .sorted() runs.
             .thenReturn(listOf(MemberMinistryView(1L, "찬양팀"), MemberMinistryView(1L, "미디어팀")))
 
-        val result = memberService.getMembers(null, null, null, 0, 20)
+        val result = memberService.getMembers(null, null, null, null, null, null, null, null, 0, 20)
 
         val summary = result.content.single()
         assertEquals(listOf("미디어팀", "찬양팀"), summary.activeMinistries)
@@ -273,20 +272,104 @@ class MemberServiceTest {
     fun `getMembers flags only the members holding a current group leadership`() {
         val leader = memberWithId(1L)
         val plain = memberWithId(2L)
-        `when`(memberRepository.findActiveMembers(anyOrNull(), anyOrNull(), anyOrNull(), any<Pageable>()))
-            .thenReturn(PageImpl(listOf(leader, plain)))
+        `when`(memberRepository.findActiveMembers(anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(listOf(leader, plain))
         `when`(groupLeaderRepository.findActiveByMemberIds(listOf(1L, 2L)))
             .thenReturn(listOf(MemberLeadershipView(1L, LocalDate.of(2026, 1, 15))))
 
-        val result = memberService.getMembers(null, null, null, 0, 20)
+        val result = memberService.getMembers(null, null, null, null, null, null, null, null, 0, 20)
 
-        val leaderSummary = result.content[0]
+        val summariesById = result.content.associateBy { it.publicId }
+        val leaderSummary = summariesById.getValue(leader.publicId.toString())
         assertEquals(true, leaderSummary.isGroupLeader)
         assertEquals(LocalDate.of(2026, 1, 15), leaderSummary.groupLeaderSince)
 
-        val plainSummary = result.content[1]
+        val plainSummary = summariesById.getValue(plain.publicId.toString())
         assertEquals(false, plainSummary.isGroupLeader)
         assertNull(plainSummary.groupLeaderSince)
+    }
+
+    @Test
+    fun `getMembers combines group training and ministry filters`() {
+        val matching = memberWithId(1L)
+        val sameTraining = memberWithId(2L)
+        val unassigned = memberWithId(3L)
+        val group = group(10L)
+        matching.group = group
+        sameTraining.group = group
+        val ministryId = UUID.randomUUID()
+
+        `when`(memberRepository.findActiveMembers(anyOrNull(), anyOrNull(), anyOrNull()))
+            .thenReturn(listOf(matching, sameTraining, unassigned))
+        `when`(userTrainingRepository.findMemberIdsByTrainingCode(TrainingCode.QT_BASIC_SEMINAR))
+            .thenReturn(listOf(1L, 2L))
+        `when`(ministryAssignmentRepository.findActiveMemberIdsByMinistryPublicId(ministryId)).thenReturn(listOf(1L))
+
+        val result =
+            memberService.getMembers(
+                search = null,
+                status = null,
+                baptism = null,
+                groupPublicId = group.publicId,
+                unassigned = null,
+                trainingCode = "qt_basic_seminar",
+                ministryPublicId = ministryId,
+                sort = null,
+                page = 0,
+                size = 20,
+            )
+
+        assertEquals(listOf(matching.publicId.toString()), result.content.map { it.publicId })
+        assertEquals(1, result.totalElements)
+    }
+
+    @Test
+    fun `getMembers filters unassigned members and sorts by ministry then name`() {
+        val media = memberWithId(1L, firstName = "민수", lastName = "김")
+        val praise = memberWithId(2L, firstName = "영희", lastName = "이")
+        val assigned = memberWithId(3L, firstName = "철수", lastName = "박")
+        assigned.group = group(10L)
+        `when`(memberRepository.findActiveMembers(anyOrNull(), anyOrNull(), anyOrNull()))
+            .thenReturn(listOf(praise, assigned, media))
+        `when`(ministryAssignmentRepository.findActiveByMemberIds(listOf(2L, 1L)))
+            .thenReturn(listOf(MemberMinistryView(1L, "미디어팀"), MemberMinistryView(2L, "찬양팀")))
+
+        val result =
+            memberService.getMembers(
+                search = null,
+                status = null,
+                baptism = null,
+                groupPublicId = null,
+                unassigned = true,
+                trainingCode = null,
+                ministryPublicId = null,
+                sort = listOf("ministry,desc"),
+                page = 0,
+                size = 20,
+            )
+
+        assertEquals(listOf("찬양팀", "미디어팀"), result.content.map { it.activeMinistries.single() })
+    }
+
+    @Test
+    fun `getMembers includes the catalog code in training chips`() {
+        val member = memberWithId(1L)
+        `when`(memberRepository.findActiveMembers(anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(listOf(member))
+        `when`(userTrainingRepository.findByMemberIds(listOf(1L)))
+            .thenReturn(
+                listOf(
+                    MemberTrainingStatusView(
+                        memberId = 1L,
+                        trainingCode = TrainingCode.QT_BASIC_SEMINAR,
+                        trainingName = "Quiet Time Basic Seminar",
+                        status = TrainingStatus.COMPLETED,
+                        sortOrder = 10,
+                    ),
+                ),
+            )
+
+        val result = memberService.getMembers(null, null, null, null, null, null, null, null, 0, 20)
+
+        assertEquals("QT_BASIC_SEMINAR", result.content.single().trainings.single().code)
     }
 
     @Test

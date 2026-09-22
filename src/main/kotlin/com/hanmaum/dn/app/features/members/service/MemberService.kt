@@ -32,6 +32,7 @@ import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
 import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
 import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
 import com.hanmaum.dn.app.features.training.api.toDto
+import com.hanmaum.dn.app.features.training.domain.TrainingCode
 import com.hanmaum.dn.app.features.training.domain.TrainingStatus
 import com.hanmaum.dn.app.features.training.domain.UserTraining
 import com.hanmaum.dn.app.features.training.repository.TrainingRepository
@@ -45,6 +46,7 @@ import org.keycloak.representations.idm.UserRepresentation
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.domain.Page
+import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
 import org.springframework.http.HttpStatus
@@ -72,6 +74,18 @@ class MemberService(
     @Value("\${app.member-retention.days:30}") private val memberRetentionDays: Long = 30,
 ) {
     private val log = LoggerFactory.getLogger(MemberService::class.java)
+    private val sortPropertyAliases =
+        mapOf(
+            "lastName" to "lastName",
+            "memberStatus" to "memberStatus",
+            "groupName" to "groupName",
+            "baptism" to "baptism",
+            "updatedAt" to "updatedAt",
+            "latestTraining" to "latestTraining",
+            "training" to "latestTraining",
+            "activeMinistries" to "activeMinistries",
+            "ministry" to "activeMinistries",
+        )
 
     /**
      * READ Operations
@@ -84,25 +98,43 @@ class MemberService(
         search: String?,
         status: MemberStatus?,
         baptism: Baptism?,
+        groupPublicId: UUID?,
+        unassigned: Boolean?,
+        trainingCode: String?,
+        ministryPublicId: UUID?,
+        sort: List<String>?,
         page: Int,
         size: Int,
     ): Page<MemberSummaryDto> {
-        val pageable =
-            PageRequest.of(
-                page,
-                size,
-                Sort.by("lastName").ascending().and(Sort.by("firstName").ascending()),
-            )
+        if (groupPublicId != null && unassigned == true) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "groupPublicId and unassigned=true cannot be combined")
+        }
+        val pageable = PageRequest.of(page, size, parseSort(sort))
+        val requestedTrainingCode = parseTrainingCode(trainingCode)
+        val trainingMemberIds =
+            requestedTrainingCode
+                ?.let(userTrainingRepository::findMemberIdsByTrainingCode)
+                ?.toSet()
+        val ministryMemberIds =
+            ministryPublicId
+                ?.let(ministryAssignmentRepository::findActiveMemberIdsByMinistryPublicId)
+                ?.toSet()
         val members =
             memberRepository
-                .findActiveMembers(search?.takeIf { it.isNotBlank() }.orEmpty(), status, baptism, pageable)
+                .findActiveMembers(search?.takeIf { it.isNotBlank() }.orEmpty(), status, baptism)
+                .asSequence()
+                .filter { groupPublicId == null || it.group?.publicId == groupPublicId }
+                .filter { unassigned != true || it.group == null }
+                .filter { trainingMemberIds == null || it.id?.let(trainingMemberIds::contains) == true }
+                .filter { ministryMemberIds == null || it.id?.let(ministryMemberIds::contains) == true }
+                .toList()
 
-        // Enrich the page in batch queries (no N+1):
+        // Enrich the filtered collection in batch queries (no N+1):
         //  - all trainings (with status) per member = grid chips, ordered by progression
         //  - latest completed training               = highest sort_order among COMPLETED chips
         //  - active ministries                       = ministry names where end_date IS NULL
         //  - current group leadership                = tenure start where end_date IS NULL
-        val memberIds = members.content.mapNotNull { it.id }
+        val memberIds = members.mapNotNull { it.id }
         val trainingsByMember: Map<Long, List<SummaryTrainingDto>> =
             if (memberIds.isEmpty()) {
                 emptyMap()
@@ -113,7 +145,13 @@ class MemberService(
                     .mapValues { (_, rows) ->
                         rows
                             .sortedBy { it.sortOrder }
-                            .map { SummaryTrainingDto(name = it.trainingName, status = it.status.name) }
+                            .map {
+                                SummaryTrainingDto(
+                                    code = it.trainingCode.name,
+                                    name = it.trainingName,
+                                    status = it.status.name,
+                                )
+                            }
                     }
             }
         val latestTrainingByMember: Map<Long, String> =
@@ -147,16 +185,103 @@ class MemberService(
                     .associate { it.memberId to it.graduatedOn }
             }
 
-        return members.map {
-            it.toSummaryDto(
-                latestTraining = it.id?.let(latestTrainingByMember::get),
-                trainings = it.id?.let(trainingsByMember::get).orEmpty(),
-                activeMinistries = it.id?.let(activeMinistriesByMember::get).orEmpty(),
-                groupLeaderSince = it.id?.let(leaderSinceByMember::get),
-                graduatedOn = it.id?.let(graduatedOnByMember::get),
-            )
+        val summaries =
+            members.map {
+                it.toSummaryDto(
+                    latestTraining = it.id?.let(latestTrainingByMember::get),
+                    trainings = it.id?.let(trainingsByMember::get).orEmpty(),
+                    activeMinistries = it.id?.let(activeMinistriesByMember::get).orEmpty(),
+                    groupLeaderSince = it.id?.let(leaderSinceByMember::get),
+                    graduatedOn = it.id?.let(graduatedOnByMember::get),
+                )
+            }
+        return PageImpl(sortSummaries(summaries, pageable.sort), pageable, summaries.size.toLong())
+    }
+
+    private fun parseTrainingCode(trainingCode: String?): TrainingCode? {
+        val code = trainingCode?.takeIf(String::isNotBlank)?.uppercase() ?: return null
+        return try {
+            TrainingCode.valueOf(code)
+        } catch (_: IllegalArgumentException) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown trainingCode: $trainingCode")
         }
     }
+
+    private fun parseSort(sort: List<String>?): Sort {
+        val orders =
+            sort
+                .orEmpty()
+                .filter(String::isNotBlank)
+                .map(::parseSortOrder)
+        return if (orders.isEmpty()) Sort.unsorted() else Sort.by(orders)
+    }
+
+    private fun parseSortOrder(value: String): Sort.Order {
+        val parts = value.split(',').map(String::trim)
+        if (parts.size !in 1..2 || parts.first().isBlank()) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid sort: $value")
+        }
+        val property = sortPropertyAliases[parts.first()]
+            ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported sort property: ${parts.first()}")
+        val direction =
+            if (parts.size == 1) {
+                Sort.Direction.ASC
+            } else {
+                Sort.Direction.fromOptionalString(parts[1])
+                    .orElse(null)
+                    ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid sort direction: ${parts[1]}")
+            }
+        return Sort.Order(direction, property)
+    }
+
+    private fun sortSummaries(
+        summaries: List<MemberSummaryDto>,
+        sort: Sort,
+    ): List<MemberSummaryDto> {
+        val orders =
+            if (sort.isSorted) {
+                sort.toList()
+            } else {
+                listOf(Sort.Order.asc("lastName"), Sort.Order.asc("firstName"))
+            }
+        val comparator = orders.fold(Comparator<MemberSummaryDto> { _, _ -> 0 }) { result, order ->
+            result.thenComparing(summaryComparator(order))
+        }
+        return summaries.sortedWith(comparator.thenComparing(compareBy { it.publicId }))
+    }
+
+    private fun summaryComparator(order: Sort.Order): Comparator<MemberSummaryDto> {
+        val comparator =
+            when (order.property) {
+                "lastName" -> stringComparator { it.lastName }
+                "firstName" -> stringComparator { it.firstName }
+                "memberStatus" -> stringComparator { it.memberStatus }
+                "groupName" -> stringComparator { it.groupName }
+                "baptism" -> stringComparator { it.baptism }
+                "updatedAt" -> Comparator { first, second -> compareNullable(first.updatedAt, second.updatedAt) }
+                "latestTraining" -> stringComparator { it.latestTraining }
+                "activeMinistries" -> stringComparator { it.activeMinistries.firstOrNull() }
+                else -> error("Unsupported sort property was not rejected: ${order.property}")
+            }
+        return if (order.direction == Sort.Direction.DESC) comparator.reversed() else comparator
+    }
+
+    private fun stringComparator(
+        selector: (MemberSummaryDto) -> String?,
+    ): Comparator<MemberSummaryDto> = Comparator { first, second ->
+        compareNullable(selector(first)?.lowercase(), selector(second)?.lowercase())
+    }
+
+    private fun <T : Comparable<T>> compareNullable(
+        first: T?,
+        second: T?,
+    ): Int =
+        when {
+            first == null && second == null -> 0
+            first == null -> 1
+            second == null -> -1
+            else -> first.compareTo(second)
+        }
 
     /**
      * All non-deleted members as minimal name entries (publicId, fullName, discriminator),

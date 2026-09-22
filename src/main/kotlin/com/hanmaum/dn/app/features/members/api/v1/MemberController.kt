@@ -43,7 +43,7 @@ class MemberController(
 ) {
     /**
      * GET /api/v1/members
-     * Role: ADMIN — paginated member list with optional search.
+     * Role: ADMIN — paginated member list with optional search, group, training, and ministry filters.
      * Default: page=0 size=20 sorted by lastName ASC.
      */
     @GetMapping
@@ -52,10 +52,28 @@ class MemberController(
         @RequestParam(required = false) search: String?,
         @RequestParam(required = false) status: MemberStatus?,
         @RequestParam(required = false) baptism: Baptism?,
+        @RequestParam(required = false) groupPublicId: UUID?,
+        @RequestParam(required = false) unassigned: Boolean?,
+        @RequestParam(required = false) trainingCode: String?,
+        @RequestParam(required = false) ministryPublicId: UUID?,
+        /** Spring Sort syntax, e.g. `sort=groupName,asc&sort=lastName,asc`. */
+        @RequestParam(required = false) sort: List<String>?,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int,
     ): ResponseEntity<ApiResponse<Page<MemberSummaryDto>>> {
-        val result = memberService.getMembers(search, status, baptism, page, size)
+        val result =
+            memberService.getMembers(
+                search = search,
+                status = status,
+                baptism = baptism,
+                groupPublicId = groupPublicId,
+                unassigned = unassigned,
+                trainingCode = trainingCode,
+                ministryPublicId = ministryPublicId,
+                sort = sort,
+                page = page,
+                size = size,
+            )
         return ResponseEntity.ok(ApiResponse.success(data = result))
     }
 

@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.training.repository
 
 import com.hanmaum.dn.app.features.training.domain.TrainingStatus
+import com.hanmaum.dn.app.features.training.domain.TrainingCode
 
 /**
  * Flat projection of a member's training including [status], used to render the
@@ -9,6 +10,7 @@ import com.hanmaum.dn.app.features.training.domain.TrainingStatus
  */
 data class MemberTrainingStatusView(
     val memberId: Long,
+    val trainingCode: TrainingCode,
     val trainingName: String,
     val status: TrainingStatus,
     val sortOrder: Int,
