@@ -30,13 +30,16 @@ import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.eq
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.web.server.ResponseStatusException
 import java.lang.reflect.Field
 import java.time.Clock
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.util.Optional
 import java.util.UUID
 
@@ -49,6 +52,8 @@ class EventRsvpServiceTest {
     @Mock private lateinit var memberRepo: MemberRepository
 
     @Mock private lateinit var announcementRepo: AnnouncementRepository
+
+    @Mock private lateinit var eventPublisher: ApplicationEventPublisher
 
     private lateinit var service: EventRsvpService
 
@@ -70,6 +75,7 @@ class EventRsvpServiceTest {
                 announcementRepo,
                 clock,
                 RsvpProperties(listOf(java.time.Duration.ofDays(7), java.time.Duration.ofDays(2))),
+                eventPublisher,
             )
     }
 
@@ -266,6 +272,56 @@ class EventRsvpServiceTest {
 
         assertEquals("새 이름", result.title)
         assertEquals(rsvp.windowStart, result.windowStart)
+        verify(eventPublisher, never()).publishEvent(any())
+    }
+
+    @Test
+    fun `updateRsvp publishes schedule change after a window update`() {
+        val rsvp = makeRsvp()
+        val newStart = rsvp.windowStart.plusDays(1)
+        val newEnd = rsvp.windowEnd.plusDays(1)
+        `when`(eventRsvpRepo.findByPublicIdAndDeletedAtIsNull(rsvp.publicId))
+            .thenReturn(Optional.of(rsvp))
+
+        service.updateRsvp(rsvp.publicId, UpdateEventRsvpRequest(windowStart = newStart, windowEnd = newEnd))
+
+        val event = argumentCaptor<EventRsvpScheduleChangedEvent>()
+        verify(eventPublisher).publishEvent(event.capture())
+        assertEquals(rsvp.id, event.firstValue.eventRsvpId)
+        assertEquals(rsvp.publicId, event.firstValue.eventPublicId)
+        assertEquals("여름 수련회", event.firstValue.eventTitle)
+        assertEquals(now.minusHours(1), event.firstValue.previousWindowStart)
+        assertEquals(now.plusHours(2), event.firstValue.previousWindowEnd)
+        assertEquals(newStart, event.firstValue.currentWindowStart)
+        assertEquals(newEnd, event.firstValue.currentWindowEnd)
+    }
+
+    @Test
+    fun `updateRsvp does not publish when a supplied window is unchanged`() {
+        val rsvp = makeRsvp()
+        `when`(eventRsvpRepo.findByPublicIdAndDeletedAtIsNull(rsvp.publicId))
+            .thenReturn(Optional.of(rsvp))
+
+        service.updateRsvp(rsvp.publicId, UpdateEventRsvpRequest(windowEnd = rsvp.windowEnd))
+
+        verify(eventPublisher, never()).publishEvent(any())
+    }
+
+    @Test
+    fun `updateRsvp does not publish for the same window expressed with a different offset`() {
+        val rsvp = makeRsvp()
+        `when`(eventRsvpRepo.findByPublicIdAndDeletedAtIsNull(rsvp.publicId))
+            .thenReturn(Optional.of(rsvp))
+
+        service.updateRsvp(
+            rsvp.publicId,
+            UpdateEventRsvpRequest(
+                windowStart = rsvp.windowStart.withOffsetSameInstant(ZoneOffset.UTC),
+                windowEnd = rsvp.windowEnd.withOffsetSameInstant(ZoneOffset.UTC),
+            ),
+        )
+
+        verify(eventPublisher, never()).publishEvent(any())
     }
 
     @Test
@@ -453,6 +509,7 @@ class EventRsvpServiceTest {
                 announcementRepo,
                 clock,
                 RsvpProperties(listOf(java.time.Duration.ofDays(2), java.time.Duration.ofDays(7))),
+                eventPublisher,
             )
         val member = makeMember()
         val active = makeRsvp(windowEnd = now.plusDays(10))

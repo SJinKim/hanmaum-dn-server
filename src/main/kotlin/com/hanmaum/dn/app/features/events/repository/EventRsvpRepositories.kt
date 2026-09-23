@@ -89,6 +89,21 @@ interface EventRsvpLogRepository : JpaRepository<EventRsvpLog, Long> {
     @Query(
         """
         SELECT l FROM EventRsvpLog l
+        JOIN FETCH l.member m
+        WHERE l.eventRsvp.id = :eventRsvpId
+          AND l.deletedAt IS NULL
+          AND m.deletedAt IS NULL
+          AND m.memberStatus = com.hanmaum.dn.app.common.domainvalue.MemberStatus.ACTIVE
+        ORDER BY l.id ASC
+        """,
+    )
+    fun findScheduleChangeRecipients(
+        @Param("eventRsvpId") eventRsvpId: Long,
+    ): List<EventRsvpLog>
+
+    @Query(
+        """
+        SELECT l FROM EventRsvpLog l
         JOIN FETCH l.eventRsvp r
         JOIN FETCH l.member m
         WHERE r.isActive = true

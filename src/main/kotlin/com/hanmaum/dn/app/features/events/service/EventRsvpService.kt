@@ -22,6 +22,7 @@ import com.hanmaum.dn.app.features.events.repository.EventRsvpRepository
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.members.service.CurrentMemberResolver
 import jakarta.persistence.EntityNotFoundException
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -39,6 +40,7 @@ class EventRsvpService(
     private val announcementRepo: AnnouncementRepository,
     private val clock: Clock,
     private val rsvpProperties: RsvpProperties,
+    private val eventPublisher: ApplicationEventPublisher,
 ) {
     @Transactional
     fun createRsvp(req: CreateEventRsvpRequest): EventRsvpDto {
@@ -75,6 +77,8 @@ class EventRsvpService(
             eventRsvpRepo
                 .findByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow { EntityNotFoundException("EventRsvp not found: $publicId") }
+        val previousWindowStart = rsvp.windowStart
+        val previousWindowEnd = rsvp.windowEnd
         val effectiveStart = req.windowStart ?: rsvp.windowStart
         val effectiveEnd = req.windowEnd ?: rsvp.windowEnd
         if (!effectiveEnd.isAfter(effectiveStart)) {
@@ -94,6 +98,22 @@ class EventRsvpService(
                             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "이벤트 카테고리의 공지만 연결할 수 있습니다.")
                         }
                     }
+        }
+        if (
+            rsvp.windowStart.toInstant() != previousWindowStart.toInstant() ||
+            rsvp.windowEnd.toInstant() != previousWindowEnd.toInstant()
+        ) {
+            eventPublisher.publishEvent(
+                EventRsvpScheduleChangedEvent(
+                    eventRsvpId = rsvp.id!!,
+                    eventPublicId = rsvp.publicId,
+                    eventTitle = rsvp.title,
+                    previousWindowStart = previousWindowStart,
+                    previousWindowEnd = previousWindowEnd,
+                    currentWindowStart = rsvp.windowStart,
+                    currentWindowEnd = rsvp.windowEnd,
+                ),
+            )
         }
         return rsvp.toDto()
     }
