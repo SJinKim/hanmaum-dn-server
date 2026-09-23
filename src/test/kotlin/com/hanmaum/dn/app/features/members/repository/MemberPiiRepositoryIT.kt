@@ -77,5 +77,26 @@ class MemberPiiRepositoryIT {
             listOf("Ara", "Min", "Anna"),
             page.content.map(Member::firstName),
         )
+
+        assertEquals(
+            listOf("Ara", "Min", "Anna"),
+            repository.findActiveMembers("im", null, null).map(Member::firstName),
+        )
+    }
+
+    @Test
+    fun `unpaged member query keeps normalized default name ordering`() {
+        repository.saveAllAndFlush(
+            listOf(
+                Member(lastName = " Ｚimmer ", firstName = "Anna"),
+                Member(lastName = "Kim", firstName = "Min"),
+            ),
+        )
+        entityManager.clear()
+
+        assertEquals(
+            listOf("Kim", " Ｚimmer "),
+            repository.findActiveMembers(null, null, null).map(Member::lastName),
+        )
     }
 }

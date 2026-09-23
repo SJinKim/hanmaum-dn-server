@@ -34,15 +34,7 @@ class MemberRepositoryImpl(
         baptism: Baptism?,
         pageable: Pageable,
     ): Page<Member> {
-        val filtered =
-            findActiveMembers(search, status, baptism)
-                .sortedWith(
-                    compareBy<Member>(
-                        { PiiCryptoContext.normalize(it.lastName) },
-                        { PiiCryptoContext.normalize(it.firstName) },
-                        { it.publicId },
-                    ),
-                )
+        val filtered = findActiveMembers(search, status, baptism)
 
         val start = pageable.offset.toInt().coerceAtMost(filtered.size)
         val end = (start + pageable.pageSize).coerceAtMost(filtered.size)
@@ -65,7 +57,13 @@ class MemberRepositoryImpl(
                             .filterNotNull()
                             .map(PiiCryptoContext::normalize)
                             .any { normalizedSearch in it }
-                }.toList()
+                }.sortedWith(
+                    compareBy<Member>(
+                        { PiiCryptoContext.normalize(it.lastName) },
+                        { PiiCryptoContext.normalize(it.firstName) },
+                        { it.publicId },
+                    ),
+                ).toList()
 
         enforceInMemoryLimit(filtered.size)
         return filtered

@@ -109,7 +109,13 @@ class MemberService(
         if (groupPublicId != null && unassigned == true) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "groupPublicId and unassigned=true cannot be combined")
         }
-        val pageable = PageRequest.of(page, size, parseSort(sort))
+        val requestedSort = parseSort(sort)
+        val pageable =
+            PageRequest.of(
+                page,
+                size,
+                if (requestedSort.isSorted) requestedSort else Sort.by("lastName", "firstName"),
+            )
         val requestedTrainingCode = parseTrainingCode(trainingCode)
         val trainingMemberIds =
             requestedTrainingCode
@@ -129,19 +135,70 @@ class MemberService(
                 .filter { ministryMemberIds == null || it.id?.let(ministryMemberIds::contains) == true }
                 .toList()
 
-        // Enrich the filtered collection in batch queries (no N+1):
+        // The name sort is already normalized in the secure repository. Related-record
+        // sort keys are loaded for all matches only when that column is requested.
+        val candidateIds = members.mapNotNull { it.id }
+        val trainingSortRows =
+            if (requestedSort.getOrderFor("latestTraining") != null && candidateIds.isNotEmpty()) {
+                userTrainingRepository.findByMemberIds(candidateIds)
+            } else {
+                emptyList()
+            }
+        val ministrySortRows =
+            if (requestedSort.getOrderFor("activeMinistries") != null && candidateIds.isNotEmpty()) {
+                ministryAssignmentRepository.findActiveByMemberIds(candidateIds)
+            } else {
+                emptyList()
+            }
+        val latestTrainingForSort =
+            trainingSortRows
+                .groupBy { it.memberId }
+                .mapValues { (_, rows) ->
+                    rows
+                        .filter { it.status == TrainingStatus.COMPLETED }
+                        .maxByOrNull { it.sortOrder }
+                        ?.trainingName
+                }
+        val ministriesForSort =
+            ministrySortRows
+                .groupBy { it.memberId }
+                .mapValues { (_, rows) -> rows.map { it.ministryName }.sorted() }
+        val sortedMembers =
+            if (requestedSort.isUnsorted) {
+                members
+            } else {
+                val membersByPublicId = members.associateBy { it.publicId.toString() }
+                sortSummaries(
+                    members.map {
+                        it.toSummaryDto(
+                            latestTraining = it.id?.let(latestTrainingForSort::get),
+                            activeMinistries = it.id?.let(ministriesForSort::get).orEmpty(),
+                        )
+                    },
+                    requestedSort,
+                ).map { membersByPublicId.getValue(it.publicId) }
+            }
+        val start = pageable.offset.coerceAtMost(sortedMembers.size.toLong()).toInt()
+        val end = (start.toLong() + pageable.pageSize).coerceAtMost(sortedMembers.size.toLong()).toInt()
+        val pageMembers = sortedMembers.subList(start, end)
+
+        // Enrich only the requested page in batch queries (no N+1):
         //  - all trainings (with status) per member = grid chips, ordered by progression
         //  - latest completed training               = highest sort_order among COMPLETED chips
         //  - active ministries                       = ministry names where end_date IS NULL
         //  - current group leadership                = tenure start where end_date IS NULL
-        val memberIds = members.mapNotNull { it.id }
+        val memberIds = pageMembers.mapNotNull { it.id }
         val trainingsByMember: Map<Long, List<SummaryTrainingDto>> =
             if (memberIds.isEmpty()) {
                 emptyMap()
             } else {
-                userTrainingRepository
-                    .findByMemberIds(memberIds)
-                    .groupBy { it.memberId }
+                (
+                    if (trainingSortRows.isNotEmpty()) {
+                        trainingSortRows.filter { it.memberId in memberIds }
+                    } else {
+                        userTrainingRepository.findByMemberIds(memberIds)
+                    }
+                ).groupBy { it.memberId }
                     .mapValues { (_, rows) ->
                         rows
                             .sortedBy { it.sortOrder }
@@ -163,9 +220,13 @@ class MemberService(
             if (memberIds.isEmpty()) {
                 emptyMap()
             } else {
-                ministryAssignmentRepository
-                    .findActiveByMemberIds(memberIds)
-                    .groupBy { it.memberId }
+                (
+                    if (ministrySortRows.isNotEmpty()) {
+                        ministrySortRows.filter { it.memberId in memberIds }
+                    } else {
+                        ministryAssignmentRepository.findActiveByMemberIds(memberIds)
+                    }
+                ).groupBy { it.memberId }
                     .mapValues { (_, rows) -> rows.map { it.ministryName }.sorted() }
             }
         val leaderSinceByMember: Map<Long, LocalDate> =
@@ -186,7 +247,7 @@ class MemberService(
             }
 
         val summaries =
-            members.map {
+            pageMembers.map {
                 it.toSummaryDto(
                     latestTraining = it.id?.let(latestTrainingByMember::get),
                     trainings = it.id?.let(trainingsByMember::get).orEmpty(),
@@ -195,7 +256,7 @@ class MemberService(
                     graduatedOn = it.id?.let(graduatedOnByMember::get),
                 )
             }
-        return PageImpl(sortSummaries(summaries, pageable.sort), pageable, summaries.size.toLong())
+        return PageImpl(summaries, pageable, members.size.toLong())
     }
 
     private fun parseTrainingCode(trainingCode: String?): TrainingCode? {
@@ -221,13 +282,15 @@ class MemberService(
         if (parts.size !in 1..2 || parts.first().isBlank()) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid sort: $value")
         }
-        val property = sortPropertyAliases[parts.first()]
-            ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported sort property: ${parts.first()}")
+        val property =
+            sortPropertyAliases[parts.first()]
+                ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported sort property: ${parts.first()}")
         val direction =
             if (parts.size == 1) {
                 Sort.Direction.ASC
             } else {
-                Sort.Direction.fromOptionalString(parts[1])
+                Sort.Direction
+                    .fromOptionalString(parts[1])
                     .orElse(null)
                     ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid sort direction: ${parts[1]}")
             }
@@ -244,9 +307,10 @@ class MemberService(
             } else {
                 listOf(Sort.Order.asc("lastName"), Sort.Order.asc("firstName"))
             }
-        val comparator = orders.fold(Comparator<MemberSummaryDto> { _, _ -> 0 }) { result, order ->
-            result.thenComparing(summaryComparator(order))
-        }
+        val comparator =
+            orders.fold(Comparator<MemberSummaryDto> { _, _ -> 0 }) { result, order ->
+                result.thenComparing(summaryComparator(order))
+            }
         return summaries.sortedWith(comparator.thenComparing(compareBy { it.publicId }))
     }
 
@@ -266,11 +330,10 @@ class MemberService(
         return if (order.direction == Sort.Direction.DESC) comparator.reversed() else comparator
     }
 
-    private fun stringComparator(
-        selector: (MemberSummaryDto) -> String?,
-    ): Comparator<MemberSummaryDto> = Comparator { first, second ->
-        compareNullable(selector(first)?.lowercase(), selector(second)?.lowercase())
-    }
+    private fun stringComparator(selector: (MemberSummaryDto) -> String?): Comparator<MemberSummaryDto> =
+        Comparator { first, second ->
+            compareNullable(selector(first)?.lowercase(), selector(second)?.lowercase())
+        }
 
     private fun <T : Comparable<T>> compareNullable(
         first: T?,

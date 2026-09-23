@@ -1,7 +1,7 @@
 package com.hanmaum.dn.app.features.training.repository
 
-import com.hanmaum.dn.app.features.training.domain.TrainingStatus
 import com.hanmaum.dn.app.features.training.domain.TrainingCode
+import com.hanmaum.dn.app.features.training.domain.TrainingStatus
 import com.hanmaum.dn.app.features.training.domain.TrainingVariant
 import com.hanmaum.dn.app.features.training.domain.UserTraining
 import org.springframework.data.jpa.repository.JpaRepository

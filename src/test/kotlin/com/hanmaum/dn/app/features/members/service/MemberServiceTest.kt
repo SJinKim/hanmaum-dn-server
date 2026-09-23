@@ -369,7 +369,37 @@ class MemberServiceTest {
 
         val result = memberService.getMembers(null, null, null, null, null, null, null, null, 0, 20)
 
-        assertEquals("QT_BASIC_SEMINAR", result.content.single().trainings.single().code)
+        assertEquals(
+            "QT_BASIC_SEMINAR",
+            result.content
+                .single()
+                .trainings
+                .single()
+                .code,
+        )
+    }
+
+    @Test
+    fun `getMembers sorts before paging and enriches only each requested page`() {
+        val zimmer = memberWithId(1L, firstName = "Anna", lastName = "Zimmer")
+        val kim = memberWithId(2L, firstName = "Min", lastName = "Kim")
+        val bach = memberWithId(3L, firstName = "Eva", lastName = "Bach")
+        `when`(memberRepository.findActiveMembers(anyOrNull(), anyOrNull(), anyOrNull()))
+            .thenReturn(listOf(zimmer, kim, bach))
+
+        val firstPage = memberService.getMembers(null, null, null, null, null, null, null, listOf("lastName,asc"), 0, 1)
+        val secondPage = memberService.getMembers(null, null, null, null, null, null, null, listOf("lastName,asc"), 1, 1)
+
+        assertEquals(listOf(bach.publicId.toString()), firstPage.content.map { it.publicId })
+        assertEquals(listOf(kim.publicId.toString()), secondPage.content.map { it.publicId })
+        assertEquals(3, firstPage.totalElements)
+        assertEquals(3, firstPage.totalPages)
+        assertEquals(1, firstPage.numberOfElements)
+        assertEquals(1, secondPage.numberOfElements)
+        verify(userTrainingRepository).findByMemberIds(listOf(3L))
+        verify(userTrainingRepository).findByMemberIds(listOf(2L))
+        verify(ministryAssignmentRepository).findActiveByMemberIds(listOf(3L))
+        verify(ministryAssignmentRepository).findActiveByMemberIds(listOf(2L))
     }
 
     @Test
