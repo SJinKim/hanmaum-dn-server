@@ -55,6 +55,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneOffset
 import java.util.UUID
 
 @Service
@@ -105,6 +106,8 @@ class MemberService(
         sort: List<String>?,
         page: Int,
         size: Int,
+        updatedFrom: LocalDate? = null,
+        updatedTo: LocalDate? = null,
     ): Page<MemberSummaryDto> {
         if (groupPublicId != null && unassigned == true) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "groupPublicId and unassigned=true cannot be combined")
@@ -133,7 +136,16 @@ class MemberService(
                 .filter { unassigned != true || it.group == null }
                 .filter { trainingMemberIds == null || it.id?.let(trainingMemberIds::contains) == true }
                 .filter { ministryMemberIds == null || it.id?.let(ministryMemberIds::contains) == true }
-                .toList()
+                .filter { member ->
+                    if (updatedFrom == null && updatedTo == null) {
+                        true
+                    } else {
+                        val updatedDate = member.updatedAt?.atOffset(ZoneOffset.UTC)?.toLocalDate()
+                        updatedDate != null &&
+                            (updatedFrom == null || !updatedDate.isBefore(updatedFrom)) &&
+                            (updatedTo == null || !updatedDate.isAfter(updatedTo))
+                    }
+                }.toList()
 
         // The name sort is already normalized in the secure repository. Related-record
         // sort keys are loaded for all matches only when that column is requested.

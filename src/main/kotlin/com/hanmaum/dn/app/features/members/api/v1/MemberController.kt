@@ -43,7 +43,7 @@ class MemberController(
 ) {
     /**
      * GET /api/v1/members
-     * Role: ADMIN — paginated member list with optional search, group, training, and ministry filters.
+     * Role: ADMIN — paginated member list with optional search, group, training, ministry, and UTC activity-date filters.
      * Default: page=0 size=20 sorted by lastName ASC.
      */
     @GetMapping
@@ -56,6 +56,8 @@ class MemberController(
         @RequestParam(required = false) unassigned: Boolean?,
         @RequestParam(required = false) trainingCode: String?,
         @RequestParam(required = false) ministryPublicId: UUID?,
+        @RequestParam(required = false) updatedFrom: LocalDate?,
+        @RequestParam(required = false) updatedTo: LocalDate?,
         /** Spring Sort syntax, e.g. `sort=groupName,asc&sort=lastName,asc`. */
         @RequestParam(required = false) sort: List<String>?,
         @RequestParam(defaultValue = "0") page: Int,
@@ -70,6 +72,8 @@ class MemberController(
                 unassigned = unassigned,
                 trainingCode = trainingCode,
                 ministryPublicId = ministryPublicId,
+                updatedFrom = updatedFrom,
+                updatedTo = updatedTo,
                 sort = sort,
                 page = page,
                 size = size,

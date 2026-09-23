@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import java.time.LocalDate
 import java.util.UUID
 import kotlin.test.Test
 
@@ -60,6 +61,8 @@ class MemberListControllerTest {
                 unassigned = false,
                 trainingCode = "QT_BASIC_SEMINAR",
                 ministryPublicId = ministryId,
+                updatedFrom = LocalDate.of(2026, 9, 1),
+                updatedTo = LocalDate.of(2026, 9, 30),
                 sort = sort,
                 page = 1,
                 size = 50,
@@ -74,6 +77,8 @@ class MemberListControllerTest {
                     .param("unassigned", "false")
                     .param("trainingCode", "QT_BASIC_SEMINAR")
                     .param("ministryPublicId", ministryId.toString())
+                    .param("updatedFrom", "2026-09-01")
+                    .param("updatedTo", "2026-09-30")
                     .param("sort", "groupName,asc")
                     .param("sort", "lastName,desc")
                     .param("page", "1")
@@ -90,6 +95,8 @@ class MemberListControllerTest {
             unassigned = false,
             trainingCode = "QT_BASIC_SEMINAR",
             ministryPublicId = ministryId,
+            updatedFrom = LocalDate.of(2026, 9, 1),
+            updatedTo = LocalDate.of(2026, 9, 30),
             sort = sort,
             page = 1,
             size = 50,

@@ -323,6 +323,67 @@ class MemberServiceTest {
     }
 
     @Test
+    fun `getMembers filters UTC activity dates before pagination with open bounds`() {
+        val before = memberWithId(1L).apply { updatedAt = Instant.parse("2026-08-31T23:59:59Z") }
+        val firstDay = memberWithId(2L).apply { updatedAt = Instant.parse("2026-09-01T00:00:00Z") }
+        val lastDay = memberWithId(3L).apply { updatedAt = Instant.parse("2026-09-30T23:59:59Z") }
+        val after = memberWithId(4L).apply { updatedAt = Instant.parse("2026-10-01T00:00:00Z") }
+        val neverUpdated = memberWithId(5L)
+        `when`(memberRepository.findActiveMembers(anyOrNull(), anyOrNull(), anyOrNull()))
+            .thenReturn(listOf(before, firstDay, lastDay, after, neverUpdated))
+
+        val range =
+            memberService.getMembers(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                1,
+                updatedFrom = LocalDate.of(2026, 9, 1),
+                updatedTo = LocalDate.of(2026, 9, 30),
+            )
+        val fromOnly =
+            memberService.getMembers(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                20,
+                updatedFrom = LocalDate.of(2026, 9, 30),
+            )
+        val toOnly =
+            memberService.getMembers(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                20,
+                updatedTo = LocalDate.of(2026, 9, 1),
+            )
+
+        assertEquals(2, range.totalElements)
+        assertEquals(2, range.totalPages)
+        assertEquals(listOf(firstDay.publicId.toString()), range.content.map { it.publicId })
+        assertEquals(setOf(lastDay.publicId.toString(), after.publicId.toString()), fromOnly.content.map { it.publicId }.toSet())
+        assertEquals(setOf(before.publicId.toString(), firstDay.publicId.toString()), toOnly.content.map { it.publicId }.toSet())
+    }
+
+    @Test
     fun `getMembers filters unassigned members and sorts by ministry then name`() {
         val media = memberWithId(1L, firstName = "민수", lastName = "김")
         val praise = memberWithId(2L, firstName = "영희", lastName = "이")
