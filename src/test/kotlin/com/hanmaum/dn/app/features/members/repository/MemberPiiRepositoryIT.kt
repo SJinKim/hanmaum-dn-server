@@ -36,22 +36,26 @@ class MemberPiiRepositoryIT {
                     firstName = "철수",
                     email = "member@example.com",
                     city = "Berlin",
+                    occupation = "개발자",
                 ),
             )
         entityManager.clear()
 
         val raw =
             jdbcTemplate.queryForMap(
-                "SELECT last_name, first_name, email, city FROM members WHERE id = ?",
+                "SELECT last_name, first_name, email, city, occupation FROM members WHERE id = ?",
                 member.id,
             )
         assertFalse(raw.values.any { value -> value.toString().contains("member@example.com") })
         assertFalse(raw.values.any { value -> value.toString().contains("Berlin") })
         assertFalse(raw.values.any { value -> value.toString().contains("철수") })
+        assertFalse(raw["occupation"].toString().contains("개발자"))
+        assertFalse(raw["occupation"].toString().isBlank())
 
         val reloaded = repository.findByEmailAndDeletedAtIsNull(" MEMBER@example.com ")
         assertEquals("철수", reloaded?.firstName)
         assertEquals("Berlin", reloaded?.city)
+        assertEquals("개발자", reloaded?.occupation)
     }
 
     @Test

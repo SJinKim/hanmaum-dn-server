@@ -15,6 +15,7 @@ import com.hanmaum.dn.app.common.pii.EncryptedGenderFieldConverter
 import com.hanmaum.dn.app.common.pii.EncryptedHouseNumberConverter
 import com.hanmaum.dn.app.common.pii.EncryptedKeycloakIdConverter
 import com.hanmaum.dn.app.common.pii.EncryptedLastNameConverter
+import com.hanmaum.dn.app.common.pii.EncryptedOccupationConverter
 import com.hanmaum.dn.app.common.pii.EncryptedPhoneNumberConverter
 import com.hanmaum.dn.app.common.pii.EncryptedProfileImageUrlConverter
 import com.hanmaum.dn.app.common.pii.EncryptedRegistrationDateConverter
@@ -62,6 +63,9 @@ class Member(
     @Convert(converter = EncryptedEmailConverter::class)
     @Column(columnDefinition = "TEXT")
     var email: String? = null,
+    @Convert(converter = EncryptedOccupationConverter::class)
+    @Column(columnDefinition = "TEXT")
+    var occupation: String? = null,
     // --- ADRESSE ---
     @Convert(converter = EncryptedStreetConverter::class)
     @Column(columnDefinition = "TEXT")

@@ -34,6 +34,8 @@ data class MemberDto(
     val houseNumber: String? = null,
     val zipCode: String? = null,
     val city: String? = null,
+    /** Occupation (직업); personal data shown only in the member detail. */
+    val occupation: String? = null,
     val registrationDate: LocalDate? = null,
     @Unredacted val memberStatus: String,
     val churchRole: String? = null,
@@ -198,6 +200,8 @@ data class CreateMemberRequest(
     val houseNumber: String? = null,
     val zipCode: String? = null,
     val city: String? = null,
+    /** Occupation (직업). */
+    val occupation: String? = null,
     val registrationDate: LocalDate? = null,
     /** Church position/title (직분), not the app access role. */
     val churchRole: String? = null,
@@ -227,6 +231,8 @@ data class UpdateMemberRequest(
     val houseNumber: String? = null,
     val zipCode: String? = null,
     val city: String? = null,
+    /** Occupation (직업); omitted or null leaves the saved value unchanged. */
+    val occupation: String? = null,
     val registrationDate: LocalDate? = null,
     @Unredacted val memberStatus: String? = null,
     val churchRole: String? = null,

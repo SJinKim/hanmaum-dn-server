@@ -181,3 +181,7 @@
 ### Paginate the sorted result and protect generated operation IDs
 - **Mistake**: Returned the full sorted member list inside `PageImpl`, loaded list enrichment for every match, changed the default name normalization, and let a second `graduate` endpoint rename an existing generated `operationId`.
 - **Rule**: For a paginated list, test with more matches than the page size and assert both page contents and metadata. Sort the complete candidate set, slice it, then enrich only that page. Keep the established normalization for default sorting. When two controller methods share a name, assign stable, distinct OpenAPI operation IDs before syncing the generated contract.
+
+### Prove persistence flows beneath mocked controller tests
+- **Mistake**: Claimed POST, GET, and PATCH occupation acceptance criteria were covered by controller tests whose mocked service returned fixed DTOs.
+- **Rule**: When a controller slice mocks the service, also test the service write and read path with assertions on the saved entity and returned DTO; a fixed mock response only proves HTTP serialization.

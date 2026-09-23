@@ -504,6 +504,33 @@ class MemberServiceTest {
     }
 
     @Test
+    fun `createMember persists occupation and getMemberByPublicId returns it`() {
+        val savedMembers = mutableListOf<Member>()
+        `when`(memberRepository.save(any<Member>())).thenAnswer { invocation ->
+            val member = invocation.getArgument<Member>(0)
+            member.id = 42L
+            savedMembers.add(member)
+            member
+        }
+
+        val created =
+            memberService.createMember(
+                CreateMemberRequest(lastName = "김", firstName = "철수", occupation = "개발자"),
+            )
+
+        val saved = savedMembers.single()
+        assertEquals("개발자", saved.occupation)
+        assertEquals("개발자", created.occupation)
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(saved.publicId))
+            .thenReturn(Optional.of(saved))
+
+        val read = memberService.getMemberByPublicId(saved.publicId)
+
+        assertEquals(saved.publicId.toString(), read.publicId)
+        assertEquals("개발자", read.occupation)
+    }
+
+    @Test
     fun `createMember assigns group when groupPublicId provided`() {
         val grp = group(5L, "다니엘조")
         val req = CreateMemberRequest(lastName = "김", firstName = "철수", groupPublicId = grp.publicId.toString())
@@ -548,6 +575,23 @@ class MemberServiceTest {
         )
 
         verify(churchGroupRepository, never()).findByPublicIdAndDeletedAtIsNull(any<UUID>())
+    }
+
+    @Test
+    fun `updateMember keeps occupation when omitted and persists a supplied change`() {
+        val member = memberWithId(1L)
+        member.occupation = "개발자"
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+
+        val unchanged = memberService.updateMember(member.publicId, UpdateMemberRequest(city = "서울"))
+        assertEquals("개발자", member.occupation)
+        assertEquals("개발자", unchanged.occupation)
+
+        val changed = memberService.updateMember(member.publicId, UpdateMemberRequest(occupation = "교사"))
+        assertEquals("교사", member.occupation)
+        assertEquals("교사", changed.occupation)
     }
 
     @Test

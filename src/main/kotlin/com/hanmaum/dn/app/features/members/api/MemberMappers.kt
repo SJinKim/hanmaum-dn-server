@@ -61,6 +61,7 @@ fun CreateMemberRequest.toEntity(): Member =
         houseNumber = this.houseNumber,
         zipCode = this.zipCode,
         city = this.city,
+        occupation = this.occupation,
         registrationDate = this.registrationDate,
         churchRole = this.churchRole,
         baptism = mapBaptism(this.baptism),
@@ -93,6 +94,7 @@ fun Member.applyPatch(request: UpdateMemberRequest) {
     request.houseNumber?.let { this.houseNumber = it }
     request.zipCode?.let { this.zipCode = it }
     request.city?.let { this.city = it }
+    request.occupation?.let { this.occupation = it }
     request.registrationDate?.let { this.registrationDate = it }
     request.churchRole?.let { this.churchRole = it }
     request.baptism?.let { this.baptism = mapBaptism(it) }
@@ -137,6 +139,7 @@ fun Member.toDto(
         houseNumber = this.houseNumber,
         zipCode = this.zipCode,
         city = this.city,
+        occupation = this.occupation,
         registrationDate = this.registrationDate,
         memberStatus = this.memberStatus.name,
         churchRole = this.churchRole,

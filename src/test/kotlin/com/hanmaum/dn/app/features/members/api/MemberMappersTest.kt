@@ -118,6 +118,7 @@ class MemberMappersTest {
                 houseNumber = "1",
                 zipCode = "12345",
                 city = "서울",
+                occupation = "개발자",
                 churchRole = "청년부원",
             )
         val entity = req.toEntity()
@@ -134,6 +135,7 @@ class MemberMappersTest {
         assertEquals("1", entity.houseNumber)
         assertEquals("12345", entity.zipCode)
         assertEquals("서울", entity.city)
+        assertEquals("개발자", entity.occupation)
         assertEquals("청년부원", entity.churchRole)
     }
 
@@ -155,6 +157,7 @@ class MemberMappersTest {
                 houseNumber = "12a",
                 zipCode = "99999",
                 city = "부산",
+                occupation = "교사",
                 memberStatus = "ACTIVE",
                 churchRole = "리더",
             )
@@ -171,6 +174,7 @@ class MemberMappersTest {
         assertEquals("12a", member.houseNumber)
         assertEquals("99999", member.zipCode)
         assertEquals("부산", member.city)
+        assertEquals("교사", member.occupation)
         assertEquals(MemberStatus.ACTIVE, member.memberStatus)
         assertEquals("리더", member.churchRole)
     }
@@ -208,9 +212,11 @@ class MemberMappersTest {
     fun `applyPatch does not change fields when corresponding request field is null`() {
         val member = Member(lastName = "김", firstName = "철수", memberStatus = MemberStatus.ACTIVE)
         member.city = "서울"
+        member.occupation = "개발자"
         val req = UpdateMemberRequest() // all null
         member.applyPatch(req)
         assertEquals("서울", member.city) // unchanged
+        assertEquals("개발자", member.occupation)
         assertEquals("김", member.lastName) // unchanged
     }
 
@@ -235,6 +241,7 @@ class MemberMappersTest {
                 houseNumber = "5",
                 zipCode = "12345",
                 city = "서울",
+                occupation = "개발자",
                 churchRole = "팀장",
             )
         val dto = member.toDto()
@@ -247,6 +254,7 @@ class MemberMappersTest {
         assertEquals("5", dto.houseNumber)
         assertEquals("12345", dto.zipCode)
         assertEquals("서울", dto.city)
+        assertEquals("개발자", dto.occupation)
         assertEquals("팀장", dto.churchRole)
         assertNull(dto.groupName)
     }

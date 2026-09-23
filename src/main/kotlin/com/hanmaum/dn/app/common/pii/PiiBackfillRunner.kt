@@ -168,6 +168,7 @@ class PiiBackfillRunner(
                 "house_number",
                 "zip_code",
                 "city",
+                "occupation",
                 "registration_date",
                 "role",
                 "baptism",

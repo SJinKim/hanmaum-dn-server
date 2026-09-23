@@ -72,6 +72,9 @@ class EncryptedZipCodeConverter : EncryptedStringConverter("members.zip_code")
 class EncryptedCityConverter : EncryptedStringConverter("members.city")
 
 @Converter
+class EncryptedOccupationConverter : EncryptedStringConverter("members.occupation")
+
+@Converter
 class EncryptedRegistrationDateConverter : EncryptedLocalDateConverter("members.registration_date")
 
 @Converter
