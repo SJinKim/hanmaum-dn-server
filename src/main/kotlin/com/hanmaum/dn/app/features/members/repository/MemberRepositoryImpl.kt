@@ -34,6 +34,18 @@ class MemberRepositoryImpl(
         baptism: Baptism?,
         pageable: Pageable,
     ): Page<Member> {
+        val filtered = findActiveMembers(search, status, baptism)
+
+        val start = pageable.offset.toInt().coerceAtMost(filtered.size)
+        val end = (start + pageable.pageSize).coerceAtMost(filtered.size)
+        return PageImpl(filtered.subList(start, end), pageable, filtered.size.toLong())
+    }
+
+    override fun findActiveMembers(
+        search: String?,
+        status: MemberStatus?,
+        baptism: Baptism?,
+    ): List<Member> {
         val normalizedSearch = search?.takeIf(String::isNotBlank)?.let(PiiCryptoContext::normalize)
         val filtered =
             activeMembers(status)
@@ -54,9 +66,7 @@ class MemberRepositoryImpl(
                 ).toList()
 
         enforceInMemoryLimit(filtered.size)
-        val start = pageable.offset.toInt().coerceAtMost(filtered.size)
-        val end = (start + pageable.pageSize).coerceAtMost(filtered.size)
-        return PageImpl(filtered.subList(start, end), pageable, filtered.size.toLong())
+        return filtered
     }
 
     override fun findSimilarNames(

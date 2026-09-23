@@ -103,8 +103,9 @@ data class MemberNameDto(
     val discriminator: String? = null,
 )
 
-/** A member's training as shown on the grid chip: catalog name + status (IN_PROGRESS | COMPLETED). */
+/** A member's training as shown on the grid chip: stable catalog code, name, and status. */
 data class SummaryTrainingDto(
+    val code: String,
     val name: String,
     val status: String,
 )

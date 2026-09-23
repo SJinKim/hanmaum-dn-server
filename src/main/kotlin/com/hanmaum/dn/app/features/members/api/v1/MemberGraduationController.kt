@@ -6,6 +6,7 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.GraduationDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.GraduationStateDto
 import com.hanmaum.dn.app.features.members.domain.MemberGraduation
 import com.hanmaum.dn.app.features.members.service.MemberGraduationService
+import io.swagger.v3.oas.annotations.Operation
 import jakarta.validation.Valid
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
@@ -32,6 +33,7 @@ class MemberGraduationController(
     private val graduationService: MemberGraduationService,
 ) {
     @PostMapping
+    @Operation(operationId = "graduate")
     fun graduate(
         @PathVariable publicId: UUID,
         @Valid @RequestBody request: CreateGraduationRequest,

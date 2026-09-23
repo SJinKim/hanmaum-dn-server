@@ -14,6 +14,7 @@ import com.hanmaum.dn.app.features.newcomers.domain.NewcomerLifecycle
 import com.hanmaum.dn.app.features.newcomers.domain.PostAssignmentAttendance
 import com.hanmaum.dn.app.features.newcomers.service.NewcomerGraduationService
 import com.hanmaum.dn.app.features.newcomers.service.NewcomerService
+import io.swagger.v3.oas.annotations.Operation
 import jakarta.validation.Valid
 import org.springframework.data.domain.Page
 import org.springframework.http.HttpStatus
@@ -112,6 +113,7 @@ class NewcomerController(
     ) = service.softDelete(publicId)
 
     @PostMapping("/{publicId}/graduate")
+    @Operation(operationId = "graduateNewcomer")
     @NewcomerWriteAccess
     fun graduate(
         @PathVariable publicId: UUID,

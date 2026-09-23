@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.training.repository
 
+import com.hanmaum.dn.app.features.training.domain.TrainingCode
 import com.hanmaum.dn.app.features.training.domain.TrainingStatus
 
 /**
@@ -9,6 +10,7 @@ import com.hanmaum.dn.app.features.training.domain.TrainingStatus
  */
 data class MemberTrainingStatusView(
     val memberId: Long,
+    val trainingCode: TrainingCode,
     val trainingName: String,
     val status: TrainingStatus,
     val sortOrder: Int,

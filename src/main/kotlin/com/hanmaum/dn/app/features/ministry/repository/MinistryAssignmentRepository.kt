@@ -75,6 +75,20 @@ interface MinistryAssignmentRepository :
         @Param("memberIds") memberIds: Collection<Long>,
     ): List<MemberMinistryView>
 
+    /** Internal member ids with an active assignment in the ministry identified by [ministryPublicId]. */
+    @Query(
+        """
+        SELECT DISTINCT a.member.id
+        FROM MinistryAssignment a
+        WHERE a.ministry.publicId = :ministryPublicId
+          AND a.endDate IS NULL
+          AND a.deletedAt IS NULL
+        """,
+    )
+    fun findActiveMemberIdsByMinistryPublicId(
+        @Param("ministryPublicId") ministryPublicId: java.util.UUID,
+    ): List<Long>
+
     // NOTE: deliberately NOT clearAutomatically=true. Clearing the persistence context
     // here detaches the already-loaded `member` (and its lazy `group`), which made
     // MemberService.replaceMemberMinistries throw LazyInitializationException when it

@@ -177,3 +177,7 @@
   the doc records a past state and drifts the same way the clone does; and before
   opening a sync PR, diff the generated file against the remote (`git diff
   origin/main -- api/openapi.yaml`) and skip the PR when it is empty.
+
+### Paginate the sorted result and protect generated operation IDs
+- **Mistake**: Returned the full sorted member list inside `PageImpl`, loaded list enrichment for every match, changed the default name normalization, and let a second `graduate` endpoint rename an existing generated `operationId`.
+- **Rule**: For a paginated list, test with more matches than the page size and assert both page contents and metadata. Sort the complete candidate set, slice it, then enrich only that page. Keep the established normalization for default sorting. When two controller methods share a name, assign stable, distinct OpenAPI operation IDs before syncing the generated contract.
