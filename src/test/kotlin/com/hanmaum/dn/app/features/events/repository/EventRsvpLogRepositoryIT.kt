@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.events.repository
 
+import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.common.pii.PiiCryptoConfiguration
 import com.hanmaum.dn.app.features.events.domain.EventRsvp
 import com.hanmaum.dn.app.features.events.domain.EventRsvpLog
@@ -112,6 +113,35 @@ class EventRsvpLogRepositoryIT {
         entityManager.clear()
 
         val result = repository.findReminderCandidates(now)
+
+        assertEquals(listOf(expected.publicId), result.map { it.publicId })
+    }
+
+    @Test
+    fun `schedule change recipients include only active non-deleted responders`() {
+        val now = OffsetDateTime.of(2026, 8, 30, 10, 0, 0, 0, ZoneOffset.UTC)
+        val activeMember = persistMember("활성").also { it.memberStatus = MemberStatus.ACTIVE }
+        val pendingMember = persistMember("대기")
+        val deletedMember =
+            persistMember("삭제").also {
+                it.memberStatus = MemberStatus.ACTIVE
+                it.deletedAt = now.toInstant()
+            }
+        val rsvp = persistRsvp("일정 변경", now.plusDays(7))
+        val otherRsvp = persistRsvp("다른 행사", now.plusDays(7))
+        val expected = persistResponse(rsvp, activeMember, RsvpStatus.GOING)
+        persistResponse(rsvp, pendingMember, RsvpStatus.MAYBE)
+        persistResponse(rsvp, deletedMember, RsvpStatus.NOT_GOING)
+        persistResponse(otherRsvp, activeMember, RsvpStatus.GOING)
+        persistResponse(
+            rsvp,
+            persistMember("응답삭제").also { it.memberStatus = MemberStatus.ACTIVE },
+            RsvpStatus.GOING,
+        ).deletedAt = now.toInstant()
+        entityManager.flush()
+        entityManager.clear()
+
+        val result = repository.findScheduleChangeRecipients(rsvp.id!!)
 
         assertEquals(listOf(expected.publicId), result.map { it.publicId })
     }
