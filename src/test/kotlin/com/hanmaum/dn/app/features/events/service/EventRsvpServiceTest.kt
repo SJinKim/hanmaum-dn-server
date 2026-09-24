@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.events.service
 
 import com.hanmaum.dn.app.common.domainvalue.AnnouncementCategory
+import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.announcements.domain.Announcement
 import com.hanmaum.dn.app.features.announcements.repository.AnnouncementRepository
 import com.hanmaum.dn.app.features.events.api.v1.dto.CreateEventRsvpRequest
@@ -11,6 +12,7 @@ import com.hanmaum.dn.app.features.events.domain.EventRsvpLog
 import com.hanmaum.dn.app.features.events.domain.RsvpStatus
 import com.hanmaum.dn.app.features.events.repository.EventRsvpLogRepository
 import com.hanmaum.dn.app.features.events.repository.EventRsvpRepository
+import com.hanmaum.dn.app.features.events.repository.RsvpResponder
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
@@ -401,6 +403,58 @@ class EventRsvpServiceTest {
     }
 
     // ─── getActiveRsvps ───────────────────────────────────────────────────────
+
+    @Test
+    fun `pending summary counts distinct people across open RSVPs`() {
+        val first = makeRsvp(id = 1L, title = "첫 행사")
+        val second = makeRsvp(id = 2L, title = "둘째 행사")
+        `when`(eventRsvpRepo.findActiveNow(now)).thenReturn(listOf(first, second))
+        `when`(memberRepo.countByMemberStatusAndDeletedAtIsNull(MemberStatus.ACTIVE)).thenReturn(3L)
+        `when`(eventRsvpLogRepo.findEligibleResponders(listOf(1L, 2L))).thenReturn(
+            listOf(
+                RsvpResponder(1L, 10L),
+                RsvpResponder(1L, 20L),
+                RsvpResponder(2L, 20L),
+                RsvpResponder(2L, 30L),
+            ),
+        )
+
+        val result = service.getPendingSummary()
+
+        assertEquals(2L, result.totalPending)
+        assertEquals(listOf("첫 행사", "둘째 행사"), result.rsvps.map { it.title })
+        assertEquals(listOf(3L, 3L), result.rsvps.map { it.expected })
+        assertEquals(listOf(2L, 2L), result.rsvps.map { it.responded })
+        assertEquals(listOf(1L, 1L), result.rsvps.map { it.pending })
+        assertEquals(first.publicId.toString(), result.rsvps[0].publicId)
+        assertEquals(first.windowEnd, result.rsvps[0].windowEnd)
+    }
+
+    @Test
+    fun `pending summary returns zero when no RSVP window is open`() {
+        `when`(eventRsvpRepo.findActiveNow(now)).thenReturn(emptyList())
+
+        val result = service.getPendingSummary()
+
+        assertEquals(0L, result.totalPending)
+        assertEquals(0, result.rsvps.size)
+        verify(memberRepo, never()).countByMemberStatusAndDeletedAtIsNull(any())
+        verify(eventRsvpLogRepo, never()).findEligibleResponders(any())
+    }
+
+    @Test
+    fun `pending summary counts every eligible member when nobody responded`() {
+        val rsvp = makeRsvp()
+        `when`(eventRsvpRepo.findActiveNow(now)).thenReturn(listOf(rsvp))
+        `when`(memberRepo.countByMemberStatusAndDeletedAtIsNull(MemberStatus.ACTIVE)).thenReturn(3L)
+        `when`(eventRsvpLogRepo.findEligibleResponders(listOf(rsvp.id!!))).thenReturn(emptyList())
+
+        val result = service.getPendingSummary()
+
+        assertEquals(3L, result.totalPending)
+        assertEquals(0L, result.rsvps.single().responded)
+        assertEquals(3L, result.rsvps.single().pending)
+    }
 
     @Test
     fun `getActiveRsvps returns only events with open window`() {

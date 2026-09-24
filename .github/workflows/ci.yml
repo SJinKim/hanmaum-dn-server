@@ -57,7 +57,10 @@ jobs:
       - name: Test
         run: |
           ./gradlew test --no-daemon
-          ./gradlew test -PincludeIntegration --tests "com.hanmaum.dn.app.features.newcomers.repository.NewcomerProfileRepositoryIT" --no-daemon
+          ./gradlew test -PincludeIntegration \
+            --tests "com.hanmaum.dn.app.features.newcomers.repository.NewcomerProfileRepositoryIT" \
+            --tests "com.hanmaum.dn.app.features.events.repository.EventRsvpLogRepositoryIT" \
+            --no-daemon
         env:
           SPRING_PROFILES_ACTIVE: test
           SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/hanmaum_test

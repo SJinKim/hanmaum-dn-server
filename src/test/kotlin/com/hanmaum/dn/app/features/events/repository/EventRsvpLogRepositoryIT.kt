@@ -6,6 +6,7 @@ import com.hanmaum.dn.app.features.events.domain.EventRsvp
 import com.hanmaum.dn.app.features.events.domain.EventRsvpLog
 import com.hanmaum.dn.app.features.events.domain.RsvpStatus
 import com.hanmaum.dn.app.features.members.domain.Member
+import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import jakarta.persistence.EntityManager
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Tag
@@ -27,6 +28,8 @@ import java.util.UUID
 @Tag("integration")
 class EventRsvpLogRepositoryIT {
     @Autowired lateinit var repository: EventRsvpLogRepository
+
+    @Autowired lateinit var memberRepository: MemberRepository
 
     @Autowired lateinit var entityManager: EntityManager
 
@@ -144,6 +147,37 @@ class EventRsvpLogRepositoryIT {
         val result = repository.findScheduleChangeRecipients(rsvp.id!!)
 
         assertEquals(listOf(expected.publicId), result.map { it.publicId })
+    }
+
+    @Test
+    fun `pending summary responders include only active non-deleted members and responses`() {
+        val now = OffsetDateTime.of(2026, 8, 30, 10, 0, 0, 0, ZoneOffset.UTC)
+        val rsvp = persistRsvp("열린 행사", now.plusDays(7))
+        val otherRsvp = persistRsvp("다른 행사", now.plusDays(7))
+        val responded = persistMember("응답").also { it.memberStatus = MemberStatus.ACTIVE }
+        val unanswered = persistMember("미응답").also { it.memberStatus = MemberStatus.ACTIVE }
+        val erasedResponse = persistMember("응답삭제").also { it.memberStatus = MemberStatus.ACTIVE }
+        val inactive = persistMember("비활성").also { it.memberStatus = MemberStatus.INACTIVE }
+        val pending = persistMember("승인대기")
+        val deleted =
+            persistMember("회원삭제").also {
+                it.memberStatus = MemberStatus.ACTIVE
+                it.deletedAt = now.toInstant()
+            }
+        persistResponse(rsvp, responded, RsvpStatus.GOING)
+        persistResponse(otherRsvp, unanswered, RsvpStatus.GOING)
+        persistResponse(rsvp, erasedResponse, RsvpStatus.MAYBE).deletedAt = now.toInstant()
+        persistResponse(rsvp, inactive, RsvpStatus.GOING)
+        persistResponse(rsvp, pending, RsvpStatus.GOING)
+        persistResponse(rsvp, deleted, RsvpStatus.GOING)
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals(3L, memberRepository.countByMemberStatusAndDeletedAtIsNull(MemberStatus.ACTIVE))
+        assertEquals(
+            listOf(RsvpResponder(rsvp.id!!, responded.id!!)),
+            repository.findEligibleResponders(listOf(rsvp.id!!)),
+        )
     }
 
     private fun persistMember(firstName: String): Member = Member(lastName = "김", firstName = firstName).also(entityManager::persist)

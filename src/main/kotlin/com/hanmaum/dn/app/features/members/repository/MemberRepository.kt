@@ -33,6 +33,8 @@ interface MemberRepository :
 
     fun countByDeletedAtIsNull(): Long
 
+    fun countByMemberStatusAndDeletedAtIsNull(memberStatus: MemberStatus): Long
+
     fun findAllByDeleteEntryAtLessThanEqualAndDeletedAtIsNotNull(deleteEntryAt: Instant): List<Member>
 
     fun findByPublicId(publicId: UUID): Optional<Member>
