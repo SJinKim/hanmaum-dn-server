@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.groups.repository
 
 import com.hanmaum.dn.app.features.groups.domain.GroupLeader
+import org.springframework.data.jpa.repository.EntityGraph
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
@@ -8,6 +9,10 @@ import org.springframework.stereotype.Repository
 
 @Repository
 interface GroupLeaderRepository : JpaRepository<GroupLeader, Long> {
+    /** Latest retained tenure, including a closed one; tie-break equal start dates by row id. */
+    @EntityGraph(attributePaths = ["group"])
+    fun findFirstByMemberIdAndDeletedAtIsNullOrderByStartDateDescIdDesc(memberId: Long): GroupLeader?
+
     /** The group's current leader tenure, or null when the group has never had one / is vacant. */
     @Query(
         """
