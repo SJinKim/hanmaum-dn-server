@@ -31,6 +31,32 @@ class NewcomerProfileRepositoryIT {
     @Autowired lateinit var jdbcTemplate: JdbcTemplate
 
     @Test
+    fun `import fingerprints match the JPA varchar mapping after Flyway migration`() {
+        val columns =
+            jdbcTemplate
+                .query(
+                    """
+                    SELECT column_name, data_type, character_maximum_length
+                    FROM information_schema.columns
+                    WHERE table_schema = current_schema()
+                      AND table_name = 'newcomer_import_records'
+                      AND column_name IN ('source_fingerprint', 'payload_fingerprint')
+                    """.trimIndent(),
+                ) { resultSet, _ ->
+                    resultSet.getString("column_name") to
+                        (resultSet.getString("data_type") to resultSet.getInt("character_maximum_length"))
+                }.toMap()
+
+        assertEquals(
+            mapOf(
+                "source_fingerprint" to ("character varying" to 64),
+                "payload_fingerprint" to ("character varying" to 64),
+            ),
+            columns,
+        )
+    }
+
+    @Test
     fun `profile is one-to-one with member and encrypts newcomer PII`() {
         val member = Member(lastName = "김", firstName = "새봄")
         entityManager.persist(member)
