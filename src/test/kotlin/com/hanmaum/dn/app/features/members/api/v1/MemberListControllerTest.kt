@@ -102,4 +102,29 @@ class MemberListControllerTest {
             size = 50,
         )
     }
+
+    @Test
+    fun `GET members keeps a single sort value whole instead of splitting it at the comma`() {
+        mockMvc
+            .perform(
+                get("/api/v1/members")
+                    .param("sort", "lastName,asc")
+                    .with(jwt().authorities(SimpleGrantedAuthority("ROLE_ADMIN"))),
+            ).andExpect(status().isOk)
+
+        verify(memberService).getMembers(
+            search = null,
+            status = null,
+            baptism = null,
+            groupPublicId = null,
+            unassigned = null,
+            trainingCode = null,
+            ministryPublicId = null,
+            updatedFrom = null,
+            updatedTo = null,
+            sort = listOf("lastName,asc"),
+            page = 0,
+            size = 20,
+        )
+    }
 }
