@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased] — 2026-03-30
 
+### Fixed
+- HDN-202: Align newcomer import fingerprint column types with Hibernate's VARCHAR(64) mapping so schema validation can start the app.
+
 ### Added
 - HDN-197: Admins can create, view, and update encrypted member occupation (직업) in the detail API.
 - HDN-136: Members who have responded to an event RSVP are notified after its schedule changes, with the previous and revised period in the notification

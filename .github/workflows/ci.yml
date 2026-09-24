@@ -55,7 +55,9 @@ jobs:
         run: ./gradlew compileKotlin compileTestKotlin --no-daemon
 
       - name: Test
-        run: ./gradlew test --no-daemon
+        run: |
+          ./gradlew test --no-daemon
+          ./gradlew test -PincludeIntegration --tests "com.hanmaum.dn.app.features.newcomers.repository.NewcomerProfileRepositoryIT" --no-daemon
         env:
           SPRING_PROFILES_ACTIVE: test
           SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/hanmaum_test
