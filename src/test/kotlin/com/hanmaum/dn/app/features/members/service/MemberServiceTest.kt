@@ -475,6 +475,7 @@ class MemberServiceTest {
 
         assertEquals(true, result.isGroupLeader)
         assertEquals(LocalDate.of(2026, 1, 15), result.groupLeaderSince)
+        assertNull(result.lastGroupLeaderTenure)
     }
 
     @Test
@@ -488,6 +489,49 @@ class MemberServiceTest {
 
         assertEquals(false, result.isGroupLeader)
         assertNull(result.groupLeaderSince)
+        assertNull(result.lastGroupLeaderTenure)
+    }
+
+    @Test
+    fun `getMemberByPublicId includes the current tenure's group and open end date`() {
+        val member = memberWithId(1L)
+        val churchGroup = group(2L, "다니엘조")
+        val start = LocalDate.of(2026, 1, 15)
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(groupLeaderRepository.findActiveByMemberIds(listOf(1L)))
+            .thenReturn(listOf(MemberLeadershipView(1L, start)))
+        `when`(groupLeaderRepository.findFirstByMemberIdAndDeletedAtIsNullOrderByStartDateDescIdDesc(1L))
+            .thenReturn(GroupLeader(churchGroup, member, start))
+
+        val result = memberService.getMemberByPublicId(member.publicId)
+
+        assertEquals(true, result.isGroupLeader)
+        assertEquals(start, result.groupLeaderSince)
+        assertEquals(churchGroup.publicId.toString(), result.lastGroupLeaderTenure?.groupPublicId)
+        assertEquals("다니엘조", result.lastGroupLeaderTenure?.groupName)
+        assertEquals(start, result.lastGroupLeaderTenure?.startDate)
+        assertNull(result.lastGroupLeaderTenure?.endDate)
+    }
+
+    @Test
+    fun `getMemberByPublicId keeps an ended tenure after leadership and group membership change`() {
+        val member = memberWithId(1L).apply { group = group(3L, "새 조") }
+        val formerGroup = group(2L, "이전 조")
+        val start = LocalDate.of(2026, 1, 15)
+        val end = LocalDate.of(2026, 9, 24)
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(groupLeaderRepository.findFirstByMemberIdAndDeletedAtIsNullOrderByStartDateDescIdDesc(1L))
+            .thenReturn(GroupLeader(formerGroup, member, start, end))
+
+        val result = memberService.getMemberByPublicId(member.publicId)
+
+        assertEquals(false, result.isGroupLeader)
+        assertNull(result.groupLeaderSince)
+        assertEquals(member.group?.publicId.toString(), result.groupPublicId)
+        assertEquals(formerGroup.publicId.toString(), result.lastGroupLeaderTenure?.groupPublicId)
+        assertEquals("이전 조", result.lastGroupLeaderTenure?.groupName)
+        assertEquals(start, result.lastGroupLeaderTenure?.startDate)
+        assertEquals(end, result.lastGroupLeaderTenure?.endDate)
     }
 
     // --- createMember ---

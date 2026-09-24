@@ -14,6 +14,7 @@ import com.hanmaum.dn.app.features.members.api.toNameDto
 import com.hanmaum.dn.app.features.members.api.toResponse
 import com.hanmaum.dn.app.features.members.api.toSummaryDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.GroupLeaderTenureDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberNameDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
@@ -379,7 +380,20 @@ class MemberService(
         val memberId = member.id!!
         val trainings = userTrainingRepository.findByMemberId(memberId).map { it.toDto() }
         val ministries = ministryAssignmentRepository.findByMemberId(memberId).map { it.toHistoryDto() }
-        return member.toDto(trainings, ministries, groupLeaderSince(memberId), graduatedOn(memberId))
+        val lastTenure =
+            groupLeaderRepository
+                .findFirstByMemberIdAndDeletedAtIsNullOrderByStartDateDescIdDesc(memberId)
+                ?.let { tenure ->
+                    GroupLeaderTenureDto(
+                        groupPublicId = tenure.group.publicId.toString(),
+                        groupName = tenure.group.name,
+                        startDate = tenure.startDate,
+                        endDate = tenure.endDate,
+                    )
+                }
+        return member
+            .toDto(trainings, ministries, groupLeaderSince(memberId), graduatedOn(memberId))
+            .copy(lastGroupLeaderTenure = lastTenure)
     }
 
     /**
