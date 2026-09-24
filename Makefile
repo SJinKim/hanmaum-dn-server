@@ -18,6 +18,10 @@ build-backend:
 build-keycloak:
 	$(DC) up -d --build hanmaumApp-keycloak
 
+# Generate and sync OpenAPI against a disposable PostgreSQL container.
+openapi-sync:
+	./scripts/sync-openapi-to-ops.sh
+
 # ── Security: local PII keyring ──────────────────────────────────────────────
 pii-keyring:
 	./scripts/generate-pii-keyring.sh

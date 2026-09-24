@@ -1,3 +1,7 @@
+import java.net.BindException
+import java.net.InetSocketAddress
+import java.net.ServerSocket
+
 plugins {
     kotlin("jvm") version "2.2.21"
     kotlin("plugin.spring") version "2.2.21"
@@ -114,32 +118,88 @@ tasks.withType<Test> {
     }
 }
 
+val openApiPort = 8089
+val openApiDbPort = providers.gradleProperty("openApiDbPort")
+val openApiEnvFile = rootProject.file(providers.gradleProperty("openApiEnvFile").orElse(".env").get())
+val opsDir = rootProject.file(providers.gradleProperty("opsDir").orElse("../hanmaum-dn-ops").get())
+
 openApi {
-    apiDocsUrl.set("http://localhost:8080/v3/api-docs.yaml")
+    apiDocsUrl.set("http://127.0.0.1:$openApiPort/v3/api-docs.yaml")
     outputDir.set(layout.buildDirectory.dir("openapi"))
     outputFileName.set("openapi.yaml")
     waitTimeInSeconds.set(60)
     customBootRun {
-        systemProperties.set(mapOf("spring.profiles.active" to "dev"))
-        val envFile = rootProject.file(".env")
-        if (envFile.exists()) {
-            val envVars =
-                envFile
+        val envVars =
+            if (openApiEnvFile.isFile) {
+                openApiEnvFile
                     .readLines()
                     .filter { it.isNotBlank() && !it.startsWith("#") && it.contains("=") }
                     .associate { line ->
                         val idx = line.indexOf("=")
                         line.substring(0, idx).trim() to line.substring(idx + 1).trim()
                     }
-            environment.set(envVars)
+            } else {
+                emptyMap()
+            }
+        environment.set(envVars + ("DB_HANMAUM_DN_PORT" to openApiDbPort.getOrElse("5433")))
+        systemProperties.set(
+            mapOf(
+                "spring.profiles.active" to "dev",
+                "server.port" to openApiPort.toString(),
+                "spring.datasource.url" to
+                    "jdbc:postgresql://127.0.0.1:${openApiDbPort.getOrElse("5433")}/${envVars["DB_HANMAUM_DN_NAME"] ?: ""}",
+            ),
+        )
+    }
+}
+
+val validateOpenApiSync =
+    tasks.register("validateOpenApiSync") {
+        doLast {
+            check(opsDir.resolve(".git").exists() && opsDir.resolve("api/openapi.yaml").isFile) {
+                "Ops directory must be an existing hanmaum-dn-ops Git checkout with api/openapi.yaml: $opsDir. " +
+                    "Pass -PopsDir=<path> when running from a worktree."
+            }
+        }
+    }
+
+tasks.named("forkedSpringBootRun") {
+    mustRunAfter(validateOpenApiSync)
+    doFirst {
+        val dbPort = openApiDbPort.orNull?.toIntOrNull()
+        check(dbPort != null && dbPort in 1..65535 && dbPort != 5433) {
+            "OpenAPI generation requires -PopenApiDbPort=<disposable PostgreSQL port> (not shared dev port 5433)."
+        }
+        check(openApiEnvFile.isFile) {
+            "OpenAPI environment file not found: $openApiEnvFile. Pass -PopenApiEnvFile=<path>."
+        }
+        try {
+            ServerSocket().use { it.bind(InetSocketAddress("127.0.0.1", openApiPort)) }
+        } catch (e: BindException) {
+            throw GradleException("OpenAPI port $openApiPort is already in use; stop that process before generating the spec.", e)
         }
     }
 }
 
-// Run after generateOpenApiDocs to push the spec into the ops repo.
-// Requires Docker services (Postgres + Keycloak) to be up.
+tasks.named("generateOpenApiDocs") {
+    outputs.upToDateWhen { false }
+    doLast {
+        val spec =
+            layout.buildDirectory
+                .file("openapi/openapi.yaml")
+                .get()
+                .asFile
+        val generatedUrl = "url: http://127.0.0.1:$openApiPort"
+        val contents = spec.readText()
+        check(contents.contains(generatedUrl)) {
+            "Generated OpenAPI spec has an unexpected server URL; refusing to sync: $spec"
+        }
+        spec.writeText(contents.replaceFirst(generatedUrl, "url: http://localhost:8080"))
+    }
+}
+
 tasks.register<Copy>("syncOpenApiToOps") {
-    dependsOn("generateOpenApiDocs")
+    dependsOn(validateOpenApiSync, "generateOpenApiDocs")
     from(layout.buildDirectory.file("openapi/openapi.yaml"))
-    into("../hanmaum-dn-ops/api")
+    into(opsDir.resolve("api"))
 }

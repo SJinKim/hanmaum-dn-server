@@ -21,10 +21,17 @@ description: Use when adding, changing, or removing REST endpoints, DTOs, or any
    - An endpoint's path or method changed
    - An error code's meaning changed
 3. **Implement** controller, service, DTO, and tests in `hanmaum-dn-server`.
-4. **Regenerate the spec locally:** `./gradlew generateOpenApiDocs`.
-5. **Sync manually to ops:** copy `build/openapi/openapi.yaml` into
-   `hanmaum-dn-ops/api/openapi.yaml`, commit in the ops repo with the same
-   HDN ticket ID.
+4. **Generate and sync with a disposable database:** run
+   `OPS_DIR=/absolute/path/to/hanmaum-dn-ops OPENAPI_ENV_FILE=/absolute/path/to/.env make openapi-sync`
+   from the server checkout. With sibling repos and a local `.env`, omit both variables.
+   The command starts temporary PostgreSQL on localhost:15433, generates this checkout's
+   spec on port 8089, validates the ops checkout, copies to `api/openapi.yaml`, and removes
+   the temporary database container afterward. The shared dev DB on 5433 is untouched.
+   With an already running disposable PostgreSQL, use
+   `./gradlew syncOpenApiToOps -PopsDir=<ops-checkout> -PopenApiEnvFile=<env-file> -PopenApiDbPort=<disposable-port>`.
+5. **Review the generated diff** in `hanmaum-dn-ops` against its freshly fetched
+   `origin/main` and commit it there with the same HDN ticket ID. This command runs
+   when invoked; a server commit alone does not trigger it.
 6. **Notify the web/mobile devs** on the HDN ticket so they pull the latest
    spec when they pick up client-side work.
 7. All three app PRs reference the same HDN ticket and merge in coordination.
