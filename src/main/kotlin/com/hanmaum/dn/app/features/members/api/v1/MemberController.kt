@@ -14,6 +14,11 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberTrainingsRequ
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMyProfileRequest
 import com.hanmaum.dn.app.features.members.service.MemberService
+import io.swagger.v3.oas.annotations.Parameter
+import io.swagger.v3.oas.annotations.enums.ParameterIn
+import io.swagger.v3.oas.annotations.media.ArraySchema
+import io.swagger.v3.oas.annotations.media.Schema
+import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.Valid
 import org.springframework.data.domain.Page
 import org.springframework.http.HttpStatus
@@ -48,6 +53,12 @@ class MemberController(
      */
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
+    @Parameter(
+        name = "sort",
+        `in` = ParameterIn.QUERY,
+        description = "Spring Sort syntax, e.g. `sort=groupName,asc&sort=lastName,asc`.",
+        array = ArraySchema(schema = Schema(type = "string")),
+    )
     fun listMembers(
         @RequestParam(required = false) search: String?,
         @RequestParam(required = false) status: MemberStatus?,
@@ -58,11 +69,14 @@ class MemberController(
         @RequestParam(required = false) ministryPublicId: UUID?,
         @RequestParam(required = false) updatedFrom: LocalDate?,
         @RequestParam(required = false) updatedTo: LocalDate?,
-        /** Spring Sort syntax, e.g. `sort=groupName,asc&sort=lastName,asc`. */
-        @RequestParam(required = false) sort: List<String>?,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int,
+        request: HttpServletRequest,
     ): ResponseEntity<ApiResponse<Page<MemberSummaryDto>>> {
+        // Read raw, not as `@RequestParam List<String>`: Spring splits a *single*
+        // value at the comma, so `sort=lastName,asc` would arrive as
+        // ["lastName", "asc"] and "asc" fail as a property (#203).
+        val sort = request.getParameterValues("sort")?.toList()
         val result =
             memberService.getMembers(
                 search = search,
