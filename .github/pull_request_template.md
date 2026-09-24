@@ -36,4 +36,6 @@ Closes #
 - [ ] No silent lint suppressions
 - [ ] No secrets, PII, or tokens in diff
 - [ ] DB migrations are safe on live data (see `db-migrations` skill)
-- [ ] API changes documented and spec synced to `hanmaum-dn-ops`
+- [ ] API contract unchanged, or ran
+  `OPS_DIR=/absolute/path/to/hanmaum-dn-ops OPENAPI_ENV_FILE=/absolute/path/to/.env make openapi-sync`,
+  reviewed the generated diff, and linked the ops PR

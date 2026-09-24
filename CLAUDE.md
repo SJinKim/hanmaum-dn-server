@@ -41,8 +41,9 @@ Pre-MVP. See `.claude/skills/mvp-focus/` for scope rules.
 - OpenAPI sync: `OPS_DIR=/absolute/path/to/hanmaum-dn-ops OPENAPI_ENV_FILE=/absolute/path/to/.env make openapi-sync`.
   This starts a disposable PostgreSQL on localhost:15433, generates from this checkout on port 8089,
   copies into the specified ops Git checkout, and removes the database container afterward.
-  With sibling checkouts and a local `.env`, `make openapi-sync` uses those defaults. The command
-  must be run after a server contract change; it is not triggered automatically by a commit.
+  Run this command after every server API contract change, review the generated ops diff, and
+  link the ops PR from the server PR. With sibling checkouts and a local `.env`, `make openapi-sync`
+  uses those defaults. A server commit does not trigger the command automatically.
   If a disposable database is already running, invoke Gradle directly with
   `./gradlew syncOpenApiToOps -PopsDir=/absolute/path/to/hanmaum-dn-ops -PopenApiEnvFile=/absolute/path/to/.env -PopenApiDbPort=15433`.
 - Definition of Done: `hanmaum-dn-ops/DEFINITION_OF_DONE.md`
