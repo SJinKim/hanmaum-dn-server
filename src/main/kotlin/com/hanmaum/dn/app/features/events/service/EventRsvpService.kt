@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.events.service
 
 import com.hanmaum.dn.app.common.domainvalue.AnnouncementCategory
+import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.announcements.repository.AnnouncementRepository
 import com.hanmaum.dn.app.features.events.api.toActiveDto
 import com.hanmaum.dn.app.features.events.api.toAttendeeDto
@@ -12,6 +13,8 @@ import com.hanmaum.dn.app.features.events.api.v1.dto.EventAttendeesResponse
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventCheckInResponse
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpResponseDto
+import com.hanmaum.dn.app.features.events.api.v1.dto.PendingEventRsvpDto
+import com.hanmaum.dn.app.features.events.api.v1.dto.PendingEventRsvpSummaryDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.UpdateEventRsvpRequest
 import com.hanmaum.dn.app.features.events.config.RsvpProperties
 import com.hanmaum.dn.app.features.events.domain.EventRsvp
@@ -143,6 +146,42 @@ class EventRsvpService(
             val response = responsesByRsvpId[rsvp.id!!]
             rsvp.toActiveDto(response, nextReminderAt(rsvp, response, now))
         }
+    }
+
+    @Transactional(readOnly = true)
+    fun getPendingSummary(): PendingEventRsvpSummaryDto {
+        val rsvps = eventRsvpRepo.findActiveNow(OffsetDateTime.now(clock))
+        if (rsvps.isEmpty()) {
+            return PendingEventRsvpSummaryDto(totalPending = 0, rsvps = emptyList())
+        }
+
+        val expected = memberRepo.countByMemberStatusAndDeletedAtIsNull(MemberStatus.ACTIVE)
+        val respondersByRsvp =
+            eventRsvpLogRepo
+                .findEligibleResponders(rsvps.map { it.id!! })
+                .groupBy({ it.eventRsvpId }, { it.memberId })
+                .mapValues { (_, memberIds) -> memberIds.toSet() }
+        val summaries =
+            rsvps.map { rsvp ->
+                val responded = respondersByRsvp[rsvp.id]?.size?.toLong() ?: 0L
+                PendingEventRsvpDto(
+                    publicId = rsvp.publicId.toString(),
+                    title = rsvp.title,
+                    windowEnd = rsvp.windowEnd,
+                    expected = expected,
+                    responded = responded,
+                    pending = expected - responded,
+                )
+            }
+        val respondedToEveryRsvp =
+            rsvps
+                .map { respondersByRsvp[it.id].orEmpty() }
+                .reduce(Set<Long>::intersect)
+                .size
+        return PendingEventRsvpSummaryDto(
+            totalPending = expected - respondedToEveryRsvp,
+            rsvps = summaries,
+        )
     }
 
     @Transactional(readOnly = true)

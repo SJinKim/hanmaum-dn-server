@@ -42,6 +42,21 @@ interface EventRsvpRepository : JpaRepository<EventRsvp, Long> {
 
 @Repository
 interface EventRsvpLogRepository : JpaRepository<EventRsvpLog, Long> {
+    @Query(
+        """
+        SELECT DISTINCT new com.hanmaum.dn.app.features.events.repository.RsvpResponder(l.eventRsvp.id, m.id)
+        FROM EventRsvpLog l
+        JOIN l.member m
+        WHERE l.eventRsvp.id IN :eventRsvpIds
+          AND l.deletedAt IS NULL
+          AND m.deletedAt IS NULL
+          AND m.memberStatus = com.hanmaum.dn.app.common.domainvalue.MemberStatus.ACTIVE
+        """,
+    )
+    fun findEligibleResponders(
+        @Param("eventRsvpIds") eventRsvpIds: Collection<Long>,
+    ): List<RsvpResponder>
+
     @Modifying(clearAutomatically = true)
     @Query(
         value = """
@@ -132,3 +147,8 @@ interface EventRsvpLogRepository : JpaRepository<EventRsvpLog, Long> {
         @Param("eventRsvpId") eventRsvpId: Long,
     ): List<EventRsvpLog>
 }
+
+data class RsvpResponder(
+    val eventRsvpId: Long,
+    val memberId: Long,
+)

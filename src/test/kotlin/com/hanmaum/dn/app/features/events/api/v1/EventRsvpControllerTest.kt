@@ -6,6 +6,8 @@ import com.hanmaum.dn.app.features.events.api.v1.dto.EventAttendeesResponse
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventCheckInResponse
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpResponseDto
+import com.hanmaum.dn.app.features.events.api.v1.dto.PendingEventRsvpDto
+import com.hanmaum.dn.app.features.events.api.v1.dto.PendingEventRsvpSummaryDto
 import com.hanmaum.dn.app.features.events.domain.RsvpStatus
 import com.hanmaum.dn.app.features.events.service.EventRsvpService
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
@@ -139,6 +141,49 @@ class EventRsvpControllerTest {
             .andExpect(jsonPath("$.data[1].myStatus").value(org.hamcrest.Matchers.nullValue()))
             .andExpect(jsonPath("$.data[1].respondedAt").value(org.hamcrest.Matchers.nullValue()))
             .andExpect(jsonPath("$.data[1].nextReminderAt").value(org.hamcrest.Matchers.nullValue()))
+    }
+
+    @Test
+    fun `GET pending summary returns counts for admin without a member profile`() {
+        `when`(eventRsvpService.getPendingSummary()).thenReturn(
+            PendingEventRsvpSummaryDto(
+                totalPending = 2,
+                rsvps = listOf(PendingEventRsvpDto(rsvpId.toString(), "여름 수련회", now, 3, 1, 2)),
+            ),
+        )
+
+        mockMvc
+            .perform(
+                get("/api/v1/events/rsvps/active/pending-summary")
+                    .with(jwt().jwt { it.subject("admin-without-member") }.authorities(SimpleGrantedAuthority("ROLE_ADMIN"))),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.totalPending").value(2))
+            .andExpect(jsonPath("$.data.rsvps[0].publicId").value(rsvpId.toString()))
+            .andExpect(jsonPath("$.data.rsvps[0].title").value("여름 수련회"))
+            .andExpect(jsonPath("$.data.rsvps[0].windowEnd").value(serializedNow))
+            .andExpect(jsonPath("$.data.rsvps[0].expected").value(3))
+            .andExpect(jsonPath("$.data.rsvps[0].responded").value(1))
+            .andExpect(jsonPath("$.data.rsvps[0].pending").value(2))
+    }
+
+    @Test
+    fun `GET pending summary allows group leader`() {
+        `when`(eventRsvpService.getPendingSummary()).thenReturn(PendingEventRsvpSummaryDto(0, emptyList()))
+
+        mockMvc
+            .perform(
+                get("/api/v1/events/rsvps/active/pending-summary")
+                    .with(jwt().authorities(SimpleGrantedAuthority("ROLE_GROUP_LEADER"))),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.totalPending").value(0))
+            .andExpect(jsonPath("$.data.rsvps.length()").value(0))
+    }
+
+    @Test
+    fun `GET pending summary rejects plain member`() {
+        mockMvc
+            .perform(get("/api/v1/events/rsvps/active/pending-summary").with(jwt()))
+            .andExpect(status().isForbidden)
     }
 
     @Test

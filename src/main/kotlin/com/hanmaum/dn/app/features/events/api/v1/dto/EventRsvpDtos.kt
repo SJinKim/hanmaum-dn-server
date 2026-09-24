@@ -33,6 +33,26 @@ data class ActiveEventRsvpDto(
     val nextReminderAt: OffsetDateTime?,
 )
 
+/** Church-wide response backlog for currently open RSVPs. */
+data class PendingEventRsvpSummaryDto(
+    /** Distinct active members missing a response to at least one open RSVP. */
+    val totalPending: Long,
+    val rsvps: List<PendingEventRsvpDto>,
+)
+
+data class PendingEventRsvpDto(
+    /** Public id of the open RSVP. */
+    val publicId: String,
+    val title: String,
+    val windowEnd: OffsetDateTime,
+    /** Active, non-deleted members eligible to respond. */
+    val expected: Long,
+    /** Eligible members with a non-deleted response. */
+    val responded: Long,
+    /** Eligible members who have not responded. */
+    val pending: Long,
+)
+
 data class EventRsvpResponseRequest(
     /** The authenticated member's RSVP response. */
     val status: RsvpStatus,

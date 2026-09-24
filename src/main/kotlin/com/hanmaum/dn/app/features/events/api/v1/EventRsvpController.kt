@@ -8,8 +8,10 @@ import com.hanmaum.dn.app.features.events.api.v1.dto.EventCheckInResponse
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpResponseDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpResponseRequest
+import com.hanmaum.dn.app.features.events.api.v1.dto.PendingEventRsvpSummaryDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.UpdateEventRsvpRequest
 import com.hanmaum.dn.app.features.events.service.EventRsvpService
+import io.swagger.v3.oas.annotations.Operation
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -53,6 +55,19 @@ class EventRsvpController(
     @PreAuthorize("isAuthenticated()")
     fun getActiveRsvps(authentication: JwtAuthenticationToken): ResponseEntity<ApiResponse<List<ActiveEventRsvpDto>>> =
         ResponseEntity.ok(ApiResponse.success(data = eventRsvpService.getActiveRsvps(authentication.token.subject)))
+
+    /** Summarizes unanswered open RSVPs across active members for admins and group leaders. */
+    @Operation(
+        summary = "Summarize pending responses to open event RSVPs",
+        description =
+            "Counts only active, non-deleted members. " +
+                "totalPending counts each member once if they have not answered at least one open RSVP. " +
+                "Group leaders currently see church-wide counts.",
+    )
+    @GetMapping("/active/pending-summary")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GROUP_LEADER')")
+    fun getPendingSummary(): ResponseEntity<ApiResponse<PendingEventRsvpSummaryDto>> =
+        ResponseEntity.ok(ApiResponse.success(data = eventRsvpService.getPendingSummary()))
 
     @PatchMapping("/{publicId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'GROUP_LEADER')")
