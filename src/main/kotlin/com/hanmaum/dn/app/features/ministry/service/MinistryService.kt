@@ -157,7 +157,7 @@ class MinistryService(
     ): ActiveMinistryMemberDto {
         val ministry =
             ministryRepository
-                .findByPublicIdAndDeletedAtIsNull(ministryPublicId)
+                .findForUpdateByPublicIdAndDeletedAtIsNull(ministryPublicId)
                 .orElseThrow { EntityNotFoundException("Ministry not found: $ministryPublicId") }
         val member =
             memberRepository
@@ -185,6 +185,12 @@ class MinistryService(
     ): ActiveMinistryMemberDto {
         val ministry = findMinistry(ministryPublicId)
         val assignment = findCurrentAssignment(ministry, memberPublicId)
+        if (assignment.selfIntroduction != null && assignment.status == MinistryAssignmentStatus.PENDING) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Review this application through the applications endpoint")
+        }
+        if (req.status == MinistryAssignmentStatus.REJECTED) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "A rejection needs a message and must use the applications endpoint")
+        }
         val startDate = req.startDate?.withDayOfMonth(1) ?: assignment.startDate
         if (req.endDate != null && req.endDate.isBefore(startDate)) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "End date precedes start date")

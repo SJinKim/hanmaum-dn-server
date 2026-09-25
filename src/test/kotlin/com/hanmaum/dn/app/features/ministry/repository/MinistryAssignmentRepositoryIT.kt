@@ -240,4 +240,54 @@ class MinistryAssignmentRepositoryIT {
         assertEquals(MinistryAssignmentStatus.PENDING, history.first { it.fullName == "이이전" }.status)
         assertEquals(listOf(current.publicId), batch.map { it.member.publicId })
     }
+
+    @Test
+    fun `pending self-application is private and rejection permits another attempt`() {
+        val ministry = Ministry(name = "새 사역", shortDescription = "Service", longDescription = "Service")
+        val applicant = Member(lastName = "김", firstName = "지원")
+        em.persist(ministry)
+        em.persist(applicant)
+        val first =
+            MinistryAssignment(
+                ministry = ministry,
+                member = applicant,
+                startDate = LocalDate.of(2026, 9, 1),
+                status = MinistryAssignmentStatus.PENDING,
+                selfIntroduction = "저는 섬기고 싶습니다",
+            )
+        em.persist(first)
+        em.flush()
+        em.clear()
+
+        assertEquals(emptyList<ActiveMemberView>(), assignments.findActiveByMinistryPublicId(ministry.publicId))
+        assertEquals("저는 섬기고 싶습니다", assignments.findPendingByMinistryPublicId(ministry.publicId).single().selfIntroduction)
+        assertEquals(MinistryAssignmentStatus.PENDING, assignments.findSelfRegistrationsByMemberId(applicant.id!!).single().status)
+
+        val rejected = em.find(MinistryAssignment::class.java, first.id)
+        rejected.status = MinistryAssignmentStatus.REJECTED
+        rejected.endDate = LocalDate.of(2026, 9, 25)
+        rejected.rejectionMessage = "일정을 확인해 주세요"
+        em.flush()
+        em.persist(
+            MinistryAssignment(
+                ministry = ministry,
+                member = applicant,
+                startDate = LocalDate.of(2026, 10, 1),
+                status = MinistryAssignmentStatus.PENDING,
+                selfIntroduction = "일정을 확인했습니다",
+            ),
+        )
+        em.flush()
+        em.clear()
+
+        assertEquals(1, assignments.findPendingByMinistryPublicId(ministry.publicId).size)
+        assertEquals(
+            "일정을 확인해 주세요",
+            assignments
+                .findSelfRegistrationsByMemberId(applicant.id!!)
+                .first { it.status == MinistryAssignmentStatus.REJECTED }
+                .rejectionMessage,
+        )
+        assertEquals(emptyList<ActiveMemberView>(), assignments.findByMinistryPublicIdIncludingEnded(ministry.publicId))
+    }
 }

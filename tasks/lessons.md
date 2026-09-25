@@ -9,6 +9,10 @@
 ## Lessons
 <!-- Claude appends here after each correction -->
 
+### Confirm where an application appears before choosing a new table
+- **Mistake**: Assumed ministry self-applications needed a separate table while the intended team workflow shows new applicants directly as `PENDING` rows in the existing 팀원 table.
+- **Rule**: For a new approval flow, confirm the operator's working list and reuse its existing membership record and status model when the pending application belongs there; add only the fields needed for the application and decision.
+
 ### Escalated MVP priorities override a previous deferral
 - **Mistake**: Deferred issue #184 solely because the written MVP scope did not list the Newcomer cutover, even though the stakeholder needed it for the MVP.
 - **Rule**: Treat an explicit user statement that a capability is needed for MVP as an authorized scope decision: update the scope artifact and implement the minimal complete path; do not leave the work deferred based on an older scope document.

@@ -6,6 +6,7 @@ import com.hanmaum.dn.app.features.ministry.api.v1.dto.CreateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryContactDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryContactRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryDto
+import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryRegistrationDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryScheduleDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryScheduleRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistrySummaryDto
@@ -130,6 +131,18 @@ fun ActiveMemberView.toDto(): ActiveMinistryMemberDto =
         role = this.role,
         status = this.status,
         endDate = this.endDate?.toString(),
+        selfIntroduction = this.selfIntroduction,
+        appliedAt = this.appliedAt,
+    )
+
+fun MinistryAssignment.toRegistrationDto(): MinistryRegistrationDto =
+    MinistryRegistrationDto(
+        ministryPublicId = ministry.publicId.toString(),
+        ministryName = ministry.name,
+        appliedAt = requireNotNull(createdAt),
+        status = status,
+        leaderNotified = leaderNotifiedAt != null,
+        rejectionMessage = rejectionMessage,
     )
 
 /** Maps a freshly created assignment to the same shape the active-members table renders. */

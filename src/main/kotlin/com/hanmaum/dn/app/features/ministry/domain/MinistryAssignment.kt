@@ -2,6 +2,8 @@ package com.hanmaum.dn.app.features.ministry.domain
 
 import com.hanmaum.dn.app.common.jpa.BaseEntity
 import com.hanmaum.dn.app.common.pii.EncryptedMinistryNoteConverter
+import com.hanmaum.dn.app.common.pii.EncryptedMinistryRejectionMessageConverter
+import com.hanmaum.dn.app.common.pii.EncryptedMinistrySelfIntroductionConverter
 import com.hanmaum.dn.app.features.members.domain.Member
 import jakarta.persistence.Column
 import jakarta.persistence.Convert
@@ -45,7 +47,16 @@ class MinistryAssignment(
     @Convert(converter = EncryptedMinistryNoteConverter::class)
     @Column(columnDefinition = "TEXT")
     var note: String? = null,
+    @Convert(converter = EncryptedMinistrySelfIntroductionConverter::class)
+    @Column(name = "self_introduction", columnDefinition = "TEXT")
+    var selfIntroduction: String? = null,
+    @Convert(converter = EncryptedMinistryRejectionMessageConverter::class)
+    @Column(name = "rejection_message", columnDefinition = "TEXT")
+    var rejectionMessage: String? = null,
 ) : BaseEntity() {
+    @Column(name = "leader_notified_at")
+    var leaderNotifiedAt: Instant? = null
+
     @Column(name = "delete_entry_at")
     var deleteEntryAt: Instant? = null
 }

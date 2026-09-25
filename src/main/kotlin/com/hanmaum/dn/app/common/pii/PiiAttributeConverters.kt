@@ -93,6 +93,12 @@ class EncryptedProfileImageUrlConverter : EncryptedStringConverter("members.prof
 class EncryptedMinistryNoteConverter : EncryptedStringConverter("ministry_registrations.note")
 
 @Converter
+class EncryptedMinistrySelfIntroductionConverter : EncryptedStringConverter("ministry_registrations.self_introduction")
+
+@Converter
+class EncryptedMinistryRejectionMessageConverter : EncryptedStringConverter("ministry_registrations.rejection_message")
+
+@Converter
 class EncryptedPrayerRequestConverter : EncryptedStringConverter("meeting_attendances.prayer_request")
 
 // The mentor (양육자) of a one-to-one discipleship record, written as free text with
