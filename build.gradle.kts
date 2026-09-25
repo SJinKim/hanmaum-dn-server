@@ -127,7 +127,7 @@ openApi {
     apiDocsUrl.set("http://127.0.0.1:$openApiPort/v3/api-docs.yaml")
     outputDir.set(layout.buildDirectory.dir("openapi"))
     outputFileName.set("openapi.yaml")
-    waitTimeInSeconds.set(60)
+    waitTimeInSeconds.set(120)
     customBootRun {
         val envVars =
             if (openApiEnvFile.isFile) {

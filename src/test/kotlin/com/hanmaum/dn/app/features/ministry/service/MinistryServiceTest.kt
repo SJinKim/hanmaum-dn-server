@@ -30,6 +30,7 @@ import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.never
 import org.springframework.web.server.ResponseStatusException
 import java.lang.reflect.Field
@@ -116,6 +117,7 @@ class MinistryServiceTest {
                             description = "매달 넷째 주 토요일: 새벽기도 후 준비모임",
                             startTime = LocalTime.of(7, 0),
                             endTime = LocalTime.of(9, 0),
+                            location = "본당",
                         ),
                     ),
                 contacts =
@@ -137,6 +139,7 @@ class MinistryServiceTest {
                             description = req.schedules.single().description,
                             startTime = req.schedules.single().startTime,
                             endTime = req.schedules.single().endTime,
+                            location = req.schedules.single().location,
                         ),
                     ),
                 )
@@ -161,10 +164,18 @@ class MinistryServiceTest {
                 .toString(),
         )
         assertEquals("팀장", result.contacts[0].role)
+        assertEquals("본당", result.schedules.single().location)
         assertEquals("김영원 권사님", result.contacts[0].name)
         assertEquals("간사", result.contacts[1].role)
         assertEquals("최혜령 자매님", result.contacts[1].name)
-        verify(ministryRepository).save(any())
+        val savedMinistry = argumentCaptor<Ministry>()
+        verify(ministryRepository).save(savedMinistry.capture())
+        assertEquals(
+            "본당",
+            savedMinistry.firstValue.schedules
+                .single()
+                .location,
+        )
     }
 
     @Test
@@ -254,6 +265,9 @@ class MinistryServiceTest {
     @Test
     fun `getMinistry - returns dto when found`() {
         val ministry = makeMinistry()
+        ministry.replaceSchedules(
+            listOf(MinistrySchedule("연습", LocalTime.of(7, 0), LocalTime.of(9, 0), "본당")),
+        )
         val publicId = ministry.publicId
         `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(publicId))
             .thenReturn(Optional.of(ministry))
@@ -264,6 +278,7 @@ class MinistryServiceTest {
         assertEquals("찬양팀", result.title)
         assertEquals("팀장", result.contacts.single().role)
         assertEquals("김민준 집사님", result.contacts.single().name)
+        assertEquals("본당", result.schedules.single().location)
     }
 
     @Test
@@ -302,6 +317,7 @@ class MinistryServiceTest {
                             description = "기존 일정",
                             startTime = LocalTime.of(10, 0),
                             endTime = LocalTime.of(11, 0),
+                            location = null,
                         ),
                     ),
                 )
@@ -327,6 +343,7 @@ class MinistryServiceTest {
                                 description = "새 일정",
                                 startTime = LocalTime.of(16, 0),
                                 endTime = LocalTime.of(18, 0),
+                                location = "3층",
                             ),
                         ),
                     contacts =
@@ -338,6 +355,8 @@ class MinistryServiceTest {
 
         assertEquals(listOf("새 자격 1", "새 자격 2"), result.requirements)
         assertEquals("새 일정", result.schedules.single().description)
+        assertEquals("3층", result.schedules.single().location)
+        assertEquals("3층", ministry.schedules.single().location)
         assertEquals("담당 교역자", result.contacts.single().role)
         assertEquals("새 담당자님", result.contacts.single().name)
     }

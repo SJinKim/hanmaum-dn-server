@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - HDN-202: Align newcomer import fingerprint column types with Hibernate's VARCHAR(64) mapping so schema validation can start the app.
 
 ### Added
+- HDN-216: Store an optional location per ministry schedule and expose it in create, update, and detail responses.
 - HDN-214: Show ministry member counts, previews, roles, status, and history; manage individual assignments and leaders from the admin screens.
 - HDN-212: Include training start dates in member detail and preserve imported training details when admins save the training set.
 - HDN-208: Include the latest retained group-leader tenure in member detail, even after leadership ends.

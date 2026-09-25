@@ -12,4 +12,6 @@ class MinistrySchedule(
     var startTime: LocalTime,
     @Column(name = "end_time", nullable = false)
     var endTime: LocalTime,
+    @Column(name = "location", length = 100)
+    var location: String? = null,
 )

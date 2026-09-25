@@ -107,6 +107,7 @@ fun MinistryScheduleRequest.toDomain(): MinistrySchedule =
         description = this.description,
         startTime = this.startTime,
         endTime = this.endTime,
+        location = this.location,
     )
 
 fun MinistrySchedule.toDto(): MinistryScheduleDto =
@@ -114,6 +115,7 @@ fun MinistrySchedule.toDto(): MinistryScheduleDto =
         description = this.description,
         startTime = this.startTime,
         endTime = this.endTime,
+        location = this.location,
     )
 
 fun ActiveMemberView.toDto(): ActiveMinistryMemberDto =

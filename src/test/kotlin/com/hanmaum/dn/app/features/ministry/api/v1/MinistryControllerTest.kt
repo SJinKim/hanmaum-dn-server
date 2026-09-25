@@ -1,20 +1,31 @@
 package com.hanmaum.dn.app.features.ministry.api.v1
 
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.ministry.api.v1.dto.CreateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryContactDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryScheduleDto
+import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.service.MinistryService
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
+import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.eq
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
+import org.springframework.http.MediaType
 import org.springframework.security.oauth2.jwt.JwtDecoder
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.time.LocalTime
@@ -37,6 +48,100 @@ class MinistryControllerTest {
     private lateinit var memberRepository: MemberRepository
 
     @Test
+    fun `POST ministry accepts schedule location`() {
+        val body =
+            """{"title":"찬양팀","subtitle":"찬양 사역","about":"소개","schedules":[""" +
+                """{"description":"연습","startTime":"07:00","endTime":"09:00","location":"본당"}]}"""
+        val dto =
+            MinistryDto(
+                "id",
+                "찬양팀",
+                "찬양 사역",
+                "소개",
+                emptyList(),
+                listOf(MinistryScheduleDto("연습", LocalTime.of(7, 0), LocalTime.of(9, 0), "본당")),
+                emptyList(),
+                null,
+                true,
+            )
+        `when`(ministryService.createMinistry(any())).thenReturn(dto)
+
+        mockMvc
+            .perform(
+                post("/api/v1/ministries")
+                    .with(user("admin").roles("ADMIN"))
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body),
+            ).andExpect(status().isCreated)
+            .andExpect(jsonPath("$.data.schedules[0].location").value("본당"))
+
+        val request = argumentCaptor<CreateMinistryRequest>()
+        verify(ministryService).createMinistry(request.capture())
+        assertEquals(
+            "본당",
+            request.firstValue.schedules
+                .single()
+                .location,
+        )
+    }
+
+    @Test
+    fun `PATCH ministry accepts schedule location`() {
+        val publicId = UUID.randomUUID()
+        val body = """{"schedules":[{"description":"연습","startTime":"07:00","endTime":"09:00","location":"3층"}]}"""
+        val dto =
+            MinistryDto(
+                publicId.toString(),
+                "찬양팀",
+                "찬양 사역",
+                "소개",
+                emptyList(),
+                listOf(MinistryScheduleDto("연습", LocalTime.of(7, 0), LocalTime.of(9, 0), "3층")),
+                emptyList(),
+                null,
+                true,
+            )
+        `when`(ministryService.updateMinistry(eq(publicId), any())).thenReturn(dto)
+
+        mockMvc
+            .perform(
+                patch(
+                    "/api/v1/ministries/{publicId}",
+                    publicId,
+                ).with(user("admin").roles("ADMIN")).with(csrf()).contentType(MediaType.APPLICATION_JSON).content(body),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.schedules[0].location").value("3층"))
+
+        val request = argumentCaptor<UpdateMinistryRequest>()
+        verify(ministryService).updateMinistry(eq(publicId), request.capture())
+        assertEquals(
+            "3층",
+            request.firstValue.schedules!!
+                .single()
+                .location,
+        )
+    }
+
+    @Test
+    fun `POST ministry rejects schedule location longer than 100 characters`() {
+        val location = "가".repeat(101)
+        val body =
+            """{"title":"찬양팀","subtitle":"찬양 사역","about":"소개","schedules":[""" +
+                """{"description":"연습","startTime":"07:00","endTime":"09:00","location":"$location"}]}"""
+
+        mockMvc
+            .perform(
+                post("/api/v1/ministries")
+                    .with(user("admin").roles("ADMIN"))
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body),
+            ).andExpect(status().isBadRequest)
+        org.mockito.Mockito.verifyNoInteractions(ministryService)
+    }
+
+    @Test
     fun `GET ministry detail returns all backend-driven page fields`() {
         val publicId = UUID.fromString("3f2a1b4c-0000-0000-0000-000000000001")
         `when`(ministryService.getMinistry(publicId)).thenReturn(
@@ -56,6 +161,7 @@ class MinistryControllerTest {
                             description = "매달 넷째 주 토요일: 새벽기도 후 준비모임",
                             startTime = LocalTime.of(7, 0),
                             endTime = LocalTime.of(9, 0),
+                            location = "본당",
                         ),
                     ),
                 contacts =
@@ -80,6 +186,7 @@ class MinistryControllerTest {
             .andExpect(jsonPath("$.data.schedules[0].description").value("매달 넷째 주 토요일: 새벽기도 후 준비모임"))
             .andExpect(jsonPath("$.data.schedules[0].startTime").value("07:00"))
             .andExpect(jsonPath("$.data.schedules[0].endTime").value("09:00"))
+            .andExpect(jsonPath("$.data.schedules[0].location").value("본당"))
             .andExpect(jsonPath("$.data.contacts[0].role").value("팀장"))
             .andExpect(jsonPath("$.data.contacts[0].name").value("김영원 권사님"))
             .andExpect(jsonPath("$.data.contacts[1].role").value("간사"))
