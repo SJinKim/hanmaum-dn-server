@@ -61,6 +61,7 @@ class MinistryAssignmentRepositoryIT {
                             description = "준비모임",
                             startTime = LocalTime.of(7, 0),
                             endTime = LocalTime.of(9, 0),
+                            location = "본당",
                         ),
                         MinistrySchedule(
                             description = "사역",
@@ -85,6 +86,7 @@ class MinistryAssignmentRepositoryIT {
         assertEquals(listOf("첫 번째 자격", "두 번째 자격"), reloaded.requirements)
         assertEquals(listOf("준비모임", "사역"), reloaded.schedules.map { it.description })
         assertEquals(LocalTime.of(7, 0), reloaded.schedules.first().startTime)
+        assertEquals(listOf("본당", null), reloaded.schedules.map { it.location })
         assertEquals(listOf("팀장", "간사"), reloaded.contacts.map { it.role })
         assertEquals(listOf("김영원 권사님", "최혜령 자매님"), reloaded.contacts.map { it.name })
 
@@ -95,6 +97,7 @@ class MinistryAssignmentRepositoryIT {
                     description = "교체된 일정",
                     startTime = LocalTime.of(12, 0),
                     endTime = LocalTime.of(14, 0),
+                    location = "3층",
                 ),
             ),
         )
@@ -105,6 +108,7 @@ class MinistryAssignmentRepositoryIT {
         val updated = em.find(Ministry::class.java, ministry.id)
         assertEquals(listOf("교체된 자격"), updated.requirements)
         assertEquals(listOf("교체된 일정"), updated.schedules.map { it.description })
+        assertEquals(listOf("3층"), updated.schedules.map { it.location })
         assertEquals(listOf("담당 교역자"), updated.contacts.map { it.role })
         assertEquals(listOf("새 담당자님"), updated.contacts.map { it.name })
     }

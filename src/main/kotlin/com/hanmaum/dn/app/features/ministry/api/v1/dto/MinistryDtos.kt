@@ -88,6 +88,8 @@ data class MinistryScheduleDto(
     @field:JsonFormat(pattern = "HH:mm")
     @field:Schema(type = "string", format = "time", example = "09:00")
     val endTime: LocalTime,
+    /** Optional place for this schedule. */
+    val location: String? = null,
 )
 
 /** One member assignment — returned by GET /{publicId}/members. */
@@ -201,4 +203,7 @@ data class MinistryScheduleRequest(
     @field:NotNull
     @field:Schema(type = "string", format = "time", example = "09:00")
     val endTime: LocalTime,
+    /** Optional place for this schedule. */
+    @field:Size(max = 100, message = "사역 일정 장소는 최대 100자입니다.")
+    val location: String? = null,
 )
