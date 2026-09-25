@@ -6,9 +6,12 @@ import com.hanmaum.dn.app.features.ministry.api.v1.dto.AddMinistryMemberRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.CreateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryContactRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryScheduleRequest
+import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateMinistryMemberRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.domain.Ministry
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
+import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentRole
+import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentStatus
 import com.hanmaum.dn.app.features.ministry.domain.MinistryContact
 import com.hanmaum.dn.app.features.ministry.domain.MinistrySchedule
 import com.hanmaum.dn.app.features.ministry.repository.ActiveMemberView
@@ -200,6 +203,52 @@ class MinistryServiceTest {
         assertEquals(0, result.size)
     }
 
+    @Test
+    fun `getMinistries batches current assignments and previews four active members`() {
+        val ministry = makeMinistry()
+        val otherMinistry = makeMinistry(id = 2L, name = "봉사팀")
+        val members = (1L..6L).map { makeMember(id = it, firstName = "${it}번") }
+        val assignments =
+            members.mapIndexed { index, member ->
+                MinistryAssignment(
+                    ministry = ministry,
+                    member = member,
+                    startDate = LocalDate.of(2025, 1, 1),
+                    role = if (index == 0) MinistryAssignmentRole.LEADER else MinistryAssignmentRole.MEMBER,
+                    status = if (index == 5) MinistryAssignmentStatus.PENDING else MinistryAssignmentStatus.ACTIVE,
+                )
+            }
+        `when`(ministryRepository.findAllActive(null)).thenReturn(listOf(ministry, otherMinistry))
+        `when`(ministryAssignmentRepository.findCurrentByMinistryIds(listOf(1L, 2L))).thenReturn(assignments)
+
+        val result = service.getMinistries(null)
+
+        assertEquals(5, result[0].memberCount)
+        assertEquals(members.take(4).map { it.publicId.toString() }, result[0].memberPreview.map { it.publicId })
+        assertEquals(members.first().publicId.toString(), result[0].leaderPublicId)
+        assertEquals(members.first().getFullName(), result[0].leaderName)
+        assertEquals(0, result[1].memberCount)
+        verify(ministryAssignmentRepository).findCurrentByMinistryIds(listOf(1L, 2L))
+    }
+
+    @Test
+    fun `createMinistry accepts inactive state and assigns a member as leader`() {
+        val member = makeMember()
+        val request =
+            CreateMinistryRequest(title = "새 사역", subtitle = "설명", about = "소개", isActive = false, leaderPublicId = member.publicId)
+        `when`(ministryRepository.save(any())).thenAnswer { invocation ->
+            invocation.getArgument<Ministry>(0).also { setId(it, 1L) }
+        }
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(ministryAssignmentRepository.save(any())).thenAnswer { it.getArgument<MinistryAssignment>(0) }
+
+        val result = service.createMinistry(request)
+
+        assertFalse(result.isActive)
+        assertEquals(member.publicId.toString(), result.leaderPublicId)
+        assertEquals(member.getFullName(), result.leaderName)
+    }
+
     // ─── getMinistry ──────────────────────────────────────────────────────────
 
     @Test
@@ -329,6 +378,28 @@ class MinistryServiceTest {
         assertFalse(ministry.isMinistryActive)
     }
 
+    @Test
+    fun `updateMinistry changes leader without duplicating an existing assignment`() {
+        val ministry = makeMinistry()
+        val oldMember = makeMember(100L)
+        val newMember = makeMember(101L)
+        val oldLeader = MinistryAssignment(ministry, oldMember, LocalDate.of(2025, 1, 1), role = MinistryAssignmentRole.LEADER)
+        val newLeader = MinistryAssignment(ministry, newMember, LocalDate.of(2025, 2, 1))
+        setId(oldLeader, 1L)
+        setId(newLeader, 2L)
+        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId)).thenReturn(Optional.of(ministry))
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(newMember.publicId)).thenReturn(Optional.of(newMember))
+        `when`(ministryAssignmentRepository.findCurrentByMinistryIds(listOf(1L))).thenReturn(listOf(oldLeader, newLeader))
+
+        val result = service.updateMinistry(ministry.publicId, UpdateMinistryRequest(leaderPublicId = newMember.publicId))
+
+        assertEquals(MinistryAssignmentRole.MEMBER, oldLeader.role)
+        assertEquals(MinistryAssignmentRole.LEADER, newLeader.role)
+        assertEquals(newMember.publicId.toString(), result.leaderPublicId)
+        verify(ministryAssignmentRepository).flush()
+        verify(ministryAssignmentRepository, never()).save(any())
+    }
+
     // ─── deactivateMinistry ───────────────────────────────────────────────────
 
     @Test
@@ -425,6 +496,8 @@ class MinistryServiceTest {
         assertEquals("김철수", result.fullName)
         assertEquals("2026-06-01", result.startDate) // first of current month per fixed clock
         assertEquals("신입", result.note)
+        assertEquals(MinistryAssignmentRole.MEMBER, result.role)
+        assertEquals(MinistryAssignmentStatus.ACTIVE, result.status)
         verify(ministryAssignmentRepository).save(any())
     }
 
@@ -495,5 +568,91 @@ class MinistryServiceTest {
             service.addMember(ministry.publicId, AddMinistryMemberRequest(memberId = unknownMemberId))
         }
         verify(ministryAssignmentRepository, never()).save(any())
+    }
+
+    @Test
+    fun `updateMember changes only the selected current assignment`() {
+        val ministry = makeMinistry()
+        val member = makeMember()
+        val assignment = MinistryAssignment(ministry, member, LocalDate.of(2025, 1, 1), note = "old")
+        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId)).thenReturn(Optional.of(ministry))
+        `when`(ministryAssignmentRepository.findCurrentByMinistryIdAndMemberPublicId(ministry.id!!, member.publicId))
+            .thenReturn(Optional.of(assignment))
+
+        val result =
+            service.updateMember(
+                ministry.publicId,
+                member.publicId,
+                UpdateMinistryMemberRequest(
+                    role = MinistryAssignmentRole.SUB_LEADER,
+                    status = MinistryAssignmentStatus.PENDING,
+                    startDate = LocalDate.of(2025, 2, 17),
+                    endDate = LocalDate.of(2025, 8, 3),
+                    note = "new",
+                ),
+            )
+
+        assertEquals(MinistryAssignmentRole.SUB_LEADER, assignment.role)
+        assertEquals(MinistryAssignmentStatus.PENDING, assignment.status)
+        assertEquals(LocalDate.of(2025, 2, 1), assignment.startDate)
+        assertEquals(LocalDate.of(2025, 8, 3), assignment.endDate)
+        assertEquals("new", assignment.note)
+        assertEquals("2025-08-03", result.endDate)
+    }
+
+    @Test
+    fun `updateMember clears a note when sent an empty string`() {
+        val ministry = makeMinistry()
+        val member = makeMember()
+        val assignment = MinistryAssignment(ministry, member, LocalDate.of(2025, 1, 1), note = "old")
+        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId)).thenReturn(Optional.of(ministry))
+        `when`(ministryAssignmentRepository.findCurrentByMinistryIdAndMemberPublicId(ministry.id!!, member.publicId))
+            .thenReturn(Optional.of(assignment))
+
+        service.updateMember(ministry.publicId, member.publicId, UpdateMinistryMemberRequest(note = ""))
+
+        assertNull(assignment.note)
+    }
+
+    @Test
+    fun `updateMember promotes one leader and demotes the previous leader`() {
+        val ministry = makeMinistry()
+        val oldMember = makeMember(100L)
+        val newMember = makeMember(101L)
+        val oldLeader = MinistryAssignment(ministry, oldMember, LocalDate.of(2025, 1, 1), role = MinistryAssignmentRole.LEADER)
+        val candidate = MinistryAssignment(ministry, newMember, LocalDate.of(2025, 2, 1))
+        setId(oldLeader, 1L)
+        setId(candidate, 2L)
+        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId)).thenReturn(Optional.of(ministry))
+        `when`(ministryAssignmentRepository.findCurrentByMinistryIdAndMemberPublicId(ministry.id!!, newMember.publicId))
+            .thenReturn(Optional.of(candidate))
+        `when`(ministryAssignmentRepository.findCurrentByMinistryIds(listOf(ministry.id!!))).thenReturn(listOf(oldLeader, candidate))
+
+        val result =
+            service.updateMember(
+                ministry.publicId,
+                newMember.publicId,
+                UpdateMinistryMemberRequest(role = MinistryAssignmentRole.LEADER),
+            )
+
+        assertEquals(MinistryAssignmentRole.MEMBER, oldLeader.role)
+        assertEquals(MinistryAssignmentRole.LEADER, candidate.role)
+        assertEquals(MinistryAssignmentStatus.ACTIVE, result.status)
+        verify(ministryAssignmentRepository).flush()
+    }
+
+    @Test
+    fun `removeMember ends only the current assignment today`() {
+        val ministry = makeMinistry()
+        val member = makeMember()
+        val assignment = MinistryAssignment(ministry, member, LocalDate.of(2025, 1, 1))
+        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId)).thenReturn(Optional.of(ministry))
+        `when`(ministryAssignmentRepository.findCurrentByMinistryIdAndMemberPublicId(ministry.id!!, member.publicId))
+            .thenReturn(Optional.of(assignment))
+
+        service.removeMember(ministry.publicId, member.publicId)
+
+        assertEquals(LocalDate.of(2026, 6, 22), assignment.endDate)
+        verify(ministryAssignmentRepository, never()).delete(any())
     }
 }

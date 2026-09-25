@@ -15,7 +15,7 @@ import jakarta.persistence.Table
 class Ministry(
     @Column(name = "name", nullable = false, length = 100)
     var name: String,
-    @Column(name = "short_description", nullable = false, length = 200)
+    @Column(name = "short_description", nullable = false, length = 500)
     var shortDescription: String,
     @Column(name = "long_description", nullable = false, columnDefinition = "TEXT")
     var longDescription: String,

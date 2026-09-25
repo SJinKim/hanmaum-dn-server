@@ -2,6 +2,9 @@ package com.hanmaum.dn.app.features.ministry.api.v1.dto
 
 import com.fasterxml.jackson.annotation.JsonFormat
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.hanmaum.dn.app.features.members.api.v1.dto.MemberNameDto
+import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentRole
+import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentStatus
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
@@ -37,6 +40,12 @@ data class MinistrySummaryDto(
     val contacts: List<MinistryContactDto>,
     @get:JsonProperty("isActive")
     val isActive: Boolean,
+    /** Number of current assignments with ACTIVE status. */
+    val memberCount: Int = 0,
+    /** First four current active members, ordered by name. */
+    val memberPreview: List<MemberNameDto> = emptyList(),
+    val leaderPublicId: String? = null,
+    val leaderName: String? = null,
 )
 
 /**
@@ -55,16 +64,16 @@ data class MinistryDto(
     val imageUrl: String?,
     @get:JsonProperty("isActive")
     val isActive: Boolean,
+    val leaderPublicId: String? = null,
+    val leaderName: String? = null,
 )
 
 /**
  * One named contact for a ministry, in the order an admin arranged them.
  *
- * There is no separate leader field on purpose: contact roles vary between ministries and
- * grow over time, so they are modelled as an ordered role-to-person collection rather than
- * as role-specific fields. The clients render the first entry as 리더 — see the ordering
- * test in [MinistryWireContractTest], which makes that position a contract instead of the
- * assumption HDN-118 flagged.
+ * Contacts remain an ordered role-to-person collection. Existing clients render the first
+ * contact as 리더; the new `leaderPublicId` identifies the member assigned the LEADER role.
+ * Those fields can differ because contacts may also name people outside the member table.
  */
 data class MinistryContactDto(
     val role: String,
@@ -81,13 +90,16 @@ data class MinistryScheduleDto(
     val endTime: LocalTime,
 )
 
-/** One active member in a ministry — returned by GET /{publicId}/members. */
+/** One member assignment — returned by GET /{publicId}/members. */
 data class ActiveMinistryMemberDto(
     val publicId: String, // member public ID
     val fullName: String,
     val startDate: String, // ISO 'YYYY-MM-DD'
     val note: String?,
     val gender: String?, // "M" | "F" | null
+    val role: MinistryAssignmentRole = MinistryAssignmentRole.MEMBER,
+    val status: MinistryAssignmentStatus = MinistryAssignmentStatus.ACTIVE,
+    val endDate: String? = null,
 )
 
 // ─── Request DTOs ─────────────────────────────────────────────────────────────
@@ -97,7 +109,7 @@ data class CreateMinistryRequest(
     @field:Size(max = 100, message = "사역 제목은 최대 100자입니다.")
     val title: String,
     @field:NotBlank(message = "사역 부제목은 필수입니다.")
-    @field:Size(max = 200, message = "사역 부제목은 최대 200자입니다.")
+    @field:Size(max = 500, message = "사역 부제목은 최대 500자입니다.")
     val subtitle: String,
     @field:NotBlank(message = "사역 소개는 필수입니다.")
     val about: String,
@@ -113,6 +125,9 @@ data class CreateMinistryRequest(
     @field:Size(max = 20, message = "연락처는 최대 20개입니다.")
     val contacts: List<MinistryContactRequest> = emptyList(),
     val imageUrl: String? = null,
+    @get:JsonProperty("isActive")
+    val isActive: Boolean = true,
+    val leaderPublicId: UUID? = null,
 )
 
 /** PATCH semantics — only non-null fields applied. */
@@ -121,7 +136,7 @@ data class UpdateMinistryRequest(
     @field:Size(max = 100)
     val title: String? = null,
     @field:Pattern(regexp = "(?s).*\\S.*", message = "사역 부제목은 비워둘 수 없습니다.")
-    @field:Size(max = 200)
+    @field:Size(max = 500)
     val subtitle: String? = null,
     @field:Pattern(regexp = "(?s).*\\S.*", message = "사역 소개는 비워둘 수 없습니다.")
     val about: String? = null,
@@ -139,6 +154,17 @@ data class UpdateMinistryRequest(
     val imageUrl: String? = null,
     @get:JsonProperty("isActive")
     val isActive: Boolean? = null,
+    val leaderPublicId: UUID? = null,
+)
+
+/** Partial edit of a current member assignment; omitted fields keep their values. */
+data class UpdateMinistryMemberRequest(
+    val role: MinistryAssignmentRole? = null,
+    val status: MinistryAssignmentStatus? = null,
+    val startDate: LocalDate? = null,
+    val endDate: LocalDate? = null,
+    @field:Size(max = 500, message = "메모는 최대 500자입니다.")
+    val note: String? = null,
 )
 
 /** Binds an existing member to a ministry — body of POST /{publicId}/members. */

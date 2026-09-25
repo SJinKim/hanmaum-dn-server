@@ -12,8 +12,12 @@ import com.hanmaum.dn.app.features.ministry.api.v1.dto.CreateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryScheduleRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistrySummaryDto
+import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateMinistryMemberRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateMinistryRequest
+import com.hanmaum.dn.app.features.ministry.domain.Ministry
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
+import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentRole
+import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentStatus
 import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
 import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
 import jakarta.persistence.EntityNotFoundException
@@ -46,7 +50,8 @@ class MinistryService(
         }
         validateScheduleTimes(req.schedules)
         val ministry = ministryRepository.save(req.toEntity())
-        return ministry.toDto()
+        val leader = req.leaderPublicId?.let { assignLeader(ministry, it) }
+        return ministry.toDto(leader)
     }
 
     /**
@@ -54,7 +59,12 @@ class MinistryService(
      * [active] null → all; true → active only; false → inactive only.
      */
     @Transactional(readOnly = true)
-    fun getMinistries(active: Boolean?): List<MinistrySummaryDto> = ministryRepository.findAllActive(active).map { it.toSummaryDto() }
+    fun getMinistries(active: Boolean?): List<MinistrySummaryDto> {
+        val ministries = ministryRepository.findAllActive(active)
+        if (ministries.isEmpty()) return emptyList()
+        val assignments = ministryAssignmentRepository.findCurrentByMinistryIds(ministries.map { it.id!! }).groupBy { it.ministry.id }
+        return ministries.map { it.toSummaryDto(assignments[it.id].orEmpty()) }
+    }
 
     /**
      * Full detail for a single ministry.
@@ -67,7 +77,7 @@ class MinistryService(
             ministryRepository
                 .findByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow { EntityNotFoundException("Ministry not found: $publicId") }
-        return ministry.toDto()
+        return ministry.toDto(currentLeader(ministry))
     }
 
     /**
@@ -88,7 +98,8 @@ class MinistryService(
 
         req.schedules?.let(::validateScheduleTimes)
         ministry.applyPatch(req)
-        return ministry.toDto()
+        val leader = req.leaderPublicId?.let { assignLeader(ministry, it) } ?: currentLeader(ministry)
+        return ministry.toDto(leader)
     }
 
     /**
@@ -114,13 +125,20 @@ class MinistryService(
      * @throws EntityNotFoundException if ministry not found or soft-deleted
      */
     @Transactional(readOnly = true)
-    fun getActiveMembers(publicId: UUID): List<ActiveMinistryMemberDto> {
+    fun getActiveMembers(
+        publicId: UUID,
+        includeEnded: Boolean = false,
+    ): List<ActiveMinistryMemberDto> {
         ministryRepository
             .findByPublicIdAndDeletedAtIsNull(publicId)
             .orElseThrow { EntityNotFoundException("Ministry not found: $publicId") }
-        return ministryAssignmentRepository
-            .findActiveByMinistryPublicId(publicId)
-            .map { it.toDto() }
+        val members =
+            if (includeEnded) {
+                ministryAssignmentRepository.findByMinistryPublicIdIncludingEnded(publicId)
+            } else {
+                ministryAssignmentRepository.findActiveByMinistryPublicId(publicId)
+            }
+        return members.map { it.toDto() }
     }
 
     /**
@@ -156,6 +174,99 @@ class MinistryService(
                 note = req.note,
             )
         return ministryAssignmentRepository.save(assignment).toActiveMemberDto()
+    }
+
+    /** Updates one current assignment without replacing the member's other ministries. */
+    @Transactional
+    fun updateMember(
+        ministryPublicId: UUID,
+        memberPublicId: UUID,
+        req: UpdateMinistryMemberRequest,
+    ): ActiveMinistryMemberDto {
+        val ministry = findMinistry(ministryPublicId)
+        val assignment = findCurrentAssignment(ministry, memberPublicId)
+        val startDate = req.startDate?.withDayOfMonth(1) ?: assignment.startDate
+        if (req.endDate != null && req.endDate.isBefore(startDate)) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "End date precedes start date")
+        }
+        if (req.role == MinistryAssignmentRole.LEADER && req.endDate != null) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "An ended assignment cannot become leader")
+        }
+        if (req.role == MinistryAssignmentRole.LEADER) {
+            promoteLeader(ministry, assignment)
+        } else {
+            req.role?.let { assignment.role = it }
+        }
+        req.status?.let { assignment.status = it }
+        assignment.startDate = startDate
+        req.endDate?.let { assignment.endDate = it }
+        req.note?.let { assignment.note = it.ifBlank { null } }
+        return assignment.toActiveMemberDto()
+    }
+
+    /** Ends a current assignment today; the row remains available in history. */
+    @Transactional
+    fun removeMember(
+        ministryPublicId: UUID,
+        memberPublicId: UUID,
+    ) {
+        val ministry = findMinistry(ministryPublicId)
+        val assignment = findCurrentAssignment(ministry, memberPublicId)
+        assignment.endDate = LocalDate.now(clock)
+    }
+
+    private fun findMinistry(publicId: UUID): Ministry =
+        ministryRepository
+            .findByPublicIdAndDeletedAtIsNull(publicId)
+            .orElseThrow { EntityNotFoundException("Ministry not found: $publicId") }
+
+    private fun findCurrentAssignment(
+        ministry: Ministry,
+        memberPublicId: UUID,
+    ): MinistryAssignment =
+        ministryAssignmentRepository
+            .findCurrentByMinistryIdAndMemberPublicId(ministry.id!!, memberPublicId)
+            .orElseThrow { EntityNotFoundException("Current ministry assignment not found: $memberPublicId") }
+
+    private fun currentLeader(ministry: Ministry): MinistryAssignment? =
+        ministryAssignmentRepository
+            .findCurrentByMinistryIds(listOf(ministry.id!!))
+            .firstOrNull { it.role == MinistryAssignmentRole.LEADER }
+
+    private fun assignLeader(
+        ministry: Ministry,
+        memberPublicId: UUID,
+    ): MinistryAssignment {
+        val member =
+            memberRepository
+                .findByPublicIdAndDeletedAtIsNull(memberPublicId)
+                .orElseThrow { EntityNotFoundException("Member not found: $memberPublicId") }
+        val assignment =
+            ministryAssignmentRepository
+                .findCurrentByMinistryIds(listOf(ministry.id!!))
+                .firstOrNull { it.member.id == member.id }
+                ?: ministryAssignmentRepository.save(
+                    MinistryAssignment(
+                        ministry = ministry,
+                        member = member,
+                        startDate = LocalDate.now(clock).withDayOfMonth(1),
+                    ),
+                )
+        promoteLeader(ministry, assignment)
+        return assignment
+    }
+
+    private fun promoteLeader(
+        ministry: Ministry,
+        assignment: MinistryAssignment,
+    ) {
+        val previous = currentLeader(ministry)
+        if (previous != null && previous.id != assignment.id) {
+            previous.role = MinistryAssignmentRole.MEMBER
+            ministryAssignmentRepository.flush()
+        }
+        assignment.role = MinistryAssignmentRole.LEADER
+        assignment.status = MinistryAssignmentStatus.ACTIVE
     }
 
     private fun validateScheduleTimes(schedules: List<MinistryScheduleRequest>) {

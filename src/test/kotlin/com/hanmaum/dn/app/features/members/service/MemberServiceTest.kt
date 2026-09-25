@@ -21,6 +21,8 @@ import com.hanmaum.dn.app.features.members.repository.MemberGraduationRepository
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.ministry.domain.Ministry
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
+import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentRole
+import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentStatus
 import com.hanmaum.dn.app.features.ministry.repository.MemberMinistryView
 import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
 import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
@@ -298,7 +300,7 @@ class MemberServiceTest {
     // --- replaceMemberMinistries ---
 
     @Test
-    fun `replaceMemberMinistries deletes existing then inserts from request`() {
+    fun `replaceMemberMinistries inserts a new assignment from request`() {
         val member = memberWithId(42L)
         val ministry =
             Ministry(
@@ -330,10 +332,39 @@ class MemberServiceTest {
 
         val result = memberService.replaceMemberMinistries(member.publicId, request)
 
-        verify(ministryAssignmentRepository).deleteByMemberId(42L)
-        verify(ministryAssignmentRepository).flush()
+        verify(ministryAssignmentRepository, never()).deleteByMemberId(42L)
         verify(ministryAssignmentRepository).saveAll(any<List<MinistryAssignment>>())
         assertEquals(member.publicId.toString(), result.publicId)
+    }
+
+    @Test
+    fun `replaceMemberMinistries preserves role and status on a retained assignment`() {
+        val member = memberWithId(42L)
+        val ministry = Ministry(name = "찬양팀", shortDescription = "찬양", longDescription = "찬양").also { it.id = 1L }
+        val assignment =
+            MinistryAssignment(
+                ministry = ministry,
+                member = member,
+                startDate = LocalDate.of(2024, 3, 1),
+                role = MinistryAssignmentRole.LEADER,
+                status = MinistryAssignmentStatus.PENDING,
+            )
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId)).thenReturn(Optional.of(ministry))
+        `when`(ministryAssignmentRepository.findByMemberId(42L)).thenReturn(listOf(assignment))
+
+        memberService.replaceMemberMinistries(
+            member.publicId,
+            ReplaceMemberMinistriesRequest(
+                listOf(MemberMinistryItem(ministry.publicId.toString(), LocalDate.of(2024, 3, 1), null, "새 메모")),
+            ),
+        )
+
+        assertEquals(MinistryAssignmentRole.LEADER, assignment.role)
+        assertEquals(MinistryAssignmentStatus.PENDING, assignment.status)
+        assertEquals("새 메모", assignment.note)
+        verify(ministryAssignmentRepository).saveAll(listOf(assignment))
+        verify(ministryAssignmentRepository, never()).deleteAll(any<List<MinistryAssignment>>())
     }
 
     // --- getMembers ---
