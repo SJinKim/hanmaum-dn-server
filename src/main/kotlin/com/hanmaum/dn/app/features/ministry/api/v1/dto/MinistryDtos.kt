@@ -177,8 +177,7 @@ data class AddMinistryMemberRequest(
     @field:NotNull(message = "맴버 ID는 필수입니다.")
     val memberId: UUID,
     /**
-     * Start of the assignment. Any day is accepted and normalized to the first of that
-     * month (assignments are month-granular). Null → first of the current month.
+     * Start of the assignment, stored as given. Null → today.
      */
     val startDate: LocalDate? = null,
     @field:Size(max = 500, message = "메모는 최대 500자입니다.")

@@ -170,7 +170,7 @@ class MinistryService(
             MinistryAssignment(
                 ministry = ministry,
                 member = member,
-                startDate = (req.startDate ?: LocalDate.now(clock)).withDayOfMonth(1),
+                startDate = req.startDate ?: LocalDate.now(clock),
                 note = req.note,
             )
         return ministryAssignmentRepository.save(assignment).toActiveMemberDto()
@@ -185,7 +185,7 @@ class MinistryService(
     ): ActiveMinistryMemberDto {
         val ministry = findMinistry(ministryPublicId)
         val assignment = findCurrentAssignment(ministry, memberPublicId)
-        val startDate = req.startDate?.withDayOfMonth(1) ?: assignment.startDate
+        val startDate = req.startDate ?: assignment.startDate
         if (req.endDate != null && req.endDate.isBefore(startDate)) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "End date precedes start date")
         }
@@ -249,7 +249,7 @@ class MinistryService(
                     MinistryAssignment(
                         ministry = ministry,
                         member = member,
-                        startDate = LocalDate.now(clock).withDayOfMonth(1),
+                        startDate = LocalDate.now(clock),
                     ),
                 )
         promoteLeader(ministry, assignment)
