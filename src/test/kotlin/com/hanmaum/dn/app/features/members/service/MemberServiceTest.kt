@@ -10,8 +10,10 @@ import com.hanmaum.dn.app.features.groups.repository.GroupLeaderRepository
 import com.hanmaum.dn.app.features.groups.repository.MemberLeadershipView
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberMinistryItem
+import com.hanmaum.dn.app.features.members.api.v1.dto.MemberTrainingItem
 import com.hanmaum.dn.app.features.members.api.v1.dto.RegisterMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberMinistriesRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberTrainingsRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMyProfileRequest
 import com.hanmaum.dn.app.features.members.domain.Member
@@ -22,8 +24,12 @@ import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
 import com.hanmaum.dn.app.features.ministry.repository.MemberMinistryView
 import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
 import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
+import com.hanmaum.dn.app.features.training.domain.Training
 import com.hanmaum.dn.app.features.training.domain.TrainingCode
+import com.hanmaum.dn.app.features.training.domain.TrainingCohort
 import com.hanmaum.dn.app.features.training.domain.TrainingStatus
+import com.hanmaum.dn.app.features.training.domain.TrainingVariant
+import com.hanmaum.dn.app.features.training.domain.UserTraining
 import com.hanmaum.dn.app.features.training.repository.MemberTrainingStatusView
 import com.hanmaum.dn.app.features.training.repository.TrainingRepository
 import com.hanmaum.dn.app.features.training.repository.UserTrainingRepository
@@ -50,6 +56,7 @@ import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.eq
 import org.springframework.web.server.ResponseStatusException
 import java.net.URI
@@ -126,6 +133,93 @@ class MemberServiceTest {
         val g = ChurchGroup(name = name)
         g.id = id
         return g
+    }
+
+    @Test
+    fun `replaceMemberTrainings updates dates and keeps imported details on existing rows`() {
+        val member = memberWithId(1L)
+        val training = Training(TrainingCode.QT_BASIC_SEMINAR, "QT", 1)
+        val cohort = TrainingCohort(training, 1)
+        val mentor = memberWithId(2L)
+        val row =
+            UserTraining(
+                member = member,
+                training = training,
+                status = TrainingStatus.IN_PROGRESS,
+                appliedOn = LocalDate.of(2023, 11, 1),
+                cohort = cohort,
+                variant = TrainingVariant.OLD_TESTAMENT,
+                mentor = mentor,
+                mentorNameRaw = "imported mentor",
+                note = "imported note",
+            )
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(userTrainingRepository.findByMemberId(1L)).thenReturn(listOf(row))
+        `when`(trainingRepository.findByPublicIdAndDeletedAtIsNull(training.publicId)).thenReturn(Optional.of(training))
+
+        val result =
+            memberService.replaceMemberTrainings(
+                member.publicId,
+                ReplaceMemberTrainingsRequest(
+                    listOf(
+                        MemberTrainingItem(training.publicId.toString(), "COMPLETED", LocalDate.of(2024, 6, 1), LocalDate.of(2024, 1, 1)),
+                    ),
+                ),
+            )
+
+        assertEquals(LocalDate.of(2024, 1, 1), result.trainings.single().startedOn)
+        assertEquals(LocalDate.of(2024, 1, 1), row.startedOn)
+        assertEquals(LocalDate.of(2024, 6, 1), row.completedAt)
+        assertEquals(TrainingStatus.COMPLETED, row.status)
+        assertEquals(LocalDate.of(2023, 11, 1), row.appliedOn)
+        assertEquals(cohort, row.cohort)
+        assertEquals(TrainingVariant.OLD_TESTAMENT, row.variant)
+        assertEquals(mentor, row.mentor)
+        assertEquals("imported mentor", row.mentorNameRaw)
+        assertEquals("imported note", row.note)
+        verify(userTrainingRepository, never()).deleteAll(any<List<UserTraining>>())
+    }
+
+    @Test
+    fun `replaceMemberTrainings deletes only courses omitted from the request`() {
+        val member = memberWithId(1L)
+        val retained = Training(TrainingCode.QT_BASIC_SEMINAR, "QT", 1)
+        val removed = Training(TrainingCode.BIBLE_OVERVIEW, "Bible", 2)
+        val retainedRow = UserTraining(member, retained)
+        val removedRow = UserTraining(member, removed)
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(userTrainingRepository.findByMemberId(1L)).thenReturn(listOf(retainedRow, removedRow))
+        `when`(trainingRepository.findByPublicIdAndDeletedAtIsNull(retained.publicId)).thenReturn(Optional.of(retained))
+
+        val result =
+            memberService.replaceMemberTrainings(
+                member.publicId,
+                ReplaceMemberTrainingsRequest(listOf(MemberTrainingItem(retained.publicId.toString(), "IN_PROGRESS"))),
+            )
+
+        assertEquals(listOf(retained.publicId.toString()), result.trainings.map { it.trainingPublicId })
+        verify(userTrainingRepository).deleteAll(listOf(removedRow))
+        verify(userTrainingRepository).saveAll(listOf(retainedRow))
+    }
+
+    @Test
+    fun `replaceMemberTrainings persists startedOn for a new course`() {
+        val member = memberWithId(1L)
+        val training = Training(TrainingCode.QT_BASIC_SEMINAR, "QT", 1)
+        val start = LocalDate.of(2024, 2, 1)
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(trainingRepository.findByPublicIdAndDeletedAtIsNull(training.publicId)).thenReturn(Optional.of(training))
+
+        val result =
+            memberService.replaceMemberTrainings(
+                member.publicId,
+                ReplaceMemberTrainingsRequest(listOf(MemberTrainingItem(training.publicId.toString(), "IN_PROGRESS", startedOn = start))),
+            )
+
+        val saved = argumentCaptor<List<UserTraining>>()
+        verify(userTrainingRepository).saveAll(saved.capture())
+        assertEquals(start, saved.firstValue.single().startedOn)
+        assertEquals(start, result.trainings.single().startedOn)
     }
 
     private fun setupKeycloakMock(

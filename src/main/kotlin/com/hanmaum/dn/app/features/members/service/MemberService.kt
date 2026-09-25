@@ -416,10 +416,7 @@ class MemberService(
             .firstOrNull()
             ?.graduatedOn
 
-    /**
-     * Replaces a member's entire training set (PUT semantics). Existing rows are
-     * removed and re-created from the request. Returns the refreshed member detail.
-     */
+    /** Replaces the training set while retaining details on courses still present. */
     @Transactional
     fun replaceMemberTrainings(
         publicId: UUID,
@@ -431,15 +428,17 @@ class MemberService(
                 .orElseThrow { EntityNotFoundException("Member not found: $publicId") }
         val memberId = member.id!!
 
-        // Flush the delete before re-inserting: Hibernate orders inserts before deletes
-        // by default, which would otherwise violate the (user_id, training_id) unique key.
-        userTrainingRepository.deleteByMemberId(memberId)
-        userTrainingRepository.flush()
+        val requestedIds = request.trainings.map { UUID.fromString(it.trainingPublicId) }
+        if (requestedIds.size != requestedIds.toSet().size) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Duplicate trainingPublicId")
+        }
+        val existing = userTrainingRepository.findByMemberId(memberId)
+        val existingByTraining = existing.groupBy { it.training.publicId }
         val rows =
-            request.trainings.map { item ->
+            request.trainings.flatMapIndexed { index, item ->
                 val training =
                     trainingRepository
-                        .findByPublicIdAndDeletedAtIsNull(UUID.fromString(item.trainingPublicId))
+                        .findByPublicIdAndDeletedAtIsNull(requestedIds[index])
                         .orElseThrow { EntityNotFoundException("Training not found: ${item.trainingPublicId}") }
                 val status =
                     try {
@@ -447,13 +446,22 @@ class MemberService(
                     } catch (e: IllegalArgumentException) {
                         throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown training status: ${item.status}")
                     }
-                UserTraining(
-                    member = member,
-                    training = training,
-                    status = status,
-                    completedAt = item.completedAt,
+                existingByTraining[training.publicId]?.onEach { row ->
+                    row.status = status
+                    row.completedAt = item.completedAt
+                    row.startedOn = item.startedOn
+                } ?: listOf(
+                    UserTraining(
+                        member = member,
+                        training = training,
+                        status = status,
+                        completedAt = item.completedAt,
+                        startedOn = item.startedOn,
+                    ),
                 )
             }
+        val removed = existing.filter { it.training.publicId !in requestedIds }
+        if (removed.isNotEmpty()) userTrainingRepository.deleteAll(removed)
         userTrainingRepository.saveAll(rows)
 
         val trainings = rows.map { it.toDto() }

@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - HDN-202: Align newcomer import fingerprint column types with Hibernate's VARCHAR(64) mapping so schema validation can start the app.
 
 ### Added
+- HDN-212: Include training start dates in member detail and preserve imported training details when admins save the training set.
 - HDN-208: Include the latest retained group-leader tenure in member detail, even after leadership ends.
 - HDN-206: Show the number of active members still awaiting a response across open event RSVPs on the web Home dashboard.
 - HDN-197: Admins can create, view, and update encrypted member occupation (직업) in the detail API.

@@ -128,6 +128,7 @@ data class UserTrainingDto(
     val nameKo: String? = null,
     val status: String,
     val completedAt: LocalDate? = null,
+    val startedOn: LocalDate? = null,
 )
 
 /** A single ministry assignment in a member's history. */
@@ -311,6 +312,7 @@ data class MemberTrainingItem(
     @field:NotBlank(message = "status는 필수입니다.")
     val status: String,
     val completedAt: LocalDate? = null,
+    val startedOn: LocalDate? = null,
 )
 
 /**
