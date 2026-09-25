@@ -20,6 +20,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase
 import org.springframework.context.annotation.Import
 import org.springframework.test.context.ActiveProfiles
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -62,6 +63,7 @@ class MinistryAssignmentRepositoryIT {
                             startTime = LocalTime.of(7, 0),
                             endTime = LocalTime.of(9, 0),
                             location = "본당",
+                            dayOfWeek = DayOfWeek.SATURDAY,
                         ),
                         MinistrySchedule(
                             description = "사역",
@@ -87,6 +89,7 @@ class MinistryAssignmentRepositoryIT {
         assertEquals(listOf("준비모임", "사역"), reloaded.schedules.map { it.description })
         assertEquals(LocalTime.of(7, 0), reloaded.schedules.first().startTime)
         assertEquals(listOf("본당", null), reloaded.schedules.map { it.location })
+        assertEquals(listOf(DayOfWeek.SATURDAY, null), reloaded.schedules.map { it.dayOfWeek })
         assertEquals(listOf("팀장", "간사"), reloaded.contacts.map { it.role })
         assertEquals(listOf("김영원 권사님", "최혜령 자매님"), reloaded.contacts.map { it.name })
 
@@ -98,6 +101,7 @@ class MinistryAssignmentRepositoryIT {
                     startTime = LocalTime.of(12, 0),
                     endTime = LocalTime.of(14, 0),
                     location = "3층",
+                    dayOfWeek = DayOfWeek.WEDNESDAY,
                 ),
             ),
         )
@@ -109,6 +113,7 @@ class MinistryAssignmentRepositoryIT {
         assertEquals(listOf("교체된 자격"), updated.requirements)
         assertEquals(listOf("교체된 일정"), updated.schedules.map { it.description })
         assertEquals(listOf("3층"), updated.schedules.map { it.location })
+        assertEquals(listOf(DayOfWeek.WEDNESDAY), updated.schedules.map { it.dayOfWeek })
         assertEquals(listOf("담당 교역자"), updated.contacts.map { it.role })
         assertEquals(listOf("새 담당자님"), updated.contacts.map { it.name })
     }
