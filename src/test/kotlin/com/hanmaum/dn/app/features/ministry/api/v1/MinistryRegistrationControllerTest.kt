@@ -51,6 +51,36 @@ class MinistryRegistrationControllerTest {
         )
 
     @Test
+    fun `my ministries uses the JWT subject and returns application details`() {
+        `when`(service.mine("member-sub")).thenReturn(listOf(pending))
+
+        mvc
+            .perform(
+                get("/api/v1/me/ministries")
+                    .with(jwt().jwt { it.subject("member-sub") }.authorities(SimpleGrantedAuthority("ROLE_MEMBER"))),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data[0].ministryPublicId").value(ministryId.toString()))
+            .andExpect(jsonPath("$.data[0].ministryName").value("찬양팀"))
+            .andExpect(jsonPath("$.data[0].appliedAt").value("2026-09-25T10:00:00Z"))
+            .andExpect(jsonPath("$.data[0].status").value("PENDING"))
+        verify(service).mine("member-sub")
+    }
+
+    @Test
+    fun `my ministries returns an empty list when the member has no applications`() {
+        `when`(service.mine("member-sub")).thenReturn(emptyList())
+
+        mvc
+            .perform(
+                get("/api/v1/me/ministries")
+                    .with(jwt().jwt { it.subject("member-sub") }.authorities(SimpleGrantedAuthority("ROLE_MEMBER"))),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data").isArray)
+            .andExpect(jsonPath("$.data").isEmpty)
+        verify(service).mine("member-sub")
+    }
+
+    @Test
     fun `member application returns pending and notified state`() {
         `when`(service.apply(ministryId, "저는 찬양을 좋아합니다", "member-sub")).thenReturn(pending)
 

@@ -20,6 +20,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase
 import org.springframework.context.annotation.Import
 import org.springframework.test.context.ActiveProfiles
+import java.sql.Timestamp
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
@@ -46,6 +47,61 @@ class MinistryAssignmentRepositoryIT {
     @Autowired lateinit var assignments: MinistryAssignmentRepository
 
     @PersistenceContext lateinit var em: EntityManager
+
+    @Test
+    fun `own applications are isolated sorted newest first and absent members get an empty list`() {
+        val ministry = Ministry(name = "찬양 사역", shortDescription = "찬양", longDescription = "찬양 사역")
+        val owner = Member(lastName = "김", firstName = "지원")
+        val another = Member(lastName = "이", firstName = "지원")
+        val withoutApplications = Member(lastName = "박", firstName = "미신청")
+        listOf(ministry, owner, another, withoutApplications).forEach(em::persist)
+        val older =
+            MinistryAssignment(
+                ministry = ministry,
+                member = owner,
+                startDate = LocalDate.of(2026, 8, 5),
+                status = MinistryAssignmentStatus.REJECTED,
+                endDate = LocalDate.of(2026, 8, 6),
+                selfIntroduction = "첫 신청",
+            )
+        val otherMembersApplication =
+            MinistryAssignment(
+                ministry = ministry,
+                member = another,
+                startDate = LocalDate.of(2026, 8, 20),
+                status = MinistryAssignmentStatus.PENDING,
+                selfIntroduction = "다른 사람의 신청",
+            )
+        val latest =
+            MinistryAssignment(
+                ministry = ministry,
+                member = owner,
+                startDate = LocalDate.of(2026, 9, 25),
+                status = MinistryAssignmentStatus.PENDING,
+                selfIntroduction = "재신청",
+            )
+        listOf(older, otherMembersApplication, latest).forEach(em::persist)
+        em.flush()
+        listOf(
+            older.id!! to Instant.parse("2026-08-05T10:00:00Z"),
+            otherMembersApplication.id!! to Instant.parse("2026-08-20T10:00:00Z"),
+            latest.id!! to Instant.parse("2026-09-25T10:00:00Z"),
+        ).forEach { (id, appliedAt) ->
+            em
+                .createNativeQuery("UPDATE ministry_registrations SET created_at = :appliedAt WHERE id = :id")
+                .setParameter("appliedAt", Timestamp.from(appliedAt))
+                .setParameter("id", id)
+                .executeUpdate()
+        }
+        em.clear()
+
+        val own = assignments.findSelfRegistrationsByMemberId(owner.id!!)
+        assertEquals(listOf(latest.id, older.id), own.map { it.id })
+        assertEquals(listOf(MinistryAssignmentStatus.PENDING, MinistryAssignmentStatus.REJECTED), own.map { it.status })
+        assertEquals("찬양 사역", own.first().ministry.name)
+        assertEquals(Instant.parse("2026-09-25T10:00:00Z"), own.first().createdAt)
+        assertEquals(emptyList<MinistryAssignment>(), assignments.findSelfRegistrationsByMemberId(withoutApplications.id!!))
+    }
 
     @Test
     fun `persists ordered backend-driven ministry details`() {
