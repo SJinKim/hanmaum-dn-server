@@ -4,17 +4,21 @@ import com.hanmaum.dn.app.common.config.SecurityConfig
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
+import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberTrainingsRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UserTrainingDto
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.members.service.MemberService
 import org.mockito.Mockito.`when`
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.eq
+import org.mockito.kotlin.verify
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.context.annotation.Import
+import org.springframework.http.MediaType
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt
@@ -22,6 +26,7 @@ import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.time.LocalDate
@@ -103,6 +108,7 @@ class MemberProfileControllerTest {
                             nameKo = "큐티베이직세미나",
                             status = "COMPLETED",
                             completedAt = LocalDate.of(2017, 5, 1),
+                            startedOn = LocalDate.of(2016, 9, 1),
                         ),
                     ),
             ),
@@ -113,6 +119,33 @@ class MemberProfileControllerTest {
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.data.trainings[0].name").value("Quiet Time Basic Seminar"))
             .andExpect(jsonPath("$.data.trainings[0].nameKo").value("큐티베이직세미나"))
+            .andExpect(jsonPath("$.data.trainings[0].startedOn").value("2016-09-01"))
+    }
+
+    @Test
+    fun `PUT member trainings accepts startedOn`() {
+        val publicId = UUID.randomUUID()
+        val trainingId = UUID.randomUUID()
+        `when`(memberService.replaceMemberTrainings(eq(publicId), any())).thenReturn(
+            MemberDto(publicId = publicId.toString(), lastName = "김", firstName = "철수", memberStatus = "ACTIVE"),
+        )
+
+        mockMvc
+            .perform(
+                put("/api/v1/members/$publicId/trainings")
+                    .with(jwt().authorities(SimpleGrantedAuthority("ROLE_ADMIN")))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"trainings":[{"trainingPublicId":"$trainingId","status":"IN_PROGRESS","startedOn":"2024-01-01"}]}"""),
+            ).andExpect(status().isOk)
+
+        val request = argumentCaptor<ReplaceMemberTrainingsRequest>()
+        verify(memberService).replaceMemberTrainings(eq(publicId), request.capture())
+        kotlin.test.assertEquals(
+            LocalDate.of(2024, 1, 1),
+            request.firstValue.trainings
+                .single()
+                .startedOn,
+        )
     }
 
     @Test

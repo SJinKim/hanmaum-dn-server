@@ -52,4 +52,5 @@ fun UserTraining.toDto(): UserTrainingDto =
         nameKo = this.training.nameKo,
         status = this.status.name,
         completedAt = this.completedAt,
+        startedOn = this.startedOn,
     )
