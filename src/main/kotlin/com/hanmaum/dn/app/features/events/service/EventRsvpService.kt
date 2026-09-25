@@ -67,6 +67,8 @@ class EventRsvpService(
                 title = req.title,
                 windowStart = req.windowStart,
                 windowEnd = req.windowEnd,
+                isActive = req.isActive,
+                description = req.description?.trim()?.ifBlank { null },
             )
         return eventRsvpRepo.save(rsvp).toDto()
     }
@@ -91,6 +93,7 @@ class EventRsvpService(
         req.windowStart?.let { rsvp.windowStart = it }
         req.windowEnd?.let { rsvp.windowEnd = it }
         req.isActive?.let { rsvp.isActive = it }
+        req.description?.let { rsvp.description = it.trim().ifBlank { null } }
         req.announcementId?.let { id ->
             rsvp.announcement =
                 announcementRepo

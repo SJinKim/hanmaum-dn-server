@@ -17,6 +17,7 @@ fun EventRsvp.toDto(): EventRsvpDto =
         windowEnd = windowEnd,
         isActive = isActive,
         announcementPublicId = announcement?.publicId?.toString(),
+        description = description,
     )
 
 fun EventRsvp.toActiveDto(

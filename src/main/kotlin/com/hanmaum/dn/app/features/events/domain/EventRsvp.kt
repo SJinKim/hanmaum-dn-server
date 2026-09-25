@@ -24,4 +24,7 @@ class EventRsvp(
     var windowEnd: OffsetDateTime,
     @Column(name = "is_active", nullable = false)
     var isActive: Boolean = true,
+    /** Optional note shown to admins next to the title in the 이벤트 list. */
+    @Column(name = "description", length = 500)
+    var description: String? = null,
 ) : BaseEntity()

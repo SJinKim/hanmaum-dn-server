@@ -16,6 +16,7 @@ data class EventRsvpDto(
     @get:JsonProperty("isActive")
     val isActive: Boolean,
     val announcementPublicId: String?,
+    val description: String? = null,
 )
 
 data class ActiveEventRsvpDto(
@@ -106,6 +107,11 @@ data class CreateEventRsvpRequest(
     @field:NotNull(message = "종료 시간은 필수입니다.")
     val windowEnd: OffsetDateTime,
     val announcementId: UUID? = null,
+    @field:Size(max = 500, message = "설명은 최대 500자입니다.")
+    val description: String? = null,
+    /** Lets the 새 이벤트 추가 dialog save an event as 비활성 right away (바로 공개 off). */
+    @get:JsonProperty("isActive")
+    val isActive: Boolean = true,
 )
 
 /** PATCH semantics — only non-null fields applied. */
@@ -117,4 +123,7 @@ data class UpdateEventRsvpRequest(
     @get:JsonProperty("isActive")
     val isActive: Boolean? = null,
     val announcementId: UUID? = null,
+    /** Blank clears the description; null leaves it unchanged. */
+    @field:Size(max = 500, message = "설명은 최대 500자입니다.")
+    val description: String? = null,
 )

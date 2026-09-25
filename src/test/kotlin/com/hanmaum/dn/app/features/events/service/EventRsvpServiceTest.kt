@@ -191,6 +191,34 @@ class EventRsvpServiceTest {
     }
 
     @Test
+    fun `createRsvp stores a trimmed description and the chosen active state`() {
+        val req =
+            CreateEventRsvpRequest(
+                title = "여름 수련회",
+                windowStart = now.minusHours(1),
+                windowEnd = now.plusHours(2),
+                description = "  2박 3일  ",
+                isActive = false,
+            )
+        `when`(eventRsvpRepo.save(any())).thenAnswer { it.arguments[0] }
+
+        val result = service.createRsvp(req)
+
+        assertEquals("2박 3일", result.description)
+        assertEquals(false, result.isActive)
+    }
+
+    @Test
+    fun `updateRsvp clears the description on blank and keeps it on null`() {
+        val rsvp = makeRsvp()
+        rsvp.description = "2박 3일"
+        `when`(eventRsvpRepo.findByPublicIdAndDeletedAtIsNull(rsvp.publicId)).thenReturn(Optional.of(rsvp))
+
+        assertEquals("2박 3일", service.updateRsvp(rsvp.publicId, UpdateEventRsvpRequest()).description)
+        assertEquals(null, service.updateRsvp(rsvp.publicId, UpdateEventRsvpRequest(description = " ")).description)
+    }
+
+    @Test
     fun `createRsvp rejects invalid window`() {
         val req =
             CreateEventRsvpRequest(
