@@ -11,4 +11,5 @@ fun AttendanceDefinition.toDto(): DefinitionDto =
         windowStart = this.windowStart,
         windowEnd = this.windowEnd,
         isActive = this.isActive,
+        description = this.description,
     )

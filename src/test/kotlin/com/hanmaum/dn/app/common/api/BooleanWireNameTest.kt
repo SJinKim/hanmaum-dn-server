@@ -125,6 +125,7 @@ class BooleanWireNameTest {
             windowStart = LocalTime.of(10, 0),
             windowEnd = LocalTime.of(12, 0),
             isActive = true,
+            description = null,
         )
 
     private fun carDto() =
