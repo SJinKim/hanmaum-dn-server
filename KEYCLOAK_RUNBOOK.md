@@ -36,6 +36,10 @@ KEYCLOAK_SMTP_USER
 KEYCLOAK_SMTP_PASSWORD
 ```
 
+The backend also uses this SMTP connection and `KEYCLOAK_SMTP_FROM` for ministry
+application emails to leaders. If these values are missing or delivery fails, the
+application request returns 503 and does not save a pending application.
+
 Realm startup import only creates missing realms; it never updates an existing one.
 For staging and production, apply the settings in the Admin Console and use **Test
 connection** before enabling password reset. Then register a disposable account and

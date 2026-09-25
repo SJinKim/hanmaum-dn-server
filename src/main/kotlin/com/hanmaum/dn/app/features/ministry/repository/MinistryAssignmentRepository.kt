@@ -1,7 +1,9 @@
 package com.hanmaum.dn.app.features.ministry.repository
 
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
+import jakarta.persistence.LockModeType
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
@@ -22,6 +24,7 @@ interface MinistryAssignmentRepository :
         JOIN FETCH a.member member
         WHERE a.ministry.id IN :ministryIds
           AND a.endDate IS NULL
+          AND a.status = com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentStatus.ACTIVE
           AND a.deletedAt IS NULL
           AND member.deletedAt IS NULL
         """,
@@ -46,12 +49,58 @@ interface MinistryAssignmentRepository :
         @Param("memberPublicId") memberPublicId: UUID,
     ): Optional<MinistryAssignment>
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query(
+        """
+        SELECT a FROM MinistryAssignment a
+        JOIN FETCH a.member member
+        WHERE a.ministry.id = :ministryId
+          AND member.publicId = :memberPublicId
+          AND a.endDate IS NULL
+          AND a.deletedAt IS NULL
+        """,
+    )
+    fun findCurrentForDecision(
+        @Param("ministryId") ministryId: Long,
+        @Param("memberPublicId") memberPublicId: UUID,
+    ): Optional<MinistryAssignment>
+
+    @Query(
+        """
+        SELECT a FROM MinistryAssignment a
+        JOIN FETCH a.ministry
+        WHERE a.member.id = :memberId
+          AND a.selfIntroduction IS NOT NULL
+          AND a.deletedAt IS NULL
+        ORDER BY a.createdAt DESC, a.id DESC
+        """,
+    )
+    fun findSelfRegistrationsByMemberId(
+        @Param("memberId") memberId: Long,
+    ): List<MinistryAssignment>
+
+    @Query(
+        """
+        SELECT a FROM MinistryAssignment a
+        WHERE a.ministry.id = :ministryId
+          AND a.member.id = :memberId
+          AND a.selfIntroduction IS NOT NULL
+          AND a.deletedAt IS NULL
+        ORDER BY a.createdAt DESC, a.id DESC
+        """,
+    )
+    fun findSelfRegistrationsByMinistryAndMember(
+        @Param("ministryId") ministryId: Long,
+        @Param("memberId") memberId: Long,
+    ): List<MinistryAssignment>
+
     /** A member's full ministry history across all ministries (for the detail view). */
     @Query(
         """
         SELECT a FROM MinistryAssignment a
         JOIN FETCH a.ministry
         WHERE a.member.id = :memberId
+          AND a.status = com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentStatus.ACTIVE
           AND a.deletedAt IS NULL
         ORDER BY a.startDate DESC, a.createdAt DESC
         """,
@@ -80,6 +129,7 @@ interface MinistryAssignmentRepository :
         SELECT COUNT(a) > 0 FROM MinistryAssignment a
         WHERE a.member.id = :memberId
           AND a.ministry.isMinistryActive = true
+          AND a.status = com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentStatus.ACTIVE
           AND a.ministry.name LIKE CONCAT('%', :ministryName, '%')
           AND a.endDate IS NULL
           AND a.deletedAt IS NULL
@@ -102,6 +152,7 @@ interface MinistryAssignmentRepository :
         WHERE a.member.id IN :memberIds
           AND a.deletedAt IS NULL
           AND a.endDate IS NULL
+          AND a.status = com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentStatus.ACTIVE
         """,
     )
     fun findActiveByMemberIds(
@@ -115,6 +166,7 @@ interface MinistryAssignmentRepository :
         FROM MinistryAssignment a
         WHERE a.ministry.publicId = :ministryPublicId
           AND a.endDate IS NULL
+          AND a.status = com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentStatus.ACTIVE
           AND a.deletedAt IS NULL
         """,
     )

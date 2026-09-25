@@ -3,6 +3,7 @@ package com.hanmaum.dn.app.features.ministry.repository
 import com.hanmaum.dn.app.common.domainvalue.Gender
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentRole
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentStatus
+import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 
@@ -16,4 +17,6 @@ data class ActiveMemberView(
     val role: MinistryAssignmentRole = MinistryAssignmentRole.MEMBER,
     val status: MinistryAssignmentStatus = MinistryAssignmentStatus.ACTIVE,
     val endDate: LocalDate? = null,
+    val selfIntroduction: String? = null,
+    val appliedAt: Instant? = null,
 )

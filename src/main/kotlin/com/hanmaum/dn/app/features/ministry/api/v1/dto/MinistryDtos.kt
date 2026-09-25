@@ -12,6 +12,7 @@ import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Pattern
 import jakarta.validation.constraints.Size
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.util.UUID
@@ -105,6 +106,38 @@ data class ActiveMinistryMemberDto(
     val role: MinistryAssignmentRole = MinistryAssignmentRole.MEMBER,
     val status: MinistryAssignmentStatus = MinistryAssignmentStatus.ACTIVE,
     val endDate: String? = null,
+    /** Visible to reviewers for a pending self-application only. */
+    val selfIntroduction: String? = null,
+    val appliedAt: Instant? = null,
+)
+
+/** The authenticated member's application; the leader's response is private to them. */
+data class MinistryRegistrationDto(
+    val ministryPublicId: String,
+    val ministryName: String,
+    val appliedAt: Instant,
+    val status: MinistryAssignmentStatus,
+    val leaderNotified: Boolean,
+    val rejectionMessage: String? = null,
+)
+
+/** A member must introduce themselves when applying to a ministry. */
+data class SelfRegisterMinistryRequest(
+    @field:NotBlank(message = "자기 소개는 필수입니다.")
+    @field:Size(max = 500, message = "자기 소개는 최대 500자입니다.")
+    val selfIntroduction: String,
+)
+
+enum class MinistryRegistrationDecision {
+    APPROVE,
+    REJECT,
+}
+
+/** A leader's decision on a pending team applicant. Rejections require a message. */
+data class ReviewMinistryRegistrationRequest(
+    val decision: MinistryRegistrationDecision,
+    @field:Size(max = 500, message = "거절 사유는 최대 500자입니다.")
+    val message: String? = null,
 )
 
 // ─── Request DTOs ─────────────────────────────────────────────────────────────

@@ -1,7 +1,9 @@
 package com.hanmaum.dn.app.features.ministry.repository
 
 import com.hanmaum.dn.app.features.ministry.domain.Ministry
+import jakarta.persistence.LockModeType
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
@@ -11,6 +13,12 @@ import java.util.UUID
 @Repository
 interface MinistryRepository : JpaRepository<Ministry, Long> {
     fun findByPublicIdAndDeletedAtIsNull(publicId: UUID): Optional<Ministry>
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT ministry FROM Ministry ministry WHERE ministry.publicId = :publicId AND ministry.deletedAt IS NULL")
+    fun findForUpdateByPublicIdAndDeletedAtIsNull(
+        @Param("publicId") publicId: UUID,
+    ): Optional<Ministry>
 
     /**
      * List ministries, optionally filtering by active flag.

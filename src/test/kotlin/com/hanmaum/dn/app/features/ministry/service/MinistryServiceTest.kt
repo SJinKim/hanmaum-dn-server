@@ -53,7 +53,7 @@ class MinistryServiceTest {
 
     private lateinit var service: MinistryService
 
-    // Fixed clock: 2026-06-22 (Berlin) → assignments start on the first of the month.
+    // Fixed clock: 2026-06-22 (Berlin) → default assignment start dates use today.
     private val clock = Clock.fixed(Instant.parse("2026-06-22T08:00:00Z"), ZoneId.of("Europe/Berlin"))
 
     @BeforeEach
@@ -504,7 +504,7 @@ class MinistryServiceTest {
     fun `addMember - binds existing member and returns active-member dto`() {
         val ministry = makeMinistry()
         val member = makeMember()
-        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId))
+        `when`(ministryRepository.findForUpdateByPublicIdAndDeletedAtIsNull(ministry.publicId))
             .thenReturn(Optional.of(ministry))
         `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
             .thenReturn(Optional.of(member))
@@ -528,7 +528,7 @@ class MinistryServiceTest {
     fun `addMember - keeps the day of the provided startDate`() {
         val ministry = makeMinistry()
         val member = makeMember()
-        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId))
+        `when`(ministryRepository.findForUpdateByPublicIdAndDeletedAtIsNull(ministry.publicId))
             .thenReturn(Optional.of(ministry))
         `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
             .thenReturn(Optional.of(member))
@@ -550,7 +550,7 @@ class MinistryServiceTest {
     fun `addMember - 409 when member already active in this ministry`() {
         val ministry = makeMinistry()
         val member = makeMember()
-        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId))
+        `when`(ministryRepository.findForUpdateByPublicIdAndDeletedAtIsNull(ministry.publicId))
             .thenReturn(Optional.of(ministry))
         `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
             .thenReturn(Optional.of(member))
@@ -569,7 +569,7 @@ class MinistryServiceTest {
     @Test
     fun `addMember - 404 when ministry not found`() {
         val ministryId = UUID.randomUUID()
-        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministryId))
+        `when`(ministryRepository.findForUpdateByPublicIdAndDeletedAtIsNull(ministryId))
             .thenReturn(Optional.empty())
 
         assertThrows<EntityNotFoundException> {
@@ -582,7 +582,7 @@ class MinistryServiceTest {
     fun `addMember - 404 when member not found`() {
         val ministry = makeMinistry()
         val unknownMemberId = UUID.randomUUID()
-        `when`(ministryRepository.findByPublicIdAndDeletedAtIsNull(ministry.publicId))
+        `when`(ministryRepository.findForUpdateByPublicIdAndDeletedAtIsNull(ministry.publicId))
             .thenReturn(Optional.of(ministry))
         `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(unknownMemberId))
             .thenReturn(Optional.empty())

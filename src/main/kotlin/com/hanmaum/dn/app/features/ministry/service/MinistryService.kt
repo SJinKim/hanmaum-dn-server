@@ -144,8 +144,8 @@ class MinistryService(
     /**
      * Binds an existing member to a ministry (the "맴버 추가" action on the ministry detail page).
      * Authorized for ADMIN and MINISTRY_LEADER at the controller; no ownership check — any
-     * ministry-leader may add to any ministry. Creates a [MinistryAssignment] starting on the
-     * first of the current month.
+     * ministry-leader may add to any ministry. Creates a [MinistryAssignment] starting on
+     * the requested date, or today when no date is supplied.
      *
      * @throws EntityNotFoundException if the ministry or member is missing/soft-deleted
      * @throws ResponseStatusException 409 if the member is already active in this ministry
@@ -157,7 +157,7 @@ class MinistryService(
     ): ActiveMinistryMemberDto {
         val ministry =
             ministryRepository
-                .findByPublicIdAndDeletedAtIsNull(ministryPublicId)
+                .findForUpdateByPublicIdAndDeletedAtIsNull(ministryPublicId)
                 .orElseThrow { EntityNotFoundException("Ministry not found: $ministryPublicId") }
         val member =
             memberRepository
@@ -185,6 +185,12 @@ class MinistryService(
     ): ActiveMinistryMemberDto {
         val ministry = findMinistry(ministryPublicId)
         val assignment = findCurrentAssignment(ministry, memberPublicId)
+        if (assignment.selfIntroduction != null && assignment.status == MinistryAssignmentStatus.PENDING) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Review this application through the applications endpoint")
+        }
+        if (req.status == MinistryAssignmentStatus.REJECTED) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "A rejection needs a message and must use the applications endpoint")
+        }
         val startDate = req.startDate ?: assignment.startDate
         if (req.endDate != null && req.endDate.isBefore(startDate)) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "End date precedes start date")

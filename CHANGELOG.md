@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - HDN-202: Align newcomer import fingerprint column types with Hibernate's VARCHAR(64) mapping so schema validation can start the app.
 
 ### Added
+- HDN-170: Active members can apply to ministries with a private introduction; leaders receive an email, review pending team applications, and send a private rejection message before reapplication.
 - HDN-218: Store an optional weekday per ministry schedule and expose it in create, update, and detail responses.
 - HDN-216: Store an optional location per ministry schedule and expose it in create, update, and detail responses.
 - HDN-214: Show ministry member counts, previews, roles, status, and history; manage individual assignments and leaders from the admin screens.
