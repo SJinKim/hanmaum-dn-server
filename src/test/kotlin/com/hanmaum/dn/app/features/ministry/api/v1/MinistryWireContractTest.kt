@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.ministry.api.v1
 
+import com.hanmaum.dn.app.features.members.api.v1.dto.MemberNameDto
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryContactDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryDto
@@ -71,6 +72,10 @@ class MinistryWireContractTest {
             imageUrl = null,
             contacts = contacts,
             isActive = true,
+            memberCount = 5,
+            memberPreview = listOf(MemberNameDto(publicId = UUID.randomUUID().toString(), fullName = "김철수")),
+            leaderPublicId = UUID.randomUUID().toString(),
+            leaderName = "김철수",
         )
 
     private fun detail() =
@@ -106,6 +111,9 @@ class MinistryWireContractTest {
             .andExpect(jsonPath("$.data[0].title").value("난민 사역"))
             .andExpect(jsonPath("$.data[0].subtitle").value("하나님의 사랑을 나누고, 복음을 전하는 사역입니다."))
             .andExpect(jsonPath("$.data[0].contacts").isArray)
+            .andExpect(jsonPath("$.data[0].memberCount").value(5))
+            .andExpect(jsonPath("$.data[0].memberPreview[0].fullName").value("김철수"))
+            .andExpect(jsonPath("$.data[0].leaderName").value("김철수"))
             // The entity column names must never surface: these are what the client used
             // to expect, and what an "align the DTO with the entity" refactor would produce.
             .andExpect(jsonPath("$.data[0].name").doesNotExist())

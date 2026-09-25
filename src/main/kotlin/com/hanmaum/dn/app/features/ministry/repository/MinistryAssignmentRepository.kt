@@ -8,11 +8,44 @@ import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
+import java.util.Optional
+import java.util.UUID
 
 @Repository
 interface MinistryAssignmentRepository :
     JpaRepository<MinistryAssignment, Long>,
     MinistryAssignmentSecureQueries {
+    /** One batched, decryptable load for ministry cards and leader details. */
+    @Query(
+        """
+        SELECT a FROM MinistryAssignment a
+        JOIN FETCH a.member member
+        WHERE a.ministry.id IN :ministryIds
+          AND a.endDate IS NULL
+          AND a.deletedAt IS NULL
+          AND member.deletedAt IS NULL
+        """,
+    )
+    fun findCurrentByMinistryIds(
+        @Param("ministryIds") ministryIds: Collection<Long>,
+    ): List<MinistryAssignment>
+
+    @Query(
+        """
+        SELECT a FROM MinistryAssignment a
+        JOIN FETCH a.member member
+        WHERE a.ministry.id = :ministryId
+          AND member.publicId = :memberPublicId
+          AND a.endDate IS NULL
+          AND a.deletedAt IS NULL
+          AND member.deletedAt IS NULL
+        """,
+    )
+    fun findCurrentByMinistryIdAndMemberPublicId(
+        @Param("ministryId") ministryId: Long,
+        @Param("memberPublicId") memberPublicId: UUID,
+    ): Optional<MinistryAssignment>
+
     /** A member's full ministry history across all ministries (for the detail view). */
     @Query(
         """

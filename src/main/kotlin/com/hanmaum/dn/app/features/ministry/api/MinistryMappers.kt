@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.ministry.api
 
+import com.hanmaum.dn.app.features.members.api.toNameDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.ActiveMinistryMemberDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.CreateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryContactDto
@@ -11,6 +12,8 @@ import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistrySummaryDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.domain.Ministry
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
+import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentRole
+import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentStatus
 import com.hanmaum.dn.app.features.ministry.domain.MinistryContact
 import com.hanmaum.dn.app.features.ministry.domain.MinistrySchedule
 import com.hanmaum.dn.app.features.ministry.repository.ActiveMemberView
@@ -23,7 +26,7 @@ fun CreateMinistryRequest.toEntity(): Ministry =
         shortDescription = this.subtitle,
         longDescription = this.about,
         imageUrl = this.imageUrl,
-        isMinistryActive = true,
+        isMinistryActive = this.isActive,
     ).also { ministry ->
         ministry.replaceRequirements(this.requirements)
         ministry.replaceSchedules(this.schedules.map { it.toDomain() })
@@ -46,7 +49,7 @@ fun Ministry.applyPatch(request: UpdateMinistryRequest) {
 
 // ─── Entity → DTO mappings ────────────────────────────────────────────────────
 
-fun Ministry.toSummaryDto(): MinistrySummaryDto =
+fun Ministry.toSummaryDto(assignments: List<MinistryAssignment> = emptyList()): MinistrySummaryDto =
     MinistrySummaryDto(
         publicId = this.publicId.toString(),
         title = this.name,
@@ -54,9 +57,25 @@ fun Ministry.toSummaryDto(): MinistrySummaryDto =
         imageUrl = this.imageUrl,
         contacts = this.contacts.map { it.toDto() },
         isActive = this.isMinistryActive,
+        memberCount = assignments.filter { it.status == MinistryAssignmentStatus.ACTIVE }.distinctBy { it.member.publicId }.size,
+        memberPreview =
+            assignments
+                .filter { it.status == MinistryAssignmentStatus.ACTIVE }
+                .map { it.member }
+                .distinctBy { it.publicId }
+                .sortedBy { it.getFullName() }
+                .take(4)
+                .map { it.toNameDto() },
+        leaderPublicId =
+            assignments
+                .firstOrNull { it.role == MinistryAssignmentRole.LEADER }
+                ?.member
+                ?.publicId
+                ?.toString(),
+        leaderName = assignments.firstOrNull { it.role == MinistryAssignmentRole.LEADER }?.member?.getFullName(),
     )
 
-fun Ministry.toDto(): MinistryDto =
+fun Ministry.toDto(leader: MinistryAssignment? = null): MinistryDto =
     MinistryDto(
         publicId = this.publicId.toString(),
         title = this.name,
@@ -67,6 +86,8 @@ fun Ministry.toDto(): MinistryDto =
         contacts = this.contacts.map { it.toDto() },
         imageUrl = this.imageUrl,
         isActive = this.isMinistryActive,
+        leaderPublicId = leader?.member?.publicId?.toString(),
+        leaderName = leader?.member?.getFullName(),
     )
 
 fun MinistryContactRequest.toDomain(): MinistryContact =
@@ -102,6 +123,9 @@ fun ActiveMemberView.toDto(): ActiveMinistryMemberDto =
         startDate = this.startDate.toString(),
         note = this.note,
         gender = this.gender?.name,
+        role = this.role,
+        status = this.status,
+        endDate = this.endDate?.toString(),
     )
 
 /** Maps a freshly created assignment to the same shape the active-members table renders. */
@@ -112,4 +136,7 @@ fun MinistryAssignment.toActiveMemberDto(): ActiveMinistryMemberDto =
         startDate = this.startDate.toString(),
         note = this.note,
         gender = this.member.gender?.name,
+        role = this.role,
+        status = this.status,
+        endDate = this.endDate?.toString(),
     )

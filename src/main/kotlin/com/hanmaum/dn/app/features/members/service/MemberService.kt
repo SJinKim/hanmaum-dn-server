@@ -469,10 +469,7 @@ class MemberService(
         return member.toDto(trainings, ministries, groupLeaderSince(memberId), graduatedOn(memberId))
     }
 
-    /**
-     * Replaces a member's entire ministry assignment set (PUT semantics). Existing
-     * rows are deleted and re-created from the request. Returns refreshed member detail.
-     */
+    /** Replaces the assignment set while retaining role and status on matching rows. */
     @Transactional
     fun replaceMemberMinistries(
         publicId: UUID,
@@ -484,25 +481,37 @@ class MemberService(
                 .orElseThrow { EntityNotFoundException("Member not found: $publicId") }
         val memberId = member.id!!
 
-        // Flush the delete before re-inserting so Hibernate doesn't reorder the new
-        // inserts ahead of the delete (mirrors replaceMemberTrainings).
-        ministryAssignmentRepository.deleteByMemberId(memberId)
-        ministryAssignmentRepository.flush()
-
+        val existing = ministryAssignmentRepository.findByMemberId(memberId)
+        val retained = mutableSetOf<MinistryAssignment>()
         val rows =
             request.ministries.map { item ->
                 val ministry =
                     ministryRepository
                         .findByPublicIdAndDeletedAtIsNull(UUID.fromString(item.ministryPublicId))
                         .orElseThrow { EntityNotFoundException("Ministry not found: ${item.ministryPublicId}") }
-                MinistryAssignment(
-                    ministry = ministry,
-                    member = member,
-                    startDate = item.startDate,
-                    endDate = item.endDate,
-                    note = item.note,
-                )
+                val candidates = existing.filter { it.ministry.publicId == ministry.publicId && it !in retained }
+                val match =
+                    candidates.firstOrNull { it.startDate == item.startDate }
+                        ?: candidates.filter { it.endDate == null && item.endDate == null }.singleOrNull()
+                        ?: candidates.singleOrNull()
+                if (match != null) {
+                    retained.add(match)
+                    match.startDate = item.startDate
+                    match.endDate = item.endDate
+                    match.note = item.note
+                    match
+                } else {
+                    MinistryAssignment(
+                        ministry = ministry,
+                        member = member,
+                        startDate = item.startDate,
+                        endDate = item.endDate,
+                        note = item.note,
+                    )
+                }
             }
+        val removed = existing.filter { it !in retained }
+        if (removed.isNotEmpty()) ministryAssignmentRepository.deleteAll(removed)
         ministryAssignmentRepository.saveAll(rows)
 
         // Re-read both lists from the DB so the returned detail reflects persisted state.

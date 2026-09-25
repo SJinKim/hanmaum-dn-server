@@ -6,6 +6,8 @@ import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.ministry.domain.Ministry
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
+import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentRole
+import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentStatus
 import com.hanmaum.dn.app.features.ministry.domain.MinistryContact
 import com.hanmaum.dn.app.features.ministry.domain.MinistrySchedule
 import jakarta.persistence.EntityManager
@@ -186,5 +188,47 @@ class MinistryAssignmentRepositoryIT {
         val results = assignments.findActiveByMinistryPublicId(ministry.publicId)
 
         assertEquals(1, results.size)
+    }
+
+    @Test
+    fun `current and history queries keep role status and end date`() {
+        val ministry = Ministry(name = "기도팀", shortDescription = "Prayer", longDescription = "Prayer ministry")
+        val current = Member(lastName = "김", firstName = "현재")
+        val former = Member(lastName = "이", firstName = "이전")
+        em.persist(ministry)
+        em.persist(current)
+        em.persist(former)
+        em.persist(
+            MinistryAssignment(
+                ministry = ministry,
+                member = current,
+                startDate = LocalDate.of(2025, 1, 1),
+                role = MinistryAssignmentRole.LEADER,
+                status = MinistryAssignmentStatus.ACTIVE,
+            ),
+        )
+        em.persist(
+            MinistryAssignment(
+                ministry = ministry,
+                member = former,
+                startDate = LocalDate.of(2024, 1, 1),
+                endDate = LocalDate.of(2024, 9, 15),
+                role = MinistryAssignmentRole.SUB_LEADER,
+                status = MinistryAssignmentStatus.PENDING,
+            ),
+        )
+        em.flush()
+        em.clear()
+
+        val currentRows = assignments.findActiveByMinistryPublicId(ministry.publicId)
+        val history = assignments.findByMinistryPublicIdIncludingEnded(ministry.publicId)
+        val batch = assignments.findCurrentByMinistryIds(listOf(ministry.id!!))
+
+        assertEquals(listOf("김현재"), currentRows.map { it.fullName })
+        assertEquals(2, history.size)
+        assertEquals(LocalDate.of(2024, 9, 15), history.first { it.fullName == "이이전" }.endDate)
+        assertEquals(MinistryAssignmentRole.SUB_LEADER, history.first { it.fullName == "이이전" }.role)
+        assertEquals(MinistryAssignmentStatus.PENDING, history.first { it.fullName == "이이전" }.status)
+        assertEquals(listOf(current.publicId), batch.map { it.member.publicId })
     }
 }

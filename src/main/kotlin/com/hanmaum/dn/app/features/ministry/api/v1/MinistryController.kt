@@ -6,8 +6,10 @@ import com.hanmaum.dn.app.features.ministry.api.v1.dto.AddMinistryMemberRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.CreateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistrySummaryDto
+import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateMinistryMemberRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.service.MinistryService
+import io.swagger.v3.oas.annotations.Operation
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -73,14 +75,15 @@ class MinistryController(
 
     /**
      * GET /api/v1/ministries/{publicId}/members
-     * Role: authenticated — list members currently active in this ministry (endDate IS NULL).
+     * Role: authenticated — current members by default; includeEnded adds history.
      */
     @GetMapping("/{publicId}/members")
     @PreAuthorize("isAuthenticated()")
     fun getActiveMembers(
         @PathVariable publicId: UUID,
+        @RequestParam(defaultValue = "false") includeEnded: Boolean,
     ): ResponseEntity<ApiResponse<List<ActiveMinistryMemberDto>>> {
-        val members = ministryService.getActiveMembers(publicId)
+        val members = ministryService.getActiveMembers(publicId, includeEnded)
         return ResponseEntity.ok(ApiResponse.success(data = members))
     }
 
@@ -99,6 +102,30 @@ class MinistryController(
         return ResponseEntity
             .status(HttpStatus.CREATED)
             .body(ApiResponse.success(data = added, message = "맴버가 부서에 추가되었습니다."))
+    }
+
+    /** PATCH one current member assignment without changing their other ministries. */
+    @PatchMapping("/{publicId}/members/{memberPublicId}")
+    @Operation(operationId = "updateMinistryMember")
+    @PreAuthorize("hasRole('ADMIN')")
+    fun updateMember(
+        @PathVariable publicId: UUID,
+        @PathVariable memberPublicId: UUID,
+        @Valid @RequestBody request: UpdateMinistryMemberRequest,
+    ): ResponseEntity<ApiResponse<ActiveMinistryMemberDto>> {
+        val updated = ministryService.updateMember(publicId, memberPublicId, request)
+        return ResponseEntity.ok(ApiResponse.success(data = updated))
+    }
+
+    /** End one current assignment today, retaining it in ministry history. */
+    @DeleteMapping("/{publicId}/members/{memberPublicId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun removeMember(
+        @PathVariable publicId: UUID,
+        @PathVariable memberPublicId: UUID,
+    ) {
+        ministryService.removeMember(publicId, memberPublicId)
     }
 
     /**

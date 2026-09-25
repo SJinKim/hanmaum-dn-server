@@ -6,6 +6,8 @@ import com.hanmaum.dn.app.features.members.domain.Member
 import jakarta.persistence.Column
 import jakarta.persistence.Convert
 import jakarta.persistence.Entity
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
 import jakarta.persistence.FetchType
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
@@ -15,7 +17,7 @@ import java.time.LocalDate
 
 /**
  * A member's assignment to a [Ministry] for a date range. [startDate] is the
- * first-of-month the assignment began; [endDate] is the first-of-month it ended,
+ * first-of-month the assignment began; [endDate] is the day it ended,
  * or null while the member is currently active in the ministry.
  * Physical table is still `ministry_registrations` (entity renamed only).
  */
@@ -32,6 +34,12 @@ class MinistryAssignment(
     var startDate: LocalDate,
     @Column(name = "end_date")
     var endDate: LocalDate? = null,
+    @Enumerated(EnumType.STRING)
+    @Column(name = "assignment_role", nullable = false, length = 20)
+    var role: MinistryAssignmentRole = MinistryAssignmentRole.MEMBER,
+    @Enumerated(EnumType.STRING)
+    @Column(name = "assignment_status", nullable = false, length = 20)
+    var status: MinistryAssignmentStatus = MinistryAssignmentStatus.ACTIVE,
     // Length is enforced at the API layer (MemberMinistryItem @Size max 500);
     // columnDefinition wins over `length` in DDL, so we omit the redundant attribute.
     @Convert(converter = EncryptedMinistryNoteConverter::class)
