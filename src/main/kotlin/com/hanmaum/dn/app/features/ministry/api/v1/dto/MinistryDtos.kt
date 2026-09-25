@@ -11,6 +11,7 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Pattern
 import jakarta.validation.constraints.Size
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
 import java.util.UUID
@@ -90,6 +91,8 @@ data class MinistryScheduleDto(
     val endTime: LocalTime,
     /** Optional place for this schedule. */
     val location: String? = null,
+    /** Optional weekday the schedule repeats on. */
+    val dayOfWeek: DayOfWeek? = null,
 )
 
 /** One member assignment — returned by GET /{publicId}/members. */
@@ -206,4 +209,6 @@ data class MinistryScheduleRequest(
     /** Optional place for this schedule. */
     @field:Size(max = 100, message = "사역 일정 장소는 최대 100자입니다.")
     val location: String? = null,
+    /** Optional weekday the schedule repeats on. */
+    val dayOfWeek: DayOfWeek? = null,
 )

@@ -28,6 +28,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import java.time.DayOfWeek
 import java.time.LocalTime
 import java.util.UUID
 import kotlin.test.Test
@@ -51,7 +52,7 @@ class MinistryControllerTest {
     fun `POST ministry accepts schedule location`() {
         val body =
             """{"title":"찬양팀","subtitle":"찬양 사역","about":"소개","schedules":[""" +
-                """{"description":"연습","startTime":"07:00","endTime":"09:00","location":"본당"}]}"""
+                """{"description":"연습","startTime":"07:00","endTime":"09:00","location":"본당","dayOfWeek":"THURSDAY"}]}"""
         val dto =
             MinistryDto(
                 "id",
@@ -59,7 +60,7 @@ class MinistryControllerTest {
                 "찬양 사역",
                 "소개",
                 emptyList(),
-                listOf(MinistryScheduleDto("연습", LocalTime.of(7, 0), LocalTime.of(9, 0), "본당")),
+                listOf(MinistryScheduleDto("연습", LocalTime.of(7, 0), LocalTime.of(9, 0), "본당", DayOfWeek.THURSDAY)),
                 emptyList(),
                 null,
                 true,
@@ -75,6 +76,7 @@ class MinistryControllerTest {
                     .content(body),
             ).andExpect(status().isCreated)
             .andExpect(jsonPath("$.data.schedules[0].location").value("본당"))
+            .andExpect(jsonPath("$.data.schedules[0].dayOfWeek").value("THURSDAY"))
 
         val request = argumentCaptor<CreateMinistryRequest>()
         verify(ministryService).createMinistry(request.capture())
@@ -84,12 +86,18 @@ class MinistryControllerTest {
                 .single()
                 .location,
         )
+        assertEquals(
+            DayOfWeek.THURSDAY,
+            request.firstValue.schedules
+                .single()
+                .dayOfWeek,
+        )
     }
 
     @Test
     fun `PATCH ministry accepts schedule location`() {
         val publicId = UUID.randomUUID()
-        val body = """{"schedules":[{"description":"연습","startTime":"07:00","endTime":"09:00","location":"3층"}]}"""
+        val body = """{"schedules":[{"description":"연습","startTime":"07:00","endTime":"09:00","location":"3층","dayOfWeek":"SUNDAY"}]}"""
         val dto =
             MinistryDto(
                 publicId.toString(),
@@ -97,7 +105,7 @@ class MinistryControllerTest {
                 "찬양 사역",
                 "소개",
                 emptyList(),
-                listOf(MinistryScheduleDto("연습", LocalTime.of(7, 0), LocalTime.of(9, 0), "3층")),
+                listOf(MinistryScheduleDto("연습", LocalTime.of(7, 0), LocalTime.of(9, 0), "3층", DayOfWeek.SUNDAY)),
                 emptyList(),
                 null,
                 true,
@@ -112,6 +120,7 @@ class MinistryControllerTest {
                 ).with(user("admin").roles("ADMIN")).with(csrf()).contentType(MediaType.APPLICATION_JSON).content(body),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.data.schedules[0].location").value("3층"))
+            .andExpect(jsonPath("$.data.schedules[0].dayOfWeek").value("SUNDAY"))
 
         val request = argumentCaptor<UpdateMinistryRequest>()
         verify(ministryService).updateMinistry(eq(publicId), request.capture())
@@ -121,6 +130,29 @@ class MinistryControllerTest {
                 .single()
                 .location,
         )
+        assertEquals(
+            DayOfWeek.SUNDAY,
+            request.firstValue.schedules!!
+                .single()
+                .dayOfWeek,
+        )
+    }
+
+    @Test
+    fun `POST ministry rejects unknown schedule weekday`() {
+        val body =
+            """{"title":"찬양팀","subtitle":"찬양 사역","about":"소개","schedules":[""" +
+                """{"description":"연습","startTime":"07:00","endTime":"09:00","dayOfWeek":"FUNDAY"}]}"""
+
+        mockMvc
+            .perform(
+                post("/api/v1/ministries")
+                    .with(user("admin").roles("ADMIN"))
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body),
+            ).andExpect(status().isBadRequest)
+        org.mockito.Mockito.verifyNoInteractions(ministryService)
     }
 
     @Test
@@ -162,6 +194,7 @@ class MinistryControllerTest {
                             startTime = LocalTime.of(7, 0),
                             endTime = LocalTime.of(9, 0),
                             location = "본당",
+                            dayOfWeek = DayOfWeek.SATURDAY,
                         ),
                     ),
                 contacts =
@@ -187,6 +220,7 @@ class MinistryControllerTest {
             .andExpect(jsonPath("$.data.schedules[0].startTime").value("07:00"))
             .andExpect(jsonPath("$.data.schedules[0].endTime").value("09:00"))
             .andExpect(jsonPath("$.data.schedules[0].location").value("본당"))
+            .andExpect(jsonPath("$.data.schedules[0].dayOfWeek").value("SATURDAY"))
             .andExpect(jsonPath("$.data.contacts[0].role").value("팀장"))
             .andExpect(jsonPath("$.data.contacts[0].name").value("김영원 권사님"))
             .andExpect(jsonPath("$.data.contacts[1].role").value("간사"))

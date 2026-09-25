@@ -35,6 +35,7 @@ import org.mockito.kotlin.never
 import org.springframework.web.server.ResponseStatusException
 import java.lang.reflect.Field
 import java.time.Clock
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -118,6 +119,7 @@ class MinistryServiceTest {
                             startTime = LocalTime.of(7, 0),
                             endTime = LocalTime.of(9, 0),
                             location = "본당",
+                            dayOfWeek = DayOfWeek.SATURDAY,
                         ),
                     ),
                 contacts =
@@ -140,6 +142,7 @@ class MinistryServiceTest {
                             startTime = req.schedules.single().startTime,
                             endTime = req.schedules.single().endTime,
                             location = req.schedules.single().location,
+                            dayOfWeek = req.schedules.single().dayOfWeek,
                         ),
                     ),
                 )
@@ -165,6 +168,7 @@ class MinistryServiceTest {
         )
         assertEquals("팀장", result.contacts[0].role)
         assertEquals("본당", result.schedules.single().location)
+        assertEquals(DayOfWeek.SATURDAY, result.schedules.single().dayOfWeek)
         assertEquals("김영원 권사님", result.contacts[0].name)
         assertEquals("간사", result.contacts[1].role)
         assertEquals("최혜령 자매님", result.contacts[1].name)

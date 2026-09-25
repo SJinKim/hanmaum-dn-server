@@ -2,6 +2,9 @@ package com.hanmaum.dn.app.features.ministry.domain
 
 import jakarta.persistence.Column
 import jakarta.persistence.Embeddable
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
+import java.time.DayOfWeek
 import java.time.LocalTime
 
 @Embeddable
@@ -14,4 +17,7 @@ class MinistrySchedule(
     var endTime: LocalTime,
     @Column(name = "location", length = 100)
     var location: String? = null,
+    @Enumerated(EnumType.STRING)
+    @Column(name = "day_of_week", length = 20)
+    var dayOfWeek: DayOfWeek? = null,
 )
