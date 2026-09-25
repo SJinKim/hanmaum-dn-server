@@ -19,7 +19,7 @@ import java.time.LocalDate
 
 /**
  * A member's assignment to a [Ministry] for a date range. [startDate] is the
- * first-of-month the assignment began; [endDate] is the day it ended,
+ * day the assignment began; [endDate] is the day it ended,
  * or null while the member is currently active in the ministry.
  * Physical table is still `ministry_registrations` (entity renamed only).
  */

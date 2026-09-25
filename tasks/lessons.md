@@ -189,3 +189,7 @@
 ### Prove persistence flows beneath mocked controller tests
 - **Mistake**: Claimed POST, GET, and PATCH occupation acceptance criteria were covered by controller tests whose mocked service returned fixed DTOs.
 - **Rule**: When a controller slice mocks the service, also test the service write and read path with assertions on the saved entity and returned DTO; a fixed mock response only proves HTTP serialization.
+
+### Preserve exact dates across related assignment flows
+- **Mistake**: The ministry self-registration branch still rounded application and approval start dates to the first of the month while another branch fixed assignment dates to retain the day.
+- **Rule**: When a date semantics fix lands on main, search every related write path and assert the exact day in focused tests before resolving and merging dependent PRs.

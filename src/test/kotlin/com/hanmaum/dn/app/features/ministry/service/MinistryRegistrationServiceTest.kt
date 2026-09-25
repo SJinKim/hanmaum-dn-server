@@ -67,7 +67,7 @@ class MinistryRegistrationServiceTest {
         val saved = argumentCaptor<MinistryAssignment>()
         verify(assignments).saveAndFlush(saved.capture())
         assertEquals("저는 노래를 좋아합니다", saved.firstValue.selfIntroduction)
-        assertEquals(LocalDate.of(2026, 9, 1), saved.firstValue.startDate)
+        assertEquals(LocalDate.of(2026, 9, 25), saved.firstValue.startDate)
         verify(email).sendApplication("leader@example.org", "찬양팀", applicant.getFullName(), "저는 노래를 좋아합니다")
     }
 
@@ -143,6 +143,7 @@ class MinistryRegistrationServiceTest {
             )
 
         assertEquals(MinistryAssignmentStatus.ACTIVE, result.status)
+        assertEquals(LocalDate.of(2026, 9, 25), pending.startDate)
         assertNull(result.rejectionMessage)
         assertNotNull(pending.createdAt)
         verify(notifications).save(any())

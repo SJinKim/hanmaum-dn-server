@@ -144,8 +144,8 @@ class MinistryService(
     /**
      * Binds an existing member to a ministry (the "맴버 추가" action on the ministry detail page).
      * Authorized for ADMIN and MINISTRY_LEADER at the controller; no ownership check — any
-     * ministry-leader may add to any ministry. Creates a [MinistryAssignment] starting on the
-     * first of the current month.
+     * ministry-leader may add to any ministry. Creates a [MinistryAssignment] starting on
+     * the requested date, or today when no date is supplied.
      *
      * @throws EntityNotFoundException if the ministry or member is missing/soft-deleted
      * @throws ResponseStatusException 409 if the member is already active in this ministry
@@ -170,7 +170,7 @@ class MinistryService(
             MinistryAssignment(
                 ministry = ministry,
                 member = member,
-                startDate = (req.startDate ?: LocalDate.now(clock)).withDayOfMonth(1),
+                startDate = req.startDate ?: LocalDate.now(clock),
                 note = req.note,
             )
         return ministryAssignmentRepository.save(assignment).toActiveMemberDto()
@@ -191,7 +191,7 @@ class MinistryService(
         if (req.status == MinistryAssignmentStatus.REJECTED) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "A rejection needs a message and must use the applications endpoint")
         }
-        val startDate = req.startDate?.withDayOfMonth(1) ?: assignment.startDate
+        val startDate = req.startDate ?: assignment.startDate
         if (req.endDate != null && req.endDate.isBefore(startDate)) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "End date precedes start date")
         }
@@ -255,7 +255,7 @@ class MinistryService(
                     MinistryAssignment(
                         ministry = ministry,
                         member = member,
-                        startDate = LocalDate.now(clock).withDayOfMonth(1),
+                        startDate = LocalDate.now(clock),
                     ),
                 )
         promoteLeader(ministry, assignment)

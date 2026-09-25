@@ -67,7 +67,7 @@ class MinistryRegistrationService(
                 MinistryAssignment(
                     ministry = ministry,
                     member = member,
-                    startDate = LocalDate.now(clock).withDayOfMonth(1),
+                    startDate = LocalDate.now(clock),
                     status = MinistryAssignmentStatus.PENDING,
                     selfIntroduction = selfIntroduction.trim(),
                 ),
@@ -135,7 +135,7 @@ class MinistryRegistrationService(
         when (decision) {
             MinistryRegistrationDecision.APPROVE -> {
                 assignment.status = MinistryAssignmentStatus.ACTIVE
-                assignment.startDate = LocalDate.now(clock).withDayOfMonth(1)
+                assignment.startDate = LocalDate.now(clock)
             }
             MinistryRegistrationDecision.REJECT -> {
                 val reason =

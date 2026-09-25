@@ -53,7 +53,7 @@ class MinistryServiceTest {
 
     private lateinit var service: MinistryService
 
-    // Fixed clock: 2026-06-22 (Berlin) → assignments start on the first of the month.
+    // Fixed clock: 2026-06-22 (Berlin) → default assignment start dates use today.
     private val clock = Clock.fixed(Instant.parse("2026-06-22T08:00:00Z"), ZoneId.of("Europe/Berlin"))
 
     @BeforeEach
@@ -517,7 +517,7 @@ class MinistryServiceTest {
 
         assertEquals(member.publicId.toString(), result.publicId)
         assertEquals("김철수", result.fullName)
-        assertEquals("2026-06-01", result.startDate) // first of current month per fixed clock
+        assertEquals("2026-06-22", result.startDate) // today per fixed clock
         assertEquals("신입", result.note)
         assertEquals(MinistryAssignmentRole.MEMBER, result.role)
         assertEquals(MinistryAssignmentStatus.ACTIVE, result.status)
@@ -525,7 +525,7 @@ class MinistryServiceTest {
     }
 
     @Test
-    fun `addMember - normalizes provided startDate to first of that month`() {
+    fun `addMember - keeps the day of the provided startDate`() {
         val ministry = makeMinistry()
         val member = makeMember()
         `when`(ministryRepository.findForUpdateByPublicIdAndDeletedAtIsNull(ministry.publicId))
@@ -543,7 +543,7 @@ class MinistryServiceTest {
                 AddMinistryMemberRequest(memberId = member.publicId, startDate = LocalDate.of(2025, 3, 17)),
             )
 
-        assertEquals("2025-03-01", result.startDate)
+        assertEquals("2025-03-17", result.startDate)
     }
 
     @Test
@@ -617,7 +617,7 @@ class MinistryServiceTest {
 
         assertEquals(MinistryAssignmentRole.SUB_LEADER, assignment.role)
         assertEquals(MinistryAssignmentStatus.PENDING, assignment.status)
-        assertEquals(LocalDate.of(2025, 2, 1), assignment.startDate)
+        assertEquals(LocalDate.of(2025, 2, 17), assignment.startDate)
         assertEquals(LocalDate.of(2025, 8, 3), assignment.endDate)
         assertEquals("new", assignment.note)
         assertEquals("2025-08-03", result.endDate)
