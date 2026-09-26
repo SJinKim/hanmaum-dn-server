@@ -181,6 +181,36 @@ class AttendanceServiceTest {
     }
 
     @Test
+    fun `createDefinition stores a trimmed description and the chosen active state`() {
+        val request =
+            CreateDefinitionRequest(
+                title = "주일예배",
+                dayOfWeek = DayOfWeek.SUNDAY,
+                windowStart = LocalTime.of(10, 0),
+                windowEnd = LocalTime.of(12, 0),
+                description = "  1부 예배  ",
+                isActive = false,
+            )
+        `when`(definitionRepo.save(any())).thenAnswer { it.arguments[0] }
+
+        val result = service.createDefinition(request)
+
+        assertEquals("1부 예배", result.description)
+        assertEquals(false, result.isActive)
+    }
+
+    @Test
+    fun `updateDefinition clears the description on blank and keeps it on null`() {
+        val definition = makeDefinition()
+        definition.description = "1부 예배"
+        `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(definition.publicId))
+            .thenReturn(Optional.of(definition))
+
+        assertEquals("1부 예배", service.updateDefinition(definition.publicId, UpdateDefinitionRequest()).description)
+        assertEquals(null, service.updateDefinition(definition.publicId, UpdateDefinitionRequest(description = " ")).description)
+    }
+
+    @Test
     fun `deactivateDefinition keeps history addressable and marks definition inactive`() {
         val definition = makeDefinition()
         `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(definition.publicId))

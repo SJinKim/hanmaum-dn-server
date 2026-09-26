@@ -49,6 +49,8 @@ class AttendanceService(
                 dayOfWeek = req.dayOfWeek,
                 windowStart = req.windowStart,
                 windowEnd = req.windowEnd,
+                isActive = req.isActive,
+                description = req.description?.trim()?.ifBlank { null },
             )
         return definitionRepo.save(definition).toDto()
     }
@@ -71,6 +73,7 @@ class AttendanceService(
         req.windowStart?.let { definition.windowStart = it }
         req.windowEnd?.let { definition.windowEnd = it }
         req.isActive?.let { definition.isActive = it }
+        req.description?.let { definition.description = it.trim().ifBlank { null } }
 
         val effectiveStart = req.windowStart ?: definition.windowStart
         val effectiveEnd = req.windowEnd ?: definition.windowEnd

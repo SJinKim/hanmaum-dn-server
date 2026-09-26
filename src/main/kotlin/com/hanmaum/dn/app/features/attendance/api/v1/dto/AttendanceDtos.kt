@@ -21,6 +21,7 @@ data class DefinitionDto(
     val windowEnd: LocalTime,
     @get:JsonProperty("isActive")
     val isActive: Boolean,
+    val description: String?,
 )
 
 /**
@@ -125,6 +126,11 @@ data class CreateDefinitionRequest(
     val windowStart: LocalTime,
     @field:NotNull(message = "종료 시간은 필수입니다.")
     val windowEnd: LocalTime,
+    @field:Size(max = 500, message = "설명은 최대 500자입니다.")
+    val description: String? = null,
+    /** Lets the 추가 dialog save a definition as 비활성 right away. */
+    @get:JsonProperty("isActive")
+    val isActive: Boolean = true,
 )
 
 /** PATCH semantics — only non-null fields applied. */
@@ -136,5 +142,8 @@ data class UpdateDefinitionRequest(
     val windowEnd: LocalTime? = null,
     @get:JsonProperty("isActive")
     val isActive: Boolean? = null,
+    /** Blank clears the description; null leaves it unchanged. */
+    @field:Size(max = 500, message = "설명은 최대 500자입니다.")
+    val description: String? = null,
 )
 // CheckInRequest has no body — member resolved entirely from JWT subject.
