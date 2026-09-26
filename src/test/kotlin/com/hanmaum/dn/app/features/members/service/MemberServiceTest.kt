@@ -878,6 +878,35 @@ class MemberServiceTest {
         verify(churchGroupRepository, never()).findByPublicIdAndDeletedAtIsNull(any<UUID>())
     }
 
+    // --- rejectMember ---
+
+    @Test
+    fun `rejectMember sets a PENDING member to REJECTED`() {
+        val member = memberWithId(1L)
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+
+        val result = memberService.rejectMember(member.publicId)
+
+        assertEquals(MemberStatus.REJECTED, member.memberStatus)
+        assertEquals("REJECTED", result.memberStatus)
+    }
+
+    @Test
+    fun `rejectMember refuses a member who is not PENDING`() {
+        val member = memberWithId(1L)
+        member.memberStatus = MemberStatus.ACTIVE
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
+
+        val ex = assertThrows<ResponseStatusException> { memberService.rejectMember(member.publicId) }
+
+        assertEquals(400, ex.statusCode.value())
+        assertEquals(MemberStatus.ACTIVE, member.memberStatus)
+        verify(memberRepository, never()).save(any<Member>())
+    }
+
     // --- softDeleteMember ---
 
     @Test
