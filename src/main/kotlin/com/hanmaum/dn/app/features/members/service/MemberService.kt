@@ -675,6 +675,31 @@ class MemberService(
     }
 
     /**
+     * Rejects a pending registration: PENDING → REJECTED. Any other current status is a 400,
+     * so an approved member cannot be rejected by accident. The Keycloak account is left
+     * enabled — see [MemberStatus].
+     */
+    @Transactional
+    fun rejectMember(publicId: UUID): MemberDto {
+        val member =
+            memberRepository
+                .findByPublicIdAndDeletedAtIsNull(publicId)
+                .orElseThrow { EntityNotFoundException("Member not found: $publicId") }
+        if (member.memberStatus != MemberStatus.PENDING) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "승인 대기 중인 회원만 거절할 수 있습니다.")
+        }
+        member.memberStatus = MemberStatus.REJECTED
+        val saved = memberRepository.save(member)
+        log
+            .atInfo()
+            .addKeyValue("event.action", "member.reject")
+            .addKeyValue("event.outcome", "success")
+            .addKeyValue("member.public_id", publicId)
+            .log("Member registration rejected")
+        return saved.toDto()
+    }
+
+    /**
      * Soft-delete: marks member DELETED, sets deletedAt. Terminal — cannot be undone via API.
      */
     @Transactional

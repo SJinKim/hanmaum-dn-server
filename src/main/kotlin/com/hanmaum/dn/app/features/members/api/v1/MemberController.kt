@@ -221,6 +221,19 @@ class MemberController(
     }
 
     /**
+     * POST /api/v1/members/{publicId}/reject
+     * Role: ADMIN — rejects a pending registration (PENDING → REJECTED); 400 otherwise.
+     */
+    @PostMapping("/{publicId}/reject")
+    @PreAuthorize("hasRole('ADMIN')")
+    fun rejectMember(
+        @PathVariable publicId: UUID,
+    ): ResponseEntity<ApiResponse<MemberDto>> {
+        val rejected = memberService.rejectMember(publicId)
+        return ResponseEntity.ok(ApiResponse.success(data = rejected))
+    }
+
+    /**
      * DELETE /api/v1/members/{publicId}
      * Role: ADMIN — soft delete; sets deletedAt + memberStatus=DELETED (terminal).
      */

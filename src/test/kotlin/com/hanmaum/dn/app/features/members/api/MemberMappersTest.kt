@@ -194,6 +194,20 @@ class MemberMappersTest {
     }
 
     @Test
+    fun `applyPatch throws IllegalStateException when trying to set REJECTED via patch`() {
+        val member = Member(lastName = "김", firstName = "철수")
+        val req = UpdateMemberRequest(memberStatus = "REJECTED")
+        assertThrows<IllegalStateException> { member.applyPatch(req) }
+    }
+
+    @Test
+    fun `applyPatch lets an admin reactivate a REJECTED member`() {
+        val member = Member(lastName = "김", firstName = "철수", memberStatus = MemberStatus.REJECTED)
+        member.applyPatch(UpdateMemberRequest(memberStatus = "ACTIVE"))
+        assertEquals(MemberStatus.ACTIVE, member.memberStatus)
+    }
+
+    @Test
     fun `applyPatch throws IllegalStateException when member is already DELETED`() {
         val member = Member(lastName = "김", firstName = "철수", memberStatus = MemberStatus.DELETED)
         val req = UpdateMemberRequest(lastName = "이")

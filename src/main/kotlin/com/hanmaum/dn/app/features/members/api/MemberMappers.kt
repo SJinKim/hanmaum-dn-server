@@ -72,11 +72,11 @@ fun CreateMemberRequest.toEntity(): Member =
 
 /**
  * Applies only non-null fields from [request] onto the entity (PATCH semantics).
- * Status transitions: PENDING → ACTIVE (approve), ACTIVE ↔ INACTIVE allowed.
- * DELETED is terminal — use DELETE endpoint.
+ * Status transitions: PENDING → ACTIVE (approve), REJECTED → ACTIVE, ACTIVE ↔ INACTIVE allowed.
+ * DELETED is terminal — use DELETE endpoint. REJECTED only via the reject endpoint.
  *
  * @throws IllegalStateException  if member is already DELETED
- * @throws IllegalStateException  if request tries to set status to DELETED
+ * @throws IllegalStateException  if request tries to set status to DELETED or REJECTED
  * @throws IllegalArgumentException if status string is not a valid MemberStatus value
  */
 fun Member.applyPatch(request: UpdateMemberRequest) {
@@ -108,6 +108,9 @@ fun Member.applyPatch(request: UpdateMemberRequest) {
                 ?: throw IllegalArgumentException("Unknown memberStatus value: $statusStr")
         if (target == MemberStatus.DELETED) {
             throw IllegalStateException("Use the DELETE endpoint to soft-delete a member.")
+        }
+        if (target == MemberStatus.REJECTED && this.memberStatus != MemberStatus.REJECTED) {
+            throw IllegalStateException("Use POST /members/{publicId}/reject to reject a member.")
         }
         this.memberStatus = target
     }
