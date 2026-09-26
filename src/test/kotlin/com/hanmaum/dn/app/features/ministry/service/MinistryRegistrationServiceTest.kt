@@ -54,6 +54,28 @@ class MinistryRegistrationServiceTest {
     private fun service() = MinistryRegistrationService(ministries, assignments, resolver, email, notifications, clock)
 
     @Test
+    fun `my applications are resolved from the subject and keep ministry date and status`() {
+        val application =
+            MinistryAssignment(
+                ministry,
+                applicant,
+                LocalDate.of(2026, 9, 25),
+                status = MinistryAssignmentStatus.PENDING,
+                selfIntroduction = "소개",
+            ).also { it.createdAt = Instant.parse("2026-09-25T09:00:00Z") }
+        `when`(resolver.require("applicant-sub")).thenReturn(applicant)
+        `when`(assignments.findSelfRegistrationsByMemberId(2L)).thenReturn(listOf(application))
+
+        val result = service().mine("applicant-sub").single()
+
+        assertEquals(ministry.publicId.toString(), result.ministryPublicId)
+        assertEquals("찬양팀", result.ministryName)
+        assertEquals(Instant.parse("2026-09-25T09:00:00Z"), result.appliedAt)
+        assertEquals(MinistryAssignmentStatus.PENDING, result.status)
+        verify(assignments).findSelfRegistrationsByMemberId(2L)
+    }
+
+    @Test
     fun `active member applies as pending and leader receives introduction`() {
         `when`(resolver.require("applicant-sub")).thenReturn(applicant)
         `when`(ministries.findForUpdateByPublicIdAndDeletedAtIsNull(ministry.publicId)).thenReturn(Optional.of(ministry))
