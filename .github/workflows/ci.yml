@@ -102,3 +102,10 @@ jobs:
             --from ${{ github.event.pull_request.base.sha }} \
             --to ${{ github.event.pull_request.head.sha }} \
             --verbose
+
+      # A squash merge commits the PR title (and the concatenated body), so the
+      # title must pass the same rules as every branch commit.
+      - name: Lint PR title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s\n' "$TITLE" | npx commitlint --verbose
