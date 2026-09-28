@@ -4,6 +4,9 @@ This runbook is the deployment contract for server issues #150 and #180. Apply i
 the local `hanmaum` realm and to both deployed realms (`hanmaum-dn-st` and
 `hanmaum-dn-prod`). Never copy credentials between environments.
 
+Realms, clients, redirect URIs, the API audience and the backend service-account role
+per environment are in [`KEYCLOAK_ENVIRONMENTS.md`](KEYCLOAK_ENVIRONMENTS.md) (#235).
+
 ## E-mail verification without a login gate
 
 The required state is:

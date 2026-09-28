@@ -65,13 +65,16 @@ services:
     image: quay.io/keycloak/keycloak:26.3.0
     container_name: hanmaumApp-keycloak
     restart: unless-stopped
-    command: start --import-realm --health-enabled=true
+    # No --import-realm: the export is the local dev realm "hanmaum" with its keys in git.
+    # hanmaum-dn-st and hanmaum-dn-prod are configured by scripts/keycloak/configure-realm.sh,
+    # see KEYCLOAK_ENVIRONMENTS.md (#235).
+    command: start --health-enabled=true
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       KEYCLOAK_BACKEND_CLIENT_SECRET: ${KEYCLOAK_BACKEND_CLIENT_SECRET:?KEYCLOAK_BACKEND_CLIENT_SECRET must be set}
-      # Realm imports resolve these placeholders. Existing realms still need the same
-      # values applied through the Admin Console; startup import never overwrites them.
+      # Kept for the realm placeholders; prod does not import, so the deployed realms get
+      # these values through the Admin Console (KEYCLOAK_RUNBOOK.md).
       KEYCLOAK_SMTP_HOST: ${KEYCLOAK_SMTP_HOST:-}
       KEYCLOAK_SMTP_PORT: ${KEYCLOAK_SMTP_PORT:-587}
       KEYCLOAK_SMTP_FROM: ${KEYCLOAK_SMTP_FROM:-}
@@ -100,8 +103,6 @@ services:
       observability.logs.enabled: "true"
       observability.service: keycloak
       observability.environment: shared
-    volumes:
-      - ./infrastructure/docker/keycloak/export:/opt/keycloak/data/import
     healthcheck:
       test:
         [

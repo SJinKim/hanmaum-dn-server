@@ -80,11 +80,11 @@ jobs:
           DB_HANMAUM_DN_USER: app
           DB_HANMAUM_DN_SECRET: ci-placeholder
           DB_HANMAUM_DN_URL: jdbc:postgresql://hanmaumApp-db-staging:5432
-          KEYCLOAK_REALM: hanmaum-st
+          KEYCLOAK_REALM: hanmaum-dn-st
           KEYCLOAK_BACKEND_CLIENT_ID: dn-backend-admin
           KEYCLOAK_BACKEND_CLIENT_SECRET: ci-placeholder
           STAGING_API_DOMAIN: api.staging.example.com
-          APP_SECURITY_KEYCLOAK_PUBLIC_ISSUER: https://auth.example.com/realms/hanmaum-st
+          APP_SECURITY_KEYCLOAK_PUBLIC_ISSUER: https://auth.example.com/realms/hanmaum-dn-st
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
