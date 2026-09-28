@@ -7,6 +7,7 @@ import com.hanmaum.dn.app.features.announcements.api.v1.dto.UpdateAnnouncementRe
 import com.hanmaum.dn.app.features.announcements.domain.Announcement
 import com.hanmaum.dn.app.features.announcements.service.AnnouncementService
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.kotlin.any
@@ -22,6 +23,7 @@ import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequ
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
@@ -144,5 +146,50 @@ class AnnouncementControllerTest {
         verify(announcementService).updateAnnouncement(org.mockito.kotlin.eq(publicId), request.capture())
         assertEquals("https://cdn.example.org/updated.jpg", request.firstValue.imageUrl)
         assertEquals("교육관", request.firstValue.location)
+    }
+
+    private fun noteTaker() = jwt().authorities(SimpleGrantedAuthority("ROLE_NOTE_TAKER"))
+
+    @Test
+    fun `GET admin announcements is readable for a note_taker`() {
+        `when`(announcementService.getAllForAdmin()).thenReturn(listOf(announcement))
+
+        mockMvc
+            .perform(get("/api/v1/announcements/admin").with(noteTaker()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data[0].title").value("여름 수련회"))
+    }
+
+    @Test
+    fun `POST announcement is allowed for a note_taker`() {
+        `when`(announcementService.createAnnouncement(any())).thenReturn(announcement)
+
+        mockMvc
+            .perform(
+                post("/api/v1/announcements")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"title": "여름 수련회", "body": "수련회 안내", "category": "EVENT"}""")
+                    .with(noteTaker()),
+            ).andExpect(status().isOk)
+
+        verify(announcementService).createAnnouncement(any())
+    }
+
+    @Test
+    fun `DELETE announcement is allowed for a note_taker`() {
+        mockMvc
+            .perform(delete("/api/v1/announcements/{publicId}", publicId).with(noteTaker()))
+            .andExpect(status().isNoContent)
+
+        verify(announcementService).softDeleteAnnouncement(publicId)
+    }
+
+    @Test
+    fun `DELETE announcement returns 403 for a plain member`() {
+        mockMvc
+            .perform(delete("/api/v1/announcements/{publicId}", publicId).with(jwt()))
+            .andExpect(status().isForbidden)
+
+        verify(announcementService, never()).softDeleteAnnouncement(any())
     }
 }

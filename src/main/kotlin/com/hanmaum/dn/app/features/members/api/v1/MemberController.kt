@@ -48,11 +48,11 @@ class MemberController(
 ) {
     /**
      * GET /api/v1/members
-     * Role: ADMIN — paginated member list with optional search, group, training, ministry, and UTC activity-date filters.
+     * Role: ADMIN, NOTE_TAKER — paginated member list with optional search, group, training, ministry, and UTC activity-date filters.
      * Default: page=0 size=20 sorted by lastName ASC.
      */
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER')")
     @Parameter(
         name = "sort",
         `in` = ParameterIn.QUERY,
@@ -151,10 +151,10 @@ class MemberController(
 
     /**
      * GET /api/v1/members/{publicId}
-     * Role: ADMIN
+     * Role: ADMIN, NOTE_TAKER
      */
     @GetMapping("/{publicId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER')")
     fun getMember(
         @PathVariable publicId: UUID,
     ): ResponseEntity<ApiResponse<MemberDto>> {

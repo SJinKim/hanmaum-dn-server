@@ -58,4 +58,20 @@ class MemberRejectControllerTest {
             .andExpect(status().isOk)
         verify(memberService).rejectMember(publicId)
     }
+
+    @Test
+    fun `a note_taker reads members but cannot reject one`() {
+        mockMvc
+            .perform(post("/api/v1/members/$publicId/reject").with(jwt().authorities(SimpleGrantedAuthority("ROLE_NOTE_TAKER"))))
+            .andExpect(status().isForbidden)
+        verify(memberService, never()).rejectMember(any())
+    }
+
+    @Test
+    fun `a pastor passes the admin-only check through the role hierarchy`() {
+        mockMvc
+            .perform(post("/api/v1/members/$publicId/reject").with(jwt().authorities(SimpleGrantedAuthority("ROLE_PASTOR"))))
+            .andExpect(status().isOk)
+        verify(memberService).rejectMember(publicId)
+    }
 }

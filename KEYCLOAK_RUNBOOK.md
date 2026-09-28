@@ -51,6 +51,33 @@ verify all of the following:
 4. After clicking the link, a refreshed access token has `email_verified: true`.
 5. Forgot-password sends a reset link to the disposable account.
 
+## Staff and leader roles and groups
+
+`pastor` has the same rights as `admin`: the server declares the role hierarchy
+`ROLE_PASTOR > ROLE_ADMIN` (`Roles.HIERARCHY`), so every `hasRole('ADMIN')` check
+also passes for a pastor. `note_taker` reads 청년 (members), 순 (church groups) and
+공지사항 (announcements) and writes 공지사항 only.
+
+| Group | Realm-role mappings | Effective access |
+|---|---|---|
+| `/staff/admins` | `admin` | Everything |
+| `/staff/pastors` | `pastor` | Everything (hierarchy, same as `admin`) |
+| `/staff/note-takers` | `note_taker` | Read members and church groups; read and write announcements |
+| `/leaders/groups` | `group_leader` | 순장 endpoints |
+| `/ministries/<slug>/members` | `<SLUG>_VIEWER` | Read the ministry's data |
+| `/ministries/<slug>/leaders` | `<SLUG>_VIEWER`, `<SLUG>_EDITOR`, `ministry_leader` | Read and write the ministry's data |
+
+Both checked-in realm exports contain the roles and the `/staff` and `/leaders`
+groups. `/ministries/newcomer` uses the older `viewers`/`editors` leaves described
+below; new ministries follow the `members`/`leaders` pattern. On an existing realm:
+
+1. Create realm roles `pastor` and `note_taker` (and `group_leader`,
+   `ministry_leader` if absent).
+2. Create the groups above and assign exactly the listed roles on each leaf
+   group's **Role mapping** tab.
+3. Add users to a leaf group, not roles directly to users.
+4. Refresh the token and confirm the role names under `realm_access.roles`.
+
 ## Newcomer roles and groups
 
 Authorization is based only on realm roles carried in `realm_access.roles`. Groups

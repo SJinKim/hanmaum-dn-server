@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.ministry.api.v1
 
 import com.hanmaum.dn.app.common.dto.ApiResponse
+import com.hanmaum.dn.app.common.security.Roles
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.ActiveMinistryMemberDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryRegistrationDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.ReviewMinistryRegistrationRequest
@@ -83,5 +84,5 @@ class MinistryRegistrationController(
             ),
         )
 
-    private fun JwtAuthenticationToken.isAdmin(): Boolean = authorities.any { it.authority == "ROLE_ADMIN" }
+    private fun JwtAuthenticationToken.isAdmin(): Boolean = authorities.any { it.authority == Roles.authority(Roles.ADMIN) }
 }

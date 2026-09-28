@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.common.config
 
+import com.hanmaum.dn.app.common.security.Roles
 import com.hanmaum.dn.app.common.security.securityProblemDetail
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.beans.factory.annotation.Value
@@ -9,6 +10,8 @@ import org.springframework.core.convert.converter.Converter
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
+import org.springframework.security.access.hierarchicalroles.RoleHierarchy
+import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl
 import org.springframework.security.authentication.AbstractAuthenticationToken
 import org.springframework.security.config.Customizer
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
@@ -139,10 +142,13 @@ class SecurityConfig(
             val roles = realmAccess?.get("roles") as? List<String> ?: emptyList()
 
             // wandle jede Rolle (z.B. "admin") in "ROLE_ADMIN" um
-            val authorities =
+            val granted =
                 roles.map { role ->
                     SimpleGrantedAuthority("ROLE_${role.uppercase()}")
                 }
+            // Expand the hierarchy here too, so programmatic checks such as
+            // `authorities.any { it.authority == "ROLE_ADMIN" }` also pass for a pastor.
+            val authorities = roleHierarchy().getReachableGrantedAuthorities(granted)
 
             // Rückgabe: Ein Token-Objekt, das Spring versteht (User + Rollen)
             JwtAuthenticationToken(jwt, authorities, jwt.getClaimAsString("preferred_username"))
@@ -203,5 +209,15 @@ class SecurityConfig(
         val source = UrlBasedCorsConfigurationSource()
         source.registerCorsConfiguration("/**", configuration)
         return source
+    }
+
+    companion object {
+        /**
+         * PASTOR > ADMIN (#240). Static, so method security picks it up before
+         * this configuration is instantiated.
+         */
+        @Bean
+        @JvmStatic
+        fun roleHierarchy(): RoleHierarchy = RoleHierarchyImpl.fromHierarchy(Roles.HIERARCHY)
     }
 }

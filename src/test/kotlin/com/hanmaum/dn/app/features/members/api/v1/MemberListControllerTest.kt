@@ -127,4 +127,34 @@ class MemberListControllerTest {
             size = 20,
         )
     }
+
+    @Test
+    fun `GET members is readable for a note_taker`() {
+        mockMvc
+            .perform(
+                get("/api/v1/members").param("sort", "lastName,asc").with(jwt().authorities(SimpleGrantedAuthority("ROLE_NOTE_TAKER"))),
+            ).andExpect(status().isOk)
+
+        verify(memberService).getMembers(
+            search = null,
+            status = null,
+            baptism = null,
+            groupPublicId = null,
+            unassigned = null,
+            trainingCode = null,
+            ministryPublicId = null,
+            updatedFrom = null,
+            updatedTo = null,
+            sort = listOf("lastName,asc"),
+            page = 0,
+            size = 20,
+        )
+    }
+
+    @Test
+    fun `GET members stays closed to a 순장`() {
+        mockMvc
+            .perform(get("/api/v1/members").with(jwt().authorities(SimpleGrantedAuthority("ROLE_GROUP_LEADER"))))
+            .andExpect(status().isForbidden)
+    }
 }

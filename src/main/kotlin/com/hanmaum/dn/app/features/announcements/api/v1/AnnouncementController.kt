@@ -43,7 +43,7 @@ class AnnouncementController(
 
     /** Returns all non-deleted announcements for the admin dashboard. */
     @GetMapping("/admin")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER')")
     fun getAnnouncementsForAdmin(): ResponseEntity<ApiResponse<List<AnnouncementDto>>> {
         val data = announcementService.getAllForAdmin().map { it.toDto() }
         return ResponseEntity.ok(ApiResponse.success(data = data))
@@ -51,7 +51,7 @@ class AnnouncementController(
 
     /** Creates an announcement as an administrator. */
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER')")
     fun createAnnouncement(
         @RequestBody createAnnouncementRequest: CreateAnnouncementRequest,
     ): ResponseEntity<ApiResponse<AnnouncementDto>> {
@@ -61,7 +61,7 @@ class AnnouncementController(
 
     /** Fully replaces editable announcement data as an administrator. */
     @PutMapping("/{publicId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER')")
     fun updateAnnouncement(
         @PathVariable publicId: UUID,
         @RequestBody request: UpdateAnnouncementRequest,
@@ -72,7 +72,7 @@ class AnnouncementController(
 
     /** Moves an announcement to the admin trash for delayed deletion. */
     @DeleteMapping("/{publicId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun deleteAnnouncement(
         @PathVariable publicId: UUID,

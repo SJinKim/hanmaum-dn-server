@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.common.interceptor
 
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
+import com.hanmaum.dn.app.common.security.Roles
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -36,7 +37,7 @@ class MemberStatusInterceptor(
                 ?: return true // unauthenticated — let security layer handle it
         // ADMIN users are never blocked by member status
         if (auth.authorities
-                .any { it.authority == "ROLE_ADMIN" }
+                .any { it.authority == Roles.authority(Roles.ADMIN) }
         ) {
             return true
         }
