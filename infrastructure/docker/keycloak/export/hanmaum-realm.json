@@ -66,6 +66,24 @@
         "attributes": {}
       },
       {
+        "id": "dc7e99cf-aa10-5b58-928a-f1b05204cdd9",
+        "name": "pastor",
+        "description": "목사님: gleiche Rechte wie admin (RoleHierarchy PASTOR > ADMIN)",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "313538da-5813-430e-ab02-16db69fc5746",
+        "attributes": {}
+      },
+      {
+        "id": "83939cd4-002d-5a26-9b1e-3ae653c977ed",
+        "name": "note_taker",
+        "description": "Schriftführer: liest 청년, 순 und 공지사항, schreibt 공지사항",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "313538da-5813-430e-ab02-16db69fc5746",
+        "attributes": {}
+      },
+      {
         "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
         "name": "group_leader",
         "description": "Gruppenleiter: kann Events und Anwesenheiten verwalten",
@@ -501,6 +519,70 @@
               "subGroups": []
             }
           ]
+        }
+      ]
+    },
+    {
+      "id": "503b1652-d8da-5554-9ce2-3586f5d746de",
+      "name": "staff",
+      "path": "/staff",
+      "attributes": {},
+      "realmRoles": [],
+      "clientRoles": {},
+      "subGroups": [
+        {
+          "id": "bcbf5b90-f2a8-56f1-8cbd-b8c5815ffbfa",
+          "name": "admins",
+          "path": "/staff/admins",
+          "attributes": {},
+          "realmRoles": [
+            "admin"
+          ],
+          "clientRoles": {},
+          "subGroups": []
+        },
+        {
+          "id": "97db6d28-4bff-5342-8dd7-8c1036b7b4f7",
+          "name": "pastors",
+          "path": "/staff/pastors",
+          "attributes": {},
+          "realmRoles": [
+            "pastor"
+          ],
+          "clientRoles": {},
+          "subGroups": []
+        },
+        {
+          "id": "566596f0-5dd9-5c46-b877-ccee04d41035",
+          "name": "note-takers",
+          "path": "/staff/note-takers",
+          "attributes": {},
+          "realmRoles": [
+            "note_taker"
+          ],
+          "clientRoles": {},
+          "subGroups": []
+        }
+      ]
+    },
+    {
+      "id": "f7b88e29-2aee-59c7-a9b5-9c3e9795792b",
+      "name": "leaders",
+      "path": "/leaders",
+      "attributes": {},
+      "realmRoles": [],
+      "clientRoles": {},
+      "subGroups": [
+        {
+          "id": "648c74f6-c44c-5435-81d8-bd75f5136ccb",
+          "name": "groups",
+          "path": "/leaders/groups",
+          "attributes": {},
+          "realmRoles": [
+            "group_leader"
+          ],
+          "clientRoles": {},
+          "subGroups": []
         }
       ]
     }

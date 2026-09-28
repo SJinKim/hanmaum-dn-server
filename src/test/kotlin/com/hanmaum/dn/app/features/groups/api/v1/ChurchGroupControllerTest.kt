@@ -160,4 +160,27 @@ class ChurchGroupControllerTest {
             .perform(delete("/api/v1/church-groups/$groupPublicId/leader").with(jwt()))
             .andExpect(status().isForbidden)
     }
+
+    private fun noteTaker() = jwt().authorities(SimpleGrantedAuthority("ROLE_NOTE_TAKER"))
+
+    @Test
+    fun `GET church-groups is readable for a note_taker`() {
+        `when`(churchGroupService.getGroups()).thenReturn(listOf(ledGroup()))
+
+        mockMvc
+            .perform(get("/api/v1/church-groups").with(noteTaker()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data[0].name").value("다니엘조"))
+    }
+
+    @Test
+    fun `PUT leader returns 403 for a note_taker, who only reads 순`() {
+        mockMvc
+            .perform(
+                put("/api/v1/church-groups/$groupPublicId/leader")
+                    .with(noteTaker())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(AssignGroupLeaderRequest(memberPublicId.toString()))),
+            ).andExpect(status().isForbidden)
+    }
 }

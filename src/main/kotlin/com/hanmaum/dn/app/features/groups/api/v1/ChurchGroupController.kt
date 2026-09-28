@@ -23,11 +23,11 @@ class ChurchGroupController(
 ) {
     /**
      * GET /api/v1/church-groups
-     * Role: ADMIN — list all church groups for selection (e.g. the member edit form).
+     * Role: ADMIN, NOTE_TAKER — list all church groups for selection (e.g. the member edit form).
      * Each entry carries the group's current leader, or nulls while the group has none.
      */
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER')")
     fun getChurchGroups(): ResponseEntity<ApiResponse<List<ChurchGroupSummaryDto>>> {
         val groups = churchGroupService.getGroups()
         return ResponseEntity.ok(ApiResponse.success(data = groups))
