@@ -101,7 +101,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "docker-compose.prod.yml,docker-compose.staging.yml,infrastructure"
+          source: "docker-compose.prod.yml,docker-compose.staging.yml,infrastructure,scripts/keycloak"
           target: ${{ env.DEPLOY_DIR }}
 
       - name: Deploy via SSH

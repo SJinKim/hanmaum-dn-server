@@ -7,12 +7,12 @@
 # Required env vars (.env.staging on the server):
 #   DB_HANMAUM_DN_NAME, DB_HANMAUM_DN_USER, DB_HANMAUM_DN_SECRET
 #   DB_HANMAUM_DN_URL              — e.g. jdbc:postgresql://hanmaumApp-db-staging:5432
-#   KEYCLOAK_REALM                 — staging realm name, e.g. hanmaum-st
+#   KEYCLOAK_REALM                 — staging realm name, hanmaum-dn-st
 #   KEYCLOAK_BACKEND_CLIENT_ID     — backend service account client ID
 #   KEYCLOAK_BACKEND_CLIENT_SECRET — backend service account client secret
 #   BACKEND_IMAGE_STAGING          — set by CI: ghcr.io/sjinkim/hanmaum-dn-server:sha-<short>
 #   STAGING_API_DOMAIN             — public staging API hostname, e.g. api.staging.graceops.de
-#   APP_SECURITY_KEYCLOAK_PUBLIC_ISSUER — https://auth.graceops.de/realms/<staging-realm>
+#   APP_SECURITY_KEYCLOAK_PUBLIC_ISSUER — https://auth.graceops.de/realms/hanmaum-dn-st
 #   HANMAUM_CHURCH_LOCATION_LATITUDE, HANMAUM_CHURCH_LOCATION_LONGITUDE
 #   HANMAUM_CHURCH_LOCATION_RADIUS_METERS — server-controlled geofence configuration
 #   QT_API_KEY_ID, QT_SECRET — congregation bible API credentials; without them

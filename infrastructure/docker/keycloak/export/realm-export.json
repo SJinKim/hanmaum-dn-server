@@ -50,7 +50,7 @@
       {
         "id": "34ca53f8-82c2-4c87-b2ef-0542d5313d9b",
         "name": "admin",
-        "description": "Hat Zugriff auf das Dashboard und darf l\u00f6schen",
+        "description": "Hat Zugriff auf das Dashboard und darf löschen",
         "composite": false,
         "clientRole": false,
         "containerId": "313538da-5813-430e-ab02-16db69fc5746",
@@ -59,7 +59,7 @@
       {
         "id": "5cf105c6-afcb-4835-b180-5329c5faf5fd",
         "name": "member",
-        "description": "Standard-Nutzer f\u00fcr die DN App",
+        "description": "Standard-Nutzer für die DN App",
         "composite": false,
         "clientRole": false,
         "containerId": "313538da-5813-430e-ab02-16db69fc5746",
@@ -707,7 +707,7 @@
       "serviceAccountClientId": "dn-backend-admin",
       "clientRoles": {
         "realm-management": [
-          "realm-admin"
+          "manage-users"
         ]
       }
     }
@@ -928,7 +928,7 @@
       "id": "597d1e54-5bea-43a5-8659-17929d8e2cbb",
       "clientId": "hanmaum-dashboard",
       "name": "",
-      "description": "F\u00fcr das Admin-Panel im Browser.",
+      "description": "Für das Admin-Panel im Browser.",
       "rootUrl": "",
       "adminUrl": "",
       "baseUrl": "",
@@ -940,7 +940,6 @@
         "http://localhost:4200/*"
       ],
       "webOrigins": [
-        "*",
         "http://localhost:4200"
       ],
       "notBefore": 0,
@@ -962,7 +961,8 @@
         "post.logout.redirect.uris": "+",
         "display.on.consent.screen": "false",
         "oauth2.device.authorization.grant.enabled": "false",
-        "backchannel.logout.revoke.offline.tokens": "false"
+        "backchannel.logout.revoke.offline.tokens": "false",
+        "pkce.code.challenge.method": "S256"
       },
       "authenticationFlowBindingOverrides": {},
       "fullScopeAllowed": true,
@@ -973,7 +973,8 @@
         "roles",
         "profile",
         "basic",
-        "email"
+        "email",
+        "hanmaum-dn-api-audience"
       ],
       "optionalClientScopes": [
         "address",
@@ -987,7 +988,7 @@
       "id": "a351c0aa-5498-4123-b725-5dd59e97c430",
       "clientId": "hanmaum-mobile",
       "name": "",
-      "description": "F\u00fcr die Android/iOS App.",
+      "description": "Für die Android/iOS App.",
       "rootUrl": "",
       "adminUrl": "",
       "baseUrl": "",
@@ -997,10 +998,11 @@
       "clientAuthenticatorType": "client-secret",
       "redirectUris": [
         "http://localhost/*",
-        "com.hanmaum.app://login-callback"
+        "com.hanmaum.app://login-callback",
+        "com.hanmaum.dn.mobile:/oauth2redirect"
       ],
       "webOrigins": [
-        "*"
+        "+"
       ],
       "notBefore": 0,
       "bearerOnly": false,
@@ -1019,7 +1021,8 @@
         "standard.token.exchange.enabled": "false",
         "post.logout.redirect.uris": "+",
         "oauth2.device.authorization.grant.enabled": "false",
-        "backchannel.logout.revoke.offline.tokens": "false"
+        "backchannel.logout.revoke.offline.tokens": "false",
+        "pkce.code.challenge.method": "S256"
       },
       "authenticationFlowBindingOverrides": {},
       "fullScopeAllowed": true,
@@ -1030,7 +1033,8 @@
         "roles",
         "profile",
         "basic",
-        "email"
+        "email",
+        "hanmaum-dn-api-audience"
       ],
       "optionalClientScopes": [
         "address",
@@ -1881,6 +1885,29 @@
             "access.token.claim": "true",
             "claim.name": "family_name",
             "jsonType.label": "String"
+          }
+        }
+      ]
+    },
+    {
+      "name": "hanmaum-dn-api-audience",
+      "description": "Adds the API audience hanmaum-dn-api to access tokens (#235)",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "api audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "hanmaum-dn-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
           }
         }
       ]

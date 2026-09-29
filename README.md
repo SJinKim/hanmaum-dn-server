@@ -153,7 +153,11 @@ Integration tests require the test database container (`test-db` on port `5434`)
 
 ## 6. First-time Keycloak setup
 
-On a fresh volume Keycloak auto-imports the realm from `infrastructure/docker/keycloak/export/`. No manual setup is needed.
+Locally, on a fresh volume, Keycloak auto-imports the dev realm `hanmaum` from `infrastructure/docker/keycloak/export/`. No manual setup is needed.
+
+Staging and prod do not import it. Their realms `hanmaum-dn-st` and `hanmaum-dn-prod` are set up with
+`scripts/keycloak/configure-realm.sh`; the target state per environment is in
+[`KEYCLOAK_ENVIRONMENTS.md`](KEYCLOAK_ENVIRONMENTS.md).
 
 SMTP, non-blocking e-mail verification, password reset, and the newcomer
 viewer/editor group mappings are documented in [`KEYCLOAK_RUNBOOK.md`](KEYCLOAK_RUNBOOK.md).
