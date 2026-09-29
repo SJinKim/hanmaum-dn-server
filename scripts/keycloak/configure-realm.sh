@@ -14,7 +14,7 @@
 # Optional:
 #   APPLY=1                      write changes (default: dry run)
 #   MOBILE_REDIRECT_URIS         default com.hanmaum.dn.mobile:/oauth2redirect
-#   MOBILE_DIRECT_GRANTS         true until the mobile PKCE migration ships, then false
+#   MOBILE_DIRECT_GRANTS         default true: the app logs in with its own password form
 #   VERIFY_USERNAME              user for the example access token check (aud and iss)
 #   EXPECTED_ISSUER              default https://auth.graceops.de/realms/$KC_REALM
 #   KC_CONTAINER                 default hanmaumApp-keycloak

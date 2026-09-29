@@ -5,8 +5,9 @@ holds no secrets. Client secrets live only in the server's `.env` files and in K
 
 ## Matrix
 
-One Keycloak instance at `auth.graceops.de` hosts both deployed realms. The issuer and
-the realm's signing keys separate staging from prod. The audience is the same in both.
+Staging runs on the Keycloak instance at `auth.graceops.de`. Prod gets its own server,
+which is not rented yet. Until then the prod column is the target, not a live system, and
+the prod host name may still change. The audience is the same everywhere.
 
 | | Local dev | Staging | Prod |
 |---|---|---|---|
@@ -26,7 +27,7 @@ emitted but not yet enforced.
 | Client | Type | Flows | Redirect URIs | Web origins | Default scopes include |
 |---|---|---|---|---|---|
 | `hanmaum-dashboard` | public | authorization code + PKCE S256 | `<dashboard origin>/*` per origin | the dashboard origins, never `*` | `hanmaum-dn-api-audience` |
-| `hanmaum-mobile` | public | authorization code + PKCE S256; password grant only until the mobile PKCE migration | `com.hanmaum.dn.mobile:/oauth2redirect` | none (native app) | `hanmaum-dn-api-audience` |
+| `hanmaum-mobile` | public | password grant (the app's own login form); authorization code + PKCE S256 allowed | `com.hanmaum.dn.mobile:/oauth2redirect` | none (native app) | `hanmaum-dn-api-audience` |
 | `dn-backend-admin` | confidential | client credentials only | none | none | — |
 
 The service account `service-account-dn-backend-admin` holds only
@@ -88,24 +89,21 @@ printed. It needs `jq` on the host. Without `APPLY=1` it only prints what it wou
    dashboard and the staging app, and run the matrix in `KEYCLOAK_RUNBOOK.md`.
 3. Check that member creation, the verification mail and member purge still work in
    staging. These calls use the reduced backend role.
-4. Repeat steps 1 to 3 with `KC_REALM=hanmaum-dn-prod` and `DASHBOARD_URLS=` (empty until
-   prod has a dashboard).
+4. Once the prod server exists, repeat steps 1 to 3 there with `KC_REALM=hanmaum-dn-prod`
+   and `DASHBOARD_URLS=` (empty until prod has a dashboard).
 5. Delete the dev realm `hanmaum` on the prod instance in the Admin Console. Only do
    this after steps 1 to 4, and only after confirming that no backend `.env` still has
    `KEYCLOAK_REALM=hanmaum`.
 
-## After the mobile PKCE migration
+## Mobile login with username and password
 
-As of 2026-09-29 the app on mobile `main` still logs in with `grant_type=password`
-(`AuthRepositoryImpl`). Turning direct grants off before the migration breaks app login.
-Once the app logs in through the browser with `com.hanmaum.dn.mobile:/oauth2redirect`:
+The app logs in with its own form and the password grant (`grant_type=password`,
+`AuthRepositoryImpl`). This is a product decision from 2026-09-29: users type username and
+password in the app, not in a browser. So `hanmaum-mobile` keeps direct access grants, and
+the script's default `MOBILE_DIRECT_GRANTS=true` stays. The #235 criterion "direct grants
+off after the mobile migration" is dropped.
 
-```bash
-APPLY=1 MOBILE_DIRECT_GRANTS=false KC_REALM=hanmaum-dn-st \
-  DASHBOARD_URLS=https://dn-admin-dashboard.st.graceops.de \
-  scripts/keycloak/configure-realm.sh
-```
-
-Run it for staging first and then for prod. This turns off the password grant, the last
-open item of #235. In the local export, `hanmaum-mobile` keeps direct grants and the old
-`com.hanmaum.app://login-callback` redirect until the app has migrated.
+What this costs: the app sees the password, and the password grant is not part of OAuth 2.1.
+Keycloak's brute force detection on the realm is the counterweight and should stay on.
+`MOBILE_DIRECT_GRANTS=false` remains in the script in case the app ever moves to a browser
+login.
