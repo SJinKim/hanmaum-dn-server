@@ -8,7 +8,9 @@
 # Required:
 #   KC_REALM          hanmaum-dn-st | hanmaum-dn-prod
 #   DASHBOARD_URLS    comma-separated HTTPS origins of the admin dashboard,
-#                     e.g. https://admin.example.org,https://hanmaum-dn-web-app.vercel.app
+#                     e.g. https://dn-admin-dashboard.st.graceops.de. Set it empty
+#                     (DASHBOARD_URLS=) while an environment has no dashboard: the
+#                     dashboard client then accepts no redirect, so no one can log in there.
 # Optional:
 #   APPLY=1                      write changes (default: dry run)
 #   MOBILE_REDIRECT_URIS         default com.hanmaum.dn.mobile:/oauth2redirect
@@ -22,7 +24,7 @@
 set -euo pipefail
 
 : "${KC_REALM:?KC_REALM must be set (hanmaum-dn-st or hanmaum-dn-prod)}"
-: "${DASHBOARD_URLS:?DASHBOARD_URLS must be set (comma-separated HTTPS origins)}"
+: "${DASHBOARD_URLS?DASHBOARD_URLS must be set (comma-separated HTTPS origins, or empty)}"
 APPLY="${APPLY:-0}"
 MOBILE_REDIRECT_URIS="${MOBILE_REDIRECT_URIS:-com.hanmaum.dn.mobile:/oauth2redirect}"
 MOBILE_DIRECT_GRANTS="${MOBILE_DIRECT_GRANTS:-true}"
@@ -84,6 +86,9 @@ mobile_redirects="$(json_list "$MOBILE_REDIRECT_URIS")"
 if jq -e 'map(select(startswith("https://") | not)) | length > 0' <<<"$dashboard_origins" >/dev/null; then
     echo "DASHBOARD_URLS must all be https:// origins in a deployed realm" >&2
     exit 1
+fi
+if [[ "$dashboard_origins" == "[]" ]]; then
+    log "DASHBOARD_URLS is empty: $DASHBOARD_CLIENT gets no redirect URIs and no web origins"
 fi
 
 client_json() { kc get clients -r "$KC_REALM" -q clientId="$1" | jq -c '.[0] // empty'; }

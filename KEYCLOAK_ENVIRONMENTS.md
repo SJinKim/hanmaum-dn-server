@@ -43,13 +43,11 @@ introspection, and not to the ID token.
 | Environment | Origins |
 |---|---|
 | Local dev | `http://localhost:4200` (in the export) |
-| Staging | **open** |
-| Prod | **open** |
+| Staging | `https://dn-admin-dashboard.st.graceops.de` |
+| Prod | none yet: run with `DASHBOARD_URLS=` (empty) so the dashboard client accepts no redirect |
 
-The Vercel URLs seen so far are `https://hanmaum-dn-web-app.vercel.app` and preview
-deployments under `dn-admin-dashboard-*-sjinkims-projects.vercel.app`. Keycloak does
-not accept wildcards inside a host name. List preview URLs explicitly, or leave them
-out of prod.
+Keycloak does not accept wildcards inside a host name. Vercel preview URLs are not
+listed. Add one explicitly only when it is needed.
 
 ## State found on 2026-09-29
 
@@ -74,14 +72,14 @@ printed. It needs `jq` on the host. Without `APPLY=1` it only prints what it wou
 1. Dry run against staging:
 
    ```bash
-   KC_REALM=hanmaum-dn-st DASHBOARD_URLS=https://<staging dashboard> \
+   KC_REALM=hanmaum-dn-st DASHBOARD_URLS=https://dn-admin-dashboard.st.graceops.de \
      scripts/keycloak/configure-realm.sh
    ```
 
 2. Apply it and check the tokens with a non-production test user:
 
    ```bash
-   APPLY=1 KC_REALM=hanmaum-dn-st DASHBOARD_URLS=https://<staging dashboard> \
+   APPLY=1 KC_REALM=hanmaum-dn-st DASHBOARD_URLS=https://dn-admin-dashboard.st.graceops.de \
      VERIFY_USERNAME=<test user> scripts/keycloak/configure-realm.sh
    ```
 
@@ -90,17 +88,21 @@ printed. It needs `jq` on the host. Without `APPLY=1` it only prints what it wou
    dashboard and the staging app, and run the matrix in `KEYCLOAK_RUNBOOK.md`.
 3. Check that member creation, the verification mail and member purge still work in
    staging. These calls use the reduced backend role.
-4. Repeat steps 1 to 3 with `KC_REALM=hanmaum-dn-prod` and the prod dashboard origin.
+4. Repeat steps 1 to 3 with `KC_REALM=hanmaum-dn-prod` and `DASHBOARD_URLS=` (empty until
+   prod has a dashboard).
 5. Delete the dev realm `hanmaum` on the prod instance in the Admin Console. Only do
    this after steps 1 to 4, and only after confirming that no backend `.env` still has
    `KEYCLOAK_REALM=hanmaum`.
 
 ## After the mobile PKCE migration
 
+As of 2026-09-29 the app on mobile `main` still logs in with `grant_type=password`
+(`AuthRepositoryImpl`). Turning direct grants off before the migration breaks app login.
 Once the app logs in through the browser with `com.hanmaum.dn.mobile:/oauth2redirect`:
 
 ```bash
-APPLY=1 MOBILE_DIRECT_GRANTS=false KC_REALM=hanmaum-dn-st DASHBOARD_URLS=... \
+APPLY=1 MOBILE_DIRECT_GRANTS=false KC_REALM=hanmaum-dn-st \
+  DASHBOARD_URLS=https://dn-admin-dashboard.st.graceops.de \
   scripts/keycloak/configure-realm.sh
 ```
 
