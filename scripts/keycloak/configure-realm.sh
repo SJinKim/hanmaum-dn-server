@@ -11,6 +11,8 @@
 #                     e.g. https://dn-admin-dashboard.st.graceops.de. Set it empty
 #                     (DASHBOARD_URLS=) while an environment has no dashboard: the
 #                     dashboard client then accepts no redirect, so no one can log in there.
+#                     The first origin also becomes the dashboard client's base URL, which
+#                     the login theme links from its error and expired-link pages (#243).
 # Optional:
 #   APPLY=1                      write changes (default: dry run)
 #   MOBILE_REDIRECT_URIS         default com.hanmaum.dn.mobile:/oauth2redirect
@@ -41,6 +43,10 @@ readonly BACKEND_CLIENT="dn-backend-admin"
 # MemberService creates users and sends the verification mail, MemberPurgeService deletes
 # users. Nothing else in the backend calls the admin API, so manage-users is enough.
 readonly BACKEND_ROLES=("manage-users")
+# Login theme from infrastructure/docker/keycloak/themes (#243); Korean first, English second.
+readonly LOGIN_THEME="hanmaum"
+readonly REALM_LOCALES='["ko","en"]'
+readonly REALM_DEFAULT_LOCALE="ko"
 readonly KCADM_CONFIG="/tmp/kcadm-hdn-235.config"
 
 command -v jq >/dev/null || { echo "jq is required" >&2; exit 1; }
@@ -81,6 +87,7 @@ login() {
 json_list() { jq -cn --arg s "$1" '$s | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(. != ""))'; }
 dashboard_origins="$(json_list "$DASHBOARD_URLS" | jq -c 'map(sub("/$"; ""))')"
 dashboard_redirects="$(jq -c 'map(. + "/*")' <<<"$dashboard_origins")"
+dashboard_base_url="$(jq -r 'if length > 0 then .[0] + "/" else "" end' <<<"$dashboard_origins")"
 mobile_redirects="$(json_list "$MOBILE_REDIRECT_URIS")"
 
 if jq -e 'map(select(startswith("https://") | not)) | length > 0' <<<"$dashboard_origins" >/dev/null; then
@@ -124,19 +131,45 @@ scope_id() {
     kc get client-scopes -r "$KC_REALM" | jq -r --arg n "$AUDIENCE_SCOPE" '.[] | select(.name == $n) | .id'
 }
 
-# $1 clientId, $2 redirects JSON, $3 web origins JSON, $4 direct grants true|false
+# The theme must be on the server before a realm points at it, or its login pages break.
+# 비밀번호 찾기 on the login page needs resetPasswordAllowed.
+ensure_realm_login_pages() {
+    log "realm login theme $LOGIN_THEME, locales $REALM_LOCALES (default $REALM_DEFAULT_LOCALE), password reset"
+    if ! kc get serverinfo | jq -e --arg t "$LOGIN_THEME" '.themes.login | any(.name == $t)' >/dev/null; then
+        log "  missing: theme $LOGIN_THEME is not mounted in $KC_CONTAINER (docker-compose.prod.yml). Not set."
+        changes=$((changes + 1))
+        return
+    fi
+    local realm drift
+    realm="$(kc get "realms/$KC_REALM" --fields loginTheme,internationalizationEnabled,supportedLocales,defaultLocale,resetPasswordAllowed)"
+    drift="$(jq -c --arg t "$LOGIN_THEME" --argjson l "$REALM_LOCALES" --arg d "$REALM_DEFAULT_LOCALE" '[
+        (select(.loginTheme != $t) | "loginTheme"),
+        (select(.internationalizationEnabled != true) | "internationalizationEnabled"),
+        (select((.supportedLocales // []) | sort != ($l | sort)) | "supportedLocales"),
+        (select(.defaultLocale != $d) | "defaultLocale"),
+        (select(.resetPasswordAllowed != true) | "resetPasswordAllowed") ]' <<<"$realm")"
+    [[ "$drift" != "[]" ]] || return 0
+    plan "update $(jq -r 'join(", ")' <<<"$drift")"
+    kc_write update "realms/$KC_REALM" -s loginTheme="$LOGIN_THEME" -s internationalizationEnabled=true \
+        -s supportedLocales="$REALM_LOCALES" -s defaultLocale="$REALM_DEFAULT_LOCALE" -s resetPasswordAllowed=true
+}
+
+# $1 clientId, $2 redirects JSON, $3 web origins JSON, $4 direct grants true|false,
+# $5 base URL (optional; empty leaves the stored one alone)
 ensure_user_client() {
-    local client_id="$1" redirects="$2" origins="$3" direct="$4"
+    local client_id="$1" redirects="$2" origins="$3" direct="$4" base_url="${5:-}"
     log "client $client_id"
     local target client id
-    target="$(jq -nc --arg c "$client_id" --argjson r "$redirects" --argjson o "$origins" --argjson d "$direct" '{
+    target="$(jq -nc --arg c "$client_id" --argjson r "$redirects" --argjson o "$origins" --argjson d "$direct" \
+        --arg b "$base_url" '{
         clientId: $c, enabled: true, protocol: "openid-connect",
         publicClient: true, bearerOnly: false, standardFlowEnabled: true, implicitFlowEnabled: false,
         directAccessGrantsEnabled: $d, serviceAccountsEnabled: false,
         redirectUris: $r, webOrigins: $o,
         attributes: {"pkce.code.challenge.method": "S256", "post.logout.redirect.uris": "+",
                      "oauth2.device.authorization.grant.enabled": "false",
-                     "oidc.ciba.grant.enabled": "false"}}')"
+                     "oidc.ciba.grant.enabled": "false"}}
+        + (if $b == "" then {} else {baseUrl: $b} end)')"
     client="$(client_json "$client_id")"
     if [[ -z "$client" ]]; then
         plan "create public client (PKCE S256, direct grants $direct)"
@@ -233,8 +266,9 @@ log "realm $KC_REALM on $KC_CONTAINER ($([[ "$APPLY" == "1" ]] && echo apply || 
 login
 kc get "realms/$KC_REALM" --fields realm >/dev/null
 
+ensure_realm_login_pages
 ensure_audience_scope
-ensure_user_client "$DASHBOARD_CLIENT" "$dashboard_redirects" "$dashboard_origins" false
+ensure_user_client "$DASHBOARD_CLIENT" "$dashboard_redirects" "$dashboard_origins" false "$dashboard_base_url"
 # Native app: no CORS, no browser origin.
 ensure_user_client "$MOBILE_CLIENT" "$mobile_redirects" "[]" "$MOBILE_DIRECT_GRANTS"
 ensure_backend_client

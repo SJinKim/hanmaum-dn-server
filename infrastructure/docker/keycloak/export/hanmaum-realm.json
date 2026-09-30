@@ -925,7 +925,7 @@
       "description": "Für das Admin-Panel im Browser.",
       "rootUrl": "",
       "adminUrl": "",
-      "baseUrl": "",
+      "baseUrl": "http://localhost:4200/",
       "surrogateAuthRequired": false,
       "enabled": true,
       "alwaysDisplayInConsole": false,
@@ -2139,7 +2139,13 @@
       }
     ]
   },
-  "internationalizationEnabled": false,
+  "internationalizationEnabled": true,
+  "supportedLocales": [
+    "ko",
+    "en"
+  ],
+  "defaultLocale": "ko",
+  "loginTheme": "hanmaum",
   "authenticationFlows": [
     {
       "id": "3a3d7a96-69ca-4e18-8244-9489562de48b",
