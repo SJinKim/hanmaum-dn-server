@@ -15,6 +15,7 @@ the prod host name may still change. The audience is the same everywhere.
 | Public issuer (`iss`) | `http://localhost:8091/realms/hanmaum` | `https://auth.graceops.de/realms/hanmaum-dn-st` | `https://auth.graceops.de/realms/hanmaum-dn-prod` |
 | JWKS (backend, internal) | `http://localhost:8091/realms/hanmaum/...` | `http://hanmaumApp-keycloak:8090/realms/hanmaum-dn-st/protocol/openid-connect/certs` | `http://hanmaumApp-keycloak:8090/realms/hanmaum-dn-prod/protocol/openid-connect/certs` |
 | API audience (`aud`) | `hanmaum-dn-api` | `hanmaum-dn-api` | `hanmaum-dn-api` |
+| Login theme, locales | `hanmaum`, `ko` (default) + `en` | `hanmaum`, `ko` (default) + `en` | `hanmaum`, `ko` (default) + `en` |
 | How the realm is set up | `--import-realm` from `infrastructure/docker/keycloak/export/` | `scripts/keycloak/configure-realm.sh` | `scripts/keycloak/configure-realm.sh` |
 
 The backend variables per environment are `KEYCLOAK_REALM` and
@@ -49,6 +50,30 @@ introspection, and not to the ID token.
 
 Keycloak does not accept wildcards inside a host name. Vercel preview URLs are not
 listed. Add one explicitly only when it is needed.
+
+The script sets the dashboard client's base URL to the first origin plus `/`. The login
+theme links there from its error and expired-link pages ("로그인 화면으로 이동"). With
+`DASHBOARD_URLS=` empty, the base URL stays as it is.
+
+### Login theme
+
+The browser pages (dashboard login, 비밀번호 찾기, 새 비밀번호 설정, 이메일 인증, expired link)
+use the theme `hanmaum` (#243). Its design is the Figma file DN-Web. The files live in
+`infrastructure/docker/keycloak/themes/hanmaum/` and are mounted read-only into
+`/opt/keycloak/themes/hanmaum` by both compose files. The prod deploy copies
+`infrastructure/` to the host, so the theme travels with every deploy.
+
+- Realm settings: `loginTheme=hanmaum`, internationalization on, locales `ko` and `en`,
+  default `ko`, and `resetPasswordAllowed=true` for the 비밀번호 찾기 link. The reset mail
+  needs the realm's SMTP settings. The local export has them; `configure-realm.sh` sets them elsewhere.
+- The script checks that Keycloak actually offers the theme before it points a realm at it.
+  If the mount is missing it reports that and changes nothing, because a realm with an
+  unknown theme shows broken login pages.
+- The app's own login form (password grant) does not render any Keycloak page, so the
+  theme does not affect it.
+- Theme files are cached by Keycloak. After changing them, restart the container:
+  `docker restart hanmaumApp-keycloak`.
+- Mails still use the default email theme. A branded email theme is a separate issue.
 
 ## State found on 2026-09-29
 

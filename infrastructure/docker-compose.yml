@@ -76,6 +76,8 @@ services:
       - ./infrastructure/docker/keycloak/data:/opt/keycloak/data
         # Hier muss deine realm-export.json liegen, damit --import-realm sie findet
       - ./infrastructure/docker/keycloak/export:/opt/keycloak/data/import
+      # Login theme (#243); set per realm with loginTheme, see KEYCLOAK_ENVIRONMENTS.md
+      - ./infrastructure/docker/keycloak/themes/hanmaum:/opt/keycloak/themes/hanmaum:ro
 
   # -----------------------------------------------------------------
   # BACKEND APP (Später für den Server)

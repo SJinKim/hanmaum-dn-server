@@ -99,6 +99,9 @@ services:
       KC_METRICS_ENABLED: "true"
       KC_LOG_CONSOLE_OUTPUT: json
       KC_LOG_CONSOLE_JSON_FORMAT: ecs
+    volumes:
+      # Login theme (#243); configure-realm.sh sets loginTheme per realm.
+      - ./infrastructure/docker/keycloak/themes/hanmaum:/opt/keycloak/themes/hanmaum:ro
     labels:
       observability.logs.enabled: "true"
       observability.service: keycloak
