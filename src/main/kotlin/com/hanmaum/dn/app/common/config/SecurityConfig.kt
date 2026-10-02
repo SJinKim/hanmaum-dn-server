@@ -18,7 +18,6 @@ import org.springframework.security.config.Customizer
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
-import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer
 import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.oauth2.jwt.Jwt
@@ -71,17 +70,17 @@ class SecurityConfig(
                 auth
                     // Prometheus reaches this only through the private observability network.
                     // Caddy blocks every public /actuator/* path except health.
-                    .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus")
+                    .requestMatchers("/actuator/health", "/actuator/prometheus")
                     .permitAll()
                     .requestMatchers("/v3/api-docs/**", "/v3/api-docs.yaml", "/swagger-ui/**", "/swagger-ui.html")
-                    .permitAll()
-                    .requestMatchers(HttpMethod.GET, "$apiPrefix/announcements")
-                    .permitAll()
-                    .requestMatchers(HttpMethod.GET, "$apiPrefix/albums")
                     .permitAll()
                     .requestMatchers(HttpMethod.GET, "$apiPrefix/newcomer-forms/*")
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "$apiPrefix/newcomer-forms/*/submissions")
+                    .permitAll()
+                    // Self-registration. permitAll instead of web.ignoring(), so CORS and the
+                    // security headers still apply (#237). Rate-limited in MemberService.
+                    .requestMatchers(HttpMethod.POST, "$apiPrefix/members/register")
                     .permitAll()
                     .anyRequest()
                     .authenticated()
@@ -120,14 +119,6 @@ class SecurityConfig(
         response.contentType = MediaType.APPLICATION_PROBLEM_JSON_VALUE
         objectMapper.writeValue(response.outputStream, securityProblemDetail(status))
     }
-
-    @Bean
-    fun webSecurityCustomizer(): WebSecurityCustomizer =
-        WebSecurityCustomizer { web ->
-            web
-                .ignoring()
-                .requestMatchers(HttpMethod.POST, "$apiPrefix/members/register")
-        }
 
     /**
      * WICHTIG: Mappt Keycloak-Rollen auf Spring Authorities.

@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.newcomers.service
 
+import com.hanmaum.dn.app.common.security.SlidingWindowRateLimiter
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.CreateFormLinkRequest
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.CreateNewcomerRequest
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.FormLinkResponse
@@ -22,7 +23,6 @@ import java.time.Duration
 import java.time.Instant
 import java.util.Base64
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 
 @Service
 class NewcomerFormService(
@@ -34,7 +34,7 @@ class NewcomerFormService(
     @Value("\${app.newcomer-form.rate-limit-per-minute:10}") private val rateLimitPerMinute: Int,
 ) {
     private val random = SecureRandom()
-    private val attempts = ConcurrentHashMap<String, ArrayDeque<Instant>>()
+    private val rateLimiter = SlidingWindowRateLimiter(rateLimitPerMinute, Duration.ofMinutes(1))
 
     @Transactional
     fun createLink(
@@ -157,16 +157,8 @@ class NewcomerFormService(
     }
 
     private fun enforceRateLimit(key: String) {
-        val now = Instant.now()
-        val queue = attempts.computeIfAbsent(key) { ArrayDeque() }
-        synchronized(queue) {
-            while (queue.firstOrNull()?.isBefore(now.minusSeconds(60)) == true) queue.removeFirst()
-            if (queue.size >=
-                rateLimitPerMinute
-            ) {
-                throw NewcomerException(HttpStatus.TOO_MANY_REQUESTS, "Too many submissions. Try again later.")
-            }
-            queue.addLast(now)
+        if (!rateLimiter.tryAcquire(key)) {
+            throw NewcomerException(HttpStatus.TOO_MANY_REQUESTS, "Too many submissions. Try again later.")
         }
     }
 

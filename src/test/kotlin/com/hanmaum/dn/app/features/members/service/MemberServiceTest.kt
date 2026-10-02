@@ -53,6 +53,7 @@ import org.keycloak.admin.client.resource.UsersResource
 import org.keycloak.representations.idm.UserRepresentation
 import org.mockito.Mock
 import org.mockito.Mockito.never
+import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
@@ -60,6 +61,7 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.eq
+import org.springframework.http.HttpStatus
 import org.springframework.web.server.ResponseStatusException
 import java.net.URI
 import java.time.Instant
@@ -930,6 +932,39 @@ class MemberServiceTest {
     // --- registerMember ---
 
     @Test
+    fun `registerMember refuses an address over its limit before touching the database or Keycloak`() {
+        val limited =
+            MemberService(
+                memberRepository,
+                churchGroupRepository,
+                groupLeaderRepository,
+                memberGraduationRepository,
+                userTrainingRepository,
+                trainingRepository,
+                ministryAssignmentRepository,
+                ministryRepository,
+                keycloak,
+                CurrentMemberResolver(memberRepository, org.mockito.kotlin.mock()),
+                operationalMetrics,
+                "test-realm",
+                registrationRateLimit = 1,
+            )
+        val req = registerReq()
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
+        `when`(memberRepository.findSimilarNames(req.firstName, req.lastName)).thenReturn(emptyList())
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+        setupKeycloakMock()
+        limited.registerMember(req, CLIENT_IP)
+
+        val error = assertThrows<ResponseStatusException> { limited.registerMember(req, CLIENT_IP) }
+
+        assertEquals(HttpStatus.TOO_MANY_REQUESTS, error.statusCode)
+        verify(memberRepository, times(1)).save(any<Member>())
+        // Another address is counted on its own.
+        limited.registerMember(req, "198.51.100.7")
+    }
+
+    @Test
     fun `registerMember stages a separate account when an unclaimed email already exists`() {
         val existing = memberWithId(1L)
         `when`(memberRepository.findByEmailAndDeletedAtIsNull("test@example.com")).thenReturn(existing)
@@ -937,7 +972,7 @@ class MemberServiceTest {
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
         setupKeycloakMock()
 
-        val staged = memberService.registerMember(registerReq(email = "test@example.com"))
+        val staged = memberService.registerMember(registerReq(email = "test@example.com"), CLIENT_IP)
 
         assertNull(staged.email)
     }
@@ -950,7 +985,7 @@ class MemberServiceTest {
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
         setupKeycloakMock()
 
-        val result = memberService.registerMember(req)
+        val result = memberService.registerMember(req, CLIENT_IP)
 
         assertNull(result.discriminator)
     }
@@ -964,7 +999,7 @@ class MemberServiceTest {
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
         setupKeycloakMock()
 
-        val result = memberService.registerMember(req)
+        val result = memberService.registerMember(req, CLIENT_IP)
 
         assertEquals("A", result.discriminator)
     }
@@ -979,7 +1014,7 @@ class MemberServiceTest {
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
         setupKeycloakMock()
 
-        val result = memberService.registerMember(req)
+        val result = memberService.registerMember(req, CLIENT_IP)
 
         assertEquals("B", result.discriminator)
     }
@@ -998,7 +1033,7 @@ class MemberServiceTest {
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
         setupKeycloakMock()
 
-        val result = memberService.registerMember(req)
+        val result = memberService.registerMember(req, CLIENT_IP)
 
         assertEquals("C", result.discriminator)
     }
@@ -1011,7 +1046,7 @@ class MemberServiceTest {
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
         setupKeycloakMock(statusCode = 409)
 
-        assertThrows<RuntimeException> { memberService.registerMember(req) }
+        assertThrows<RuntimeException> { memberService.registerMember(req, CLIENT_IP) }
         verify(operationalMetrics)
             .recordExternalCall(eq("keycloak"), eq("create_user"), eq(ExternalCallOutcome.CLIENT_ERROR), any())
     }
@@ -1026,7 +1061,7 @@ class MemberServiceTest {
         `when`(realmResource.users()).thenReturn(usersResource)
         `when`(usersResource.create(any<UserRepresentation>())).thenThrow(ProcessingException("timeout"))
 
-        assertThrows<RuntimeException> { memberService.registerMember(req) }
+        assertThrows<RuntimeException> { memberService.registerMember(req, CLIENT_IP) }
         verify(operationalMetrics)
             .recordExternalCall(eq("keycloak"), eq("create_user"), eq(ExternalCallOutcome.TRANSPORT_ERROR), any())
     }
@@ -1039,7 +1074,7 @@ class MemberServiceTest {
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
         setupKeycloakMock()
 
-        val result = memberService.registerMember(req)
+        val result = memberService.registerMember(req, CLIENT_IP)
 
         assertEquals(MemberStatus.PENDING, result.memberStatus)
         assertNull(result.group)
@@ -1053,7 +1088,7 @@ class MemberServiceTest {
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
         setupKeycloakMock()
 
-        val result = memberService.registerMember(req)
+        val result = memberService.registerMember(req, CLIENT_IP)
 
         assertEquals("Hauptstraße", result.street)
         assertEquals("12a", result.houseNumber)
@@ -1067,7 +1102,7 @@ class MemberServiceTest {
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
         setupKeycloakMock(keycloakId = "kc-123")
 
-        val result = memberService.registerMember(req)
+        val result = memberService.registerMember(req, CLIENT_IP)
 
         assertEquals("kc-123", result.keycloakId)
         verify(userResource).sendVerifyEmail()
@@ -1084,7 +1119,7 @@ class MemberServiceTest {
         setupKeycloakMock(keycloakId = "kc-123")
         `when`(userResource.sendVerifyEmail()).thenThrow(ProcessingException("smtp unavailable"))
 
-        val result = memberService.registerMember(req)
+        val result = memberService.registerMember(req, CLIENT_IP)
 
         assertEquals("kc-123", result.keycloakId)
         verify(operationalMetrics)
@@ -1106,7 +1141,7 @@ class MemberServiceTest {
         val response = Response.status(503).build()
         `when`(userResource.sendVerifyEmail()).thenThrow(WebApplicationException(response))
 
-        val result = memberService.registerMember(req)
+        val result = memberService.registerMember(req, CLIENT_IP)
 
         assertEquals("kc-123", result.keycloakId)
         verify(operationalMetrics)
@@ -1299,5 +1334,9 @@ class MemberServiceTest {
                 request = UpdateMyProfileRequest(phoneNumber = "+49 123"),
             )
         assertEquals(LocalDate.of(1992, 12, 7), preserved.birthDate)
+    }
+
+    private companion object {
+        const val CLIENT_IP = "203.0.113.10"
     }
 }
