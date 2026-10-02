@@ -17,16 +17,17 @@ import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequ
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.util.UUID
 import kotlin.test.Test
 
-/** Rejecting a registration is an admin decision; nobody else may reach the endpoint. */
+/** Restoring and permanently deleting a deleted member are admin decisions (#246). */
 @WebMvcTest(MemberController::class, excludeAutoConfiguration = [OAuth2ResourceServerAutoConfiguration::class])
 @ActiveProfiles("test")
 @Import(SecurityConfig::class)
-class MemberRejectControllerTest {
+class MemberDeletionControllerTest {
     @Autowired private lateinit var mockMvc: MockMvc
 
     @MockitoBean private lateinit var memberService: MemberService
@@ -39,42 +40,47 @@ class MemberRejectControllerTest {
 
     private val publicId: UUID = UUID.randomUUID()
 
+    private fun role(name: String) = jwt().authorities(SimpleGrantedAuthority("ROLE_$name"))
+
     @Test
-    fun `anonymous cannot reject a member`() {
-        mockMvc
-            .perform(post("/api/v1/members/$publicId/reject"))
-            .andExpect(status().isUnauthorized)
+    fun `anonymous can neither restore nor permanently delete`() {
+        mockMvc.perform(post("/api/v1/members/$publicId/restore")).andExpect(status().isUnauthorized)
+        mockMvc.perform(delete("/api/v1/members/$publicId/permanent")).andExpect(status().isUnauthorized)
     }
 
     @Test
-    fun `a plain user cannot reject a member`() {
+    fun `a note_taker can neither restore nor permanently delete`() {
         mockMvc
-            .perform(post("/api/v1/members/$publicId/reject").with(jwt().authorities(SimpleGrantedAuthority("ROLE_USER"))))
+            .perform(post("/api/v1/members/$publicId/restore").with(role("NOTE_TAKER")))
             .andExpect(status().isForbidden)
-        verify(memberService, never()).rejectMember(any())
-    }
-
-    @Test
-    fun `an admin rejects a member through the service`() {
         mockMvc
-            .perform(post("/api/v1/members/$publicId/reject").with(jwt().authorities(SimpleGrantedAuthority("ROLE_ADMIN"))))
-            .andExpect(status().isOk)
-        verify(memberService).rejectMember(publicId)
-    }
-
-    @Test
-    fun `a note_taker reads members but cannot reject one`() {
-        mockMvc
-            .perform(post("/api/v1/members/$publicId/reject").with(jwt().authorities(SimpleGrantedAuthority("ROLE_NOTE_TAKER"))))
+            .perform(delete("/api/v1/members/$publicId/permanent").with(role("NOTE_TAKER")))
             .andExpect(status().isForbidden)
-        verify(memberService, never()).rejectMember(any())
+        verify(memberService, never()).restoreMember(any())
+        verify(memberPurgeService, never()).purgeMember(any())
     }
 
     @Test
-    fun `a pastor passes the admin-only check through the role hierarchy`() {
+    fun `a plain user cannot permanently delete`() {
         mockMvc
-            .perform(post("/api/v1/members/$publicId/reject").with(jwt().authorities(SimpleGrantedAuthority("ROLE_PASTOR"))))
+            .perform(delete("/api/v1/members/$publicId/permanent").with(role("USER")))
+            .andExpect(status().isForbidden)
+        verify(memberPurgeService, never()).purgeMember(any())
+    }
+
+    @Test
+    fun `an admin restores a member through the service`() {
+        mockMvc
+            .perform(post("/api/v1/members/$publicId/restore").with(role("ADMIN")))
             .andExpect(status().isOk)
-        verify(memberService).rejectMember(publicId)
+        verify(memberService).restoreMember(publicId)
+    }
+
+    @Test
+    fun `an admin permanently deletes a member through the purge service`() {
+        mockMvc
+            .perform(delete("/api/v1/members/$publicId/permanent").with(role("ADMIN")))
+            .andExpect(status().isNoContent)
+        verify(memberPurgeService).purgeMember(publicId)
     }
 }

@@ -122,6 +122,10 @@ class Member(
     var piiKeyId: String? = null,
     @Column(name = "delete_entry_at")
     var deleteEntryAt: Instant? = null,
+    /** Status before the soft delete. A restore returns to it; null while the member is not deleted. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status_before_delete")
+    var statusBeforeDelete: MemberStatus? = null,
     @Column(name = "push_enabled", nullable = false)
     var pushEnabled: Boolean = true,
 ) : BaseEntity() {

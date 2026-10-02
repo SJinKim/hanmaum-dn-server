@@ -705,7 +705,8 @@ class MemberService(
     }
 
     /**
-     * Soft-delete: marks member DELETED, sets deletedAt. Terminal — cannot be undone via API.
+     * Soft-delete: marks member DELETED, sets deletedAt and remembers the previous status.
+     * [restoreMember] undoes it; MemberPurgeService removes the member for good.
      */
     @Transactional
     fun softDeleteMember(publicId: UUID) {
@@ -713,10 +714,47 @@ class MemberService(
             memberRepository
                 .findByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow { EntityNotFoundException("Member not found or already deleted: $publicId") }
+        member.statusBeforeDelete = member.memberStatus
         member.memberStatus = MemberStatus.DELETED
         member.deletedAt = Instant.now()
         member.deleteEntryAt = Instant.now().plusSeconds(memberRetentionDays * 24 * 60 * 60)
         memberRepository.save(member)
+    }
+
+    /**
+     * Undoes [softDeleteMember]: the member returns to the status it had before. Rows deleted
+     * before that status was stored come back as INACTIVE. 409 when an active member already
+     * uses the same email or Keycloak account, because both are unique among active members.
+     */
+    @Transactional
+    fun restoreMember(publicId: UUID): MemberDto {
+        val member =
+            memberRepository
+                .findByPublicId(publicId)
+                .orElseThrow { EntityNotFoundException("Member not found: $publicId") }
+        if (member.deletedAt == null) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "삭제된 회원만 복원할 수 있습니다.")
+        }
+        val emailTaken = member.email?.let(memberRepository::findByEmailAndDeletedAtIsNull) != null
+        if (emailTaken) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다.")
+        }
+        val accountTaken = member.keycloakId?.let(memberRepository::findByKeycloakIdAndDeletedAtIsNull) != null
+        if (accountTaken) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "이미 사용 중인 계정입니다.")
+        }
+        member.memberStatus = member.statusBeforeDelete ?: MemberStatus.INACTIVE
+        member.statusBeforeDelete = null
+        member.deletedAt = null
+        member.deleteEntryAt = null
+        val saved = memberRepository.save(member)
+        log
+            .atInfo()
+            .addKeyValue("event.action", "member.restore")
+            .addKeyValue("event.outcome", "success")
+            .addKeyValue("member.public_id", publicId)
+            .log("Member restored")
+        return saved.toDto()
     }
 
     /**
@@ -840,6 +878,10 @@ class MemberService(
                         .addKeyValue("http.response.status_code", response.status)
                         .addKeyValue("realm", realm)
                         .log("Keycloak user creation was rejected")
+                    if (response.status == 409) {
+                        // The account still exists in Keycloak, e.g. for a soft-deleted member.
+                        throw ResponseStatusException(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다.")
+                    }
                     throw RuntimeException("Keycloak user creation failed (HTTP ${response.status})")
                 }
 

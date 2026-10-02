@@ -7,6 +7,7 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
 import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberTrainingsRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UserTrainingDto
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.members.service.MemberPurgeService
 import com.hanmaum.dn.app.features.members.service.MemberService
 import org.mockito.Mockito.`when`
 import org.mockito.kotlin.any
@@ -47,6 +48,8 @@ class MemberProfileControllerTest {
     @Autowired private lateinit var mockMvc: MockMvc
 
     @MockitoBean private lateinit var memberService: MemberService
+
+    @MockitoBean private lateinit var memberPurgeService: MemberPurgeService
 
     @MockitoBean private lateinit var memberRepository: MemberRepository
 
