@@ -20,8 +20,29 @@ separates them. This is intended, not a stopgap (#253). The audience is the same
 
 The backend variables per environment are `KEYCLOAK_REALM` and
 `APP_SECURITY_KEYCLOAK_PUBLIC_ISSUER`. The issuer must equal the `iss` claim exactly.
-Checking the audience on the server side is #236. Until #236 lands, the `aud` claim is
-emitted but not yet enforced.
+
+### What the backend accepts
+
+Since #236 the backend takes a bearer token only if all of these hold
+(`common/security/AccessTokenValidator.kt`):
+
+- the signature verifies against the realm's JWKS, and `exp`/`nbf` are in range,
+- `iss` is one of `app.security.allowed-issuers`. ST and prod share one Keycloak instance,
+  so this is what keeps a staging token out of prod,
+- `aud` contains `app.security.audience` (`hanmaum-dn-api`, set in `application.yml`).
+  Only the two user clients carry the audience scope, so the backend's own service
+  account and any other client of the realm are rejected,
+- `typ` is `Bearer` or absent. ID tokens (`ID`) and refresh tokens (`Refresh`) are rejected.
+
+A rejected token gets 401, a valid token without the needed role gets 403. A blank issuer
+list or audience stops the start; in prod a missing `APP_SECURITY_KEYCLOAK_PUBLIC_ISSUER`
+already fails placeholder resolution.
+
+A local realm imported before #235 has no `hanmaum-dn-api-audience` scope, and the backend
+now answers every request from it with 401. `--import-realm` does not update an existing
+realm, so either delete the local realm `hanmaum` and restart Keycloak to re-import it
+(local users are lost), or create the scope by hand as described under "Clients" and add it
+as a default scope to `hanmaum-dashboard` and `hanmaum-mobile`.
 
 ### Clients
 

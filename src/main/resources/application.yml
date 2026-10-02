@@ -64,6 +64,10 @@ hanmaum:
     reminder-offsets: ${HANMAUM_RSVP_REMINDEROFFSETS:P7D}
 
 app:
+  security:
+    # The `aud` claim every accepted access token must carry (#236). The same in every
+    # environment; Keycloak's client scope `hanmaum-dn-api-audience` emits it (#235).
+    audience: ${APP_SECURITY_API_AUDIENCE:hanmaum-dn-api}
   pii:
     strict: ${PII_STRICT:false}
     local-plaintext-enabled: ${PII_LOCAL_PLAINTEXT_ENABLED:false}
