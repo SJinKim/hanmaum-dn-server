@@ -116,7 +116,7 @@ These were read-only probes against `auth.graceops.de`:
 
 ## Rollout: staging first, then prod
 
-Run everything on the Hetzner host, from the deploy directory. The prod deploy copies
+Run everything on the Hetzner host, from the deploy directory. Both deploys copy
 `scripts/keycloak/` there. The script runs `kcadm` inside the Keycloak
 container and logs in with that container's bootstrap admin, so no password is typed or
 printed. It needs `jq` on the host. Without `APPLY=1` it only prints what it would change.
