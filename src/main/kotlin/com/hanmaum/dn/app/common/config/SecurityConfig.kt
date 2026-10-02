@@ -8,7 +8,6 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.convert.converter.Converter
-import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.security.access.hierarchicalroles.RoleHierarchy
@@ -72,16 +71,15 @@ class SecurityConfig(
                     // Caddy blocks every public /actuator/* path except health.
                     .requestMatchers("/actuator/health", "/actuator/prometheus")
                     .permitAll()
+                    // Only reachable in local dev: springdoc is off in the prod profile (#237).
                     .requestMatchers("/v3/api-docs/**", "/v3/api-docs.yaml", "/swagger-ui/**", "/swagger-ui.html")
                     .permitAll()
-                    .requestMatchers(HttpMethod.GET, "$apiPrefix/newcomer-forms/*")
-                    .permitAll()
-                    .requestMatchers(HttpMethod.POST, "$apiPrefix/newcomer-forms/*/submissions")
-                    .permitAll()
-                    // Self-registration. permitAll instead of web.ignoring(), so CORS and the
-                    // security headers still apply (#237). Rate-limited in MemberService.
-                    .requestMatchers(HttpMethod.POST, "$apiPrefix/members/register")
-                    .permitAll()
+                // permitAll instead of web.ignoring(), so CORS and the security headers still
+                // apply to the anonymous API routes (#237).
+                PublicApiRoutes.operations.forEach { (method, path) ->
+                    auth.requestMatchers(method, "$apiPrefix$path").permitAll()
+                }
+                auth
                     .anyRequest()
                     .authenticated()
             }.oauth2ResourceServer { oauth2 ->
