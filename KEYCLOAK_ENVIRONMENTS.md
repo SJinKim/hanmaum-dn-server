@@ -5,9 +5,8 @@ holds no secrets. Client secrets live only in the server's `.env` files and in K
 
 ## Matrix
 
-Staging runs on the Keycloak instance at `auth.graceops.de`. Prod gets its own server,
-which is not rented yet. Until then the prod column is the target, not a live system, and
-the prod host name may still change. The audience is the same everywhere.
+Staging and prod share one Keycloak instance at `auth.graceops.de`. Only the realm
+separates them. This is intended, not a stopgap (#253). The audience is the same everywhere.
 
 | | Local dev | Staging | Prod |
 |---|---|---|---|
@@ -56,13 +55,42 @@ The script sets the dashboard client's base URL to the first origin plus `/`. Th
 theme links there from its error and expired-link pages ("로그인 화면으로 이동"). With
 `DASHBOARD_URLS=` empty, the base URL stays as it is.
 
+### The shared Keycloak container
+
+The container `hanmaumApp-keycloak` is defined only in `docker-compose.prod.yml`, compose
+project `hanmaum-prod`. The staging stack has no Keycloak, so a staging deploy never
+touches it.
+
+- A change to the container itself (a mount, the image, the start command) reaches the
+  host only with the prod deploy, which copies `docker-compose.prod.yml` and recreates
+  what changed. Until then the host keeps the old compose file.
+- Every recreate or restart takes Keycloak down for both realms at once, usually 30 to
+  60 seconds. Staging and prod logins fail during that time.
+- Realms, users and sessions live in Postgres (`hanmaum_keycloak_db`), so recreating the
+  container loses nothing.
+
+To apply a container change without a full prod deploy, put the current
+`docker-compose.prod.yml` from `main` on the host, then recreate only Keycloak:
+
+```bash
+cd /opt/hanmaum-dn-server
+grep -n "themes/hanmaum\|command:" docker-compose.prod.yml   # check it is the current file
+set -a && source .env && set +a
+docker compose --project-name hanmaum-prod -f docker-compose.prod.yml \
+  up -d --no-deps hanmaumApp-keycloak
+```
+
+`--no-deps` leaves the backend and the database alone.
+
 ### Login theme
 
 The browser pages (dashboard login, 비밀번호 찾기, 새 비밀번호 설정, 이메일 인증, expired link)
 use the theme `hanmaum` (#243). Its design is the Figma file DN-Web. The files live in
 `infrastructure/docker/keycloak/themes/hanmaum/` and are mounted read-only into
-`/opt/keycloak/themes/hanmaum` by both compose files. The prod deploy copies
-`infrastructure/` to the host, so the theme travels with every deploy.
+`/opt/keycloak/themes/hanmaum` by `infrastructure/docker-compose.yml` (local) and
+`docker-compose.prod.yml` (the shared instance). Both deploys copy `infrastructure/` to the
+host, so theme files travel with either one. The mount itself only exists once the container
+was created from a compose file that has it (see the section above).
 
 - Realm settings: `loginTheme=hanmaum`, internationalization on, locales `ko` and `en`,
   default `ko`, and `resetPasswordAllowed=true` for the 비밀번호 찾기 link. The reset mail
@@ -140,9 +168,9 @@ printed. It needs `jq` on the host. Without `APPLY=1` it only prints what it wou
    dashboard and the staging app, and run the matrix in `KEYCLOAK_RUNBOOK.md`.
 3. Check that member creation, the verification mail and member purge still work in
    staging. These calls use the reduced backend role.
-4. Once the prod server exists, repeat steps 1 to 3 there with `KC_REALM=hanmaum-dn-prod`
-   and `DASHBOARD_URLS=` (empty until prod has a dashboard).
-5. Delete the dev realm `hanmaum` on the prod instance in the Admin Console. Only do
+4. Repeat steps 1 to 3 with `KC_REALM=hanmaum-dn-prod` and `DASHBOARD_URLS=` (empty until
+   prod has a dashboard). It is the same instance, so nothing else changes.
+5. Delete the dev realm `hanmaum` on the shared instance in the Admin Console. Only do
    this after steps 1 to 4, and only after confirming that no backend `.env` still has
    `KEYCLOAK_REALM=hanmaum`.
 
