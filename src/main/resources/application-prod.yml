@@ -11,6 +11,14 @@ spring:
         jwt:
           jwk-set-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI}
 
+# No public API docs on ST or prod: both run this profile (#237). The spec for ops is
+# generated with the dev profile (generateOpenApiDocs), so it is not affected.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
 logging:
   level:
     root: INFO

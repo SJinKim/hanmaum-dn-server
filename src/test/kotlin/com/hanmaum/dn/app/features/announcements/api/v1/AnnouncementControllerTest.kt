@@ -86,9 +86,19 @@ class AnnouncementControllerTest {
     }
 
     @Test
-    fun `GET announcement detail requires authentication`() {
+    fun `GET announcement detail is public like the list`() {
+        `when`(announcementService.getActiveAnnouncement(publicId)).thenReturn(announcement)
+
         mockMvc
             .perform(get("/api/v1/announcements/{publicId}", publicId))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.id").value(publicId.toString()))
+    }
+
+    @Test
+    fun `GET admin announcement list still requires authentication`() {
+        mockMvc
+            .perform(get("/api/v1/announcements/admin"))
             .andExpect(status().isUnauthorized)
     }
 
