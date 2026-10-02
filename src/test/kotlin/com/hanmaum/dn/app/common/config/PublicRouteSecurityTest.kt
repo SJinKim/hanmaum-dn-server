@@ -53,9 +53,6 @@ class PublicRouteSecurityTest {
             listOf(
                 HttpMethod.GET to "/actuator/health",
                 HttpMethod.GET to "/actuator/prometheus",
-                HttpMethod.GET to "/api/v1/announcements",
-                HttpMethod.GET to "/api/v1/announcements/00000000-0000-0000-0000-000000000001",
-                HttpMethod.GET to "/api/v1/albums",
                 HttpMethod.GET to "/api/v1/newcomer-forms/some-token",
                 HttpMethod.POST to "/api/v1/newcomer-forms/some-token/submissions",
                 HttpMethod.POST to "/api/v1/members/register",
@@ -68,7 +65,10 @@ class PublicRouteSecurityTest {
         val protected =
             listOf(
                 HttpMethod.GET to "/actuator/info",
+                HttpMethod.GET to "/api/v1/announcements",
+                HttpMethod.GET to "/api/v1/announcements/00000000-0000-0000-0000-000000000001",
                 HttpMethod.GET to "/api/v1/announcements/admin",
+                HttpMethod.GET to "/api/v1/albums",
                 HttpMethod.POST to "/api/v1/announcements",
                 HttpMethod.POST to "/api/v1/albums",
                 HttpMethod.GET to "/api/v1/newcomer-forms",

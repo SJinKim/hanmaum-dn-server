@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.album.api.v1
 
+import com.hanmaum.dn.app.common.config.SecurityConfig
 import com.hanmaum.dn.app.features.album.api.v1.dto.AlbumDto
 import com.hanmaum.dn.app.features.album.service.AlbumService
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
@@ -7,7 +8,9 @@ import org.mockito.Mockito.`when`
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
+import org.springframework.context.annotation.Import
 import org.springframework.security.oauth2.jwt.JwtDecoder
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
@@ -20,6 +23,7 @@ import kotlin.test.Test
 
 @WebMvcTest(AlbumController::class, excludeAutoConfiguration = [OAuth2ResourceServerAutoConfiguration::class])
 @ActiveProfiles("test")
+@Import(SecurityConfig::class)
 class AlbumControllerTest {
     @Autowired
     private lateinit var mockMvc: MockMvc
@@ -31,12 +35,11 @@ class AlbumControllerTest {
     private lateinit var jwtDecoder: JwtDecoder
 
     // MemberStatusInterceptor uses this; mock it so the interceptor's real logic runs
-    // (unauthenticated requests return true from preHandle without hitting the DB)
     @MockitoBean
     private lateinit var memberRepository: MemberRepository
 
     @Test
-    fun `GET albums returns 200 without authentication`() {
+    fun `GET albums returns 200 for an authenticated member`() {
         `when`(albumService.getAlbums()).thenReturn(
             listOf(
                 AlbumDto(
@@ -49,7 +52,7 @@ class AlbumControllerTest {
         )
 
         mockMvc
-            .perform(get("/api/v1/albums"))
+            .perform(get("/api/v1/albums").with(jwt()))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$[0].name").value("여름수련회"))
             .andExpect(jsonPath("$[0].pcloudCode").value("CODE1"))
@@ -61,8 +64,15 @@ class AlbumControllerTest {
         `when`(albumService.getAlbums()).thenReturn(emptyList())
 
         mockMvc
-            .perform(get("/api/v1/albums"))
+            .perform(get("/api/v1/albums").with(jwt()))
             .andExpect(status().isOk)
             .andExpect(content().json("[]"))
+    }
+
+    @Test
+    fun `GET albums requires authentication`() {
+        mockMvc
+            .perform(get("/api/v1/albums"))
+            .andExpect(status().isUnauthorized)
     }
 }

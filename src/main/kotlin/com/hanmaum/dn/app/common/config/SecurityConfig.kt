@@ -74,13 +74,6 @@ class SecurityConfig(
                     .permitAll()
                     .requestMatchers("/v3/api-docs/**", "/v3/api-docs.yaml", "/swagger-ui/**", "/swagger-ui.html")
                     .permitAll()
-                    // The admin list sits next to the public detail route and must match first.
-                    .requestMatchers(HttpMethod.GET, "$apiPrefix/announcements/admin")
-                    .authenticated()
-                    .requestMatchers(HttpMethod.GET, "$apiPrefix/announcements", "$apiPrefix/announcements/*")
-                    .permitAll()
-                    .requestMatchers(HttpMethod.GET, "$apiPrefix/albums")
-                    .permitAll()
                     .requestMatchers(HttpMethod.GET, "$apiPrefix/newcomer-forms/*")
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "$apiPrefix/newcomer-forms/*/submissions")

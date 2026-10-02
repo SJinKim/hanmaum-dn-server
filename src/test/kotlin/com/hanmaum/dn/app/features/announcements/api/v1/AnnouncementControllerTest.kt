@@ -59,11 +59,11 @@ class AnnouncementControllerTest {
     private val publicId = announcement.publicId
 
     @Test
-    fun `GET announcements returns enriched feed without authentication`() {
+    fun `GET announcements returns enriched feed for authenticated member`() {
         `when`(announcementService.getActiveAnnouncements()).thenReturn(listOf(announcement))
 
         mockMvc
-            .perform(get("/api/v1/announcements"))
+            .perform(get("/api/v1/announcements").with(jwt().jwt { it.subject("kc-001") }))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.data[0].imageUrl").value("https://cdn.example.org/retreat.jpg"))
             .andExpect(jsonPath("$.data[0].location").value("교회 본당"))
@@ -86,20 +86,13 @@ class AnnouncementControllerTest {
     }
 
     @Test
-    fun `GET announcement detail is public like the list`() {
-        `when`(announcementService.getActiveAnnouncement(publicId)).thenReturn(announcement)
-
-        mockMvc
-            .perform(get("/api/v1/announcements/{publicId}", publicId))
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.id").value(publicId.toString()))
-    }
-
-    @Test
-    fun `GET admin announcement list still requires authentication`() {
-        mockMvc
-            .perform(get("/api/v1/announcements/admin"))
-            .andExpect(status().isUnauthorized)
+    fun `announcement reads require authentication`() {
+        listOf("/api/v1/announcements", "/api/v1/announcements/$publicId", "/api/v1/announcements/admin")
+            .forEach { path ->
+                mockMvc
+                    .perform(get(path))
+                    .andExpect(status().isUnauthorized)
+            }
     }
 
     @Test
