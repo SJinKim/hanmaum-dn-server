@@ -259,27 +259,37 @@ data class UpdateMemberRequest(
 
 @Redacted
 data class RegisterMemberRequest(
+    // The endpoint is anonymous, so every field has an upper bound (#237).
     @field:NotBlank(message = "이름은 필수입니다.")
+    @field:Size(max = 100)
     val firstName: String,
     @field:NotBlank(message = "성은 필수입니다.")
+    @field:Size(max = 100)
     val lastName: String,
     @field:NotBlank
+    @field:Size(max = 256)
     val password: String,
     // Trim before validation so a stray leading/trailing space (mobile keyboard, copy-paste)
     // can't fail @Email or create a mismatched Keycloak username. Password is deliberately not trimmed.
     @field:JsonDeserialize(converter = TrimmingStringConverter::class)
     @field:NotBlank
     @field:Email(message = "유효한 이메일이어야 합니다.")
+    @field:Size(max = 254)
     val email: String,
+    @field:Size(max = 100)
     val city: String? = null,
+    @field:Size(max = 50)
     val baptism: String? = null,
+    @field:Size(max = 20)
     val gender: String? = null,
     val birthDate: LocalDate? = null,
     @field:Size(max = 50)
     val phoneNumber: String? = null,
+    @field:Size(max = 200)
     val street: String? = null,
     @field:Size(max = 50)
     val houseNumber: String? = null,
+    @field:Size(max = 20)
     val zipCode: String? = null,
 )
 

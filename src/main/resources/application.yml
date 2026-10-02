@@ -1,5 +1,9 @@
 server:
   port: 8080
+  # Caddy is the only ingress and sets X-Forwarded-For. Tomcat's RemoteIpValve trusts it
+  # only from internal proxy addresses, so remoteAddr is the real client IP for the
+  # rate limits on the anonymous write paths (#237). Without a proxy nothing changes.
+  forward-headers-strategy: native
 
 api:
   prefix: /api/v1

@@ -5,6 +5,7 @@ import com.hanmaum.dn.app.common.domainvalue.Gender
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.common.observability.ExternalCallOutcome
 import com.hanmaum.dn.app.common.observability.OperationalMetrics
+import com.hanmaum.dn.app.common.security.SlidingWindowRateLimiter
 import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
 import com.hanmaum.dn.app.features.groups.repository.GroupLeaderRepository
 import com.hanmaum.dn.app.features.members.api.applyPatch
@@ -54,6 +55,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -74,8 +76,11 @@ class MemberService(
     private val operationalMetrics: OperationalMetrics,
     @Value("\${app.keycloak.realm:hanmaum}") private val realm: String,
     @Value("\${app.member-retention.days:30}") private val memberRetentionDays: Long = 30,
+    // Self-registration is anonymous and creates a Keycloak user per call (#237).
+    @Value("\${app.registration.rate-limit-per-ten-minutes:10}") registrationRateLimit: Int = 10,
 ) {
     private val log = LoggerFactory.getLogger(MemberService::class.java)
+    private val registrationLimiter = SlidingWindowRateLimiter(registrationRateLimit, Duration.ofMinutes(10))
     private val sortPropertyAliases =
         mapOf(
             "lastName" to "lastName",
@@ -718,7 +723,13 @@ class MemberService(
      * Self-registration: creates DB record + Keycloak user, stores keycloakId on member.
      */
     @Transactional
-    fun registerMember(req: RegisterMemberRequest): Member {
+    fun registerMember(
+        req: RegisterMemberRequest,
+        remoteAddress: String,
+    ): Member {
+        if (!registrationLimiter.tryAcquire(remoteAddress)) {
+            throw ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Too many registrations. Try again later.")
+        }
         // A dashboard/newcomer record with this email is not an error. The account is
         // created as a separate pending registration and is linked only after Keycloak has
         // verified the email and the identity checks run on first authenticated access.

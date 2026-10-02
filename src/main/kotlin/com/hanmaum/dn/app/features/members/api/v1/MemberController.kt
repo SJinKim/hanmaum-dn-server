@@ -249,13 +249,14 @@ class MemberController(
     /**
      * POST /api/v1/members/register
      * Public (no auth required) — self-registration; creates DB record + Keycloak user.
-     * Path is whitelisted in SecurityConfig.
+     * permitAll in SecurityConfig, rate-limited per client address in MemberService (#237).
      */
     @PostMapping("/register")
     fun registerMember(
         @Valid @RequestBody request: RegisterMemberRequest,
+        servletRequest: HttpServletRequest,
     ): ResponseEntity<ApiResponse<Unit>> {
-        memberService.registerMember(request)
+        memberService.registerMember(request, servletRequest.remoteAddr)
         return ResponseEntity
             .status(HttpStatus.CREATED)
             .body(ApiResponse.success(message = "등록이 완료되었습니다."))

@@ -14,7 +14,7 @@ import org.springframework.web.servlet.HandlerInterceptor
 /**
  * Blocks PENDING and INACTIVE members from accessing any endpoint except:
  * - GET /api/v1/members/me  (so the mobile app can read status and show the correct screen)
- * - POST /api/v1/members/register (public, bypasses security entirely)
+ * - POST /api/v1/members/register (public via permitAll, the caller has no member yet)
  *
  * ADMIN-role users bypass this check entirely.
  */
