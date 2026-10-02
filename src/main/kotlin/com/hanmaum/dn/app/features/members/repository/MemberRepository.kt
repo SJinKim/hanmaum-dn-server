@@ -57,6 +57,8 @@ interface MemberRepositorySecureQueries {
     /**
      * Loads the encrypted member fields needed by the admin list before its related-record
      * filters and display-value sort are applied in the service layer.
+     * Without a status filter only non-deleted members are returned; [MemberStatus.DELETED]
+     * returns the soft-deleted members instead.
      */
     fun findActiveMembers(
         search: String?,

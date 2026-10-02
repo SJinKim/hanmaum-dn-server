@@ -47,8 +47,10 @@ class MemberRepositoryImpl(
         baptism: Baptism?,
     ): List<Member> {
         val normalizedSearch = search?.takeIf(String::isNotBlank)?.let(PiiCryptoContext::normalize)
+        // Soft-deleted members only show up when the caller filters for DELETED (#246).
+        val candidates = if (status == MemberStatus.DELETED) deletedMembers() else activeMembers(status)
         val filtered =
-            activeMembers(status)
+            candidates
                 .asSequence()
                 .filter { baptism == null || it.baptism == baptism }
                 .filter { member ->
@@ -166,6 +168,21 @@ class MemberRepositoryImpl(
             )
         query.setParameter("status", status)
         val members = query.resultList
+        enforceInMemoryLimit(members.size)
+        return members
+    }
+
+    private fun deletedMembers(): List<Member> {
+        val members =
+            entityManager
+                .createQuery(
+                    """
+                    SELECT DISTINCT m FROM Member m
+                    LEFT JOIN FETCH m.group
+                    WHERE m.deletedAt IS NOT NULL
+                    """.trimIndent(),
+                    Member::class.java,
+                ).resultList
         enforceInMemoryLimit(members.size)
         return members
     }

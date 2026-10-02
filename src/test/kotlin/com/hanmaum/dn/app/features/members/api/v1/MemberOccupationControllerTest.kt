@@ -7,6 +7,7 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.members.service.MemberPurgeService
 import com.hanmaum.dn.app.features.members.service.MemberService
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -40,6 +41,8 @@ class MemberOccupationControllerTest {
     @Autowired private lateinit var mockMvc: MockMvc
 
     @MockitoBean private lateinit var memberService: MemberService
+
+    @MockitoBean private lateinit var memberPurgeService: MemberPurgeService
 
     @MockitoBean private lateinit var memberRepository: MemberRepository
 

@@ -13,6 +13,7 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberMinistriesReq
 import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberTrainingsRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMyProfileRequest
+import com.hanmaum.dn.app.features.members.service.MemberPurgeService
 import com.hanmaum.dn.app.features.members.service.MemberService
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.enums.ParameterIn
@@ -45,6 +46,7 @@ import java.util.UUID
 @RequestMapping("/members")
 class MemberController(
     private val memberService: MemberService,
+    private val memberPurgeService: MemberPurgeService,
 ) {
     /**
      * GET /api/v1/members
@@ -235,7 +237,7 @@ class MemberController(
 
     /**
      * DELETE /api/v1/members/{publicId}
-     * Role: ADMIN — soft delete; sets deletedAt + memberStatus=DELETED (terminal).
+     * Role: ADMIN — soft delete; sets deletedAt + memberStatus=DELETED. Reversible via restore.
      */
     @DeleteMapping("/{publicId}")
     @PreAuthorize("hasRole('ADMIN')")
@@ -244,6 +246,34 @@ class MemberController(
         @PathVariable publicId: UUID,
     ) {
         memberService.softDeleteMember(publicId)
+    }
+
+    /**
+     * POST /api/v1/members/{publicId}/restore
+     * Role: ADMIN — undoes a soft delete; the member gets its previous status back.
+     * 400 if the member is not deleted, 409 if an active member uses the same email.
+     */
+    @PostMapping("/{publicId}/restore")
+    @PreAuthorize("hasRole('ADMIN')")
+    fun restoreMember(
+        @PathVariable publicId: UUID,
+    ): ResponseEntity<ApiResponse<MemberDto>> {
+        val restored = memberService.restoreMember(publicId)
+        return ResponseEntity.ok(ApiResponse.success(data = restored))
+    }
+
+    /**
+     * DELETE /api/v1/members/{publicId}/permanent
+     * Role: ADMIN — hard delete of a soft-deleted member, including the Keycloak account.
+     * Cannot be undone; the email is free again afterwards. 400 if the member is not deleted.
+     */
+    @DeleteMapping("/{publicId}/permanent")
+    @PreAuthorize("hasRole('ADMIN')")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun purgeMember(
+        @PathVariable publicId: UUID,
+    ) {
+        memberPurgeService.purgeMember(publicId)
     }
 
     /**

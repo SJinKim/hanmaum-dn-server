@@ -1,14 +1,19 @@
 package com.hanmaum.dn.app.features.members.service
 
+import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import jakarta.persistence.EntityNotFoundException
 import jakarta.ws.rs.ProcessingException
 import org.keycloak.admin.client.Keycloak
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.support.TransactionTemplate
+import org.springframework.web.server.ResponseStatusException
 import java.time.Instant
+import java.util.UUID
 
 @Service
 class MemberPurgeService(
@@ -29,6 +34,26 @@ class MemberPurgeService(
             }
         }
         return expiredMembers.size
+    }
+
+    /**
+     * Admin hard delete of one soft-deleted member, ahead of the retention period. Same steps
+     * as [purgeExpired]: the Keycloak account goes first (404 counts as gone), then the rows.
+     * Afterwards the email can be registered again.
+     */
+    fun purgeMember(publicId: UUID) {
+        val member =
+            memberRepository
+                .findByPublicId(publicId)
+                .orElseThrow { EntityNotFoundException("Member not found: $publicId") }
+        if (member.deletedAt == null || member.memberStatus != MemberStatus.DELETED) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "삭제된 회원만 영구 삭제할 수 있습니다.")
+        }
+        val memberId = member.id!!
+        deleteKeycloakUser(member.keycloakId, memberId)
+        transactionTemplate.executeWithoutResult {
+            purgeMemberRows(memberId)
+        }
     }
 
     private fun deleteKeycloakUser(

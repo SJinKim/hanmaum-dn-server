@@ -3,6 +3,7 @@ package com.hanmaum.dn.app.features.members.api.v1
 import com.hanmaum.dn.app.common.config.SecurityConfig
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberNameDto
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.members.service.MemberPurgeService
 import com.hanmaum.dn.app.features.members.service.MemberService
 import org.mockito.Mockito.`when`
 import org.springframework.beans.factory.annotation.Autowired
@@ -32,6 +33,8 @@ class MemberNamesControllerTest {
     @Autowired private lateinit var mockMvc: MockMvc
 
     @MockitoBean private lateinit var memberService: MemberService
+
+    @MockitoBean private lateinit var memberPurgeService: MemberPurgeService
 
     @MockitoBean private lateinit var memberRepository: MemberRepository
 

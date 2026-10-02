@@ -914,6 +914,7 @@ class MemberServiceTest {
     @Test
     fun `softDeleteMember sets deletedAt and status to DELETED`() {
         val member = memberWithId(1L)
+        member.memberStatus = MemberStatus.INACTIVE
         `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
             .thenReturn(Optional.of(member))
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
@@ -924,9 +925,84 @@ class MemberServiceTest {
 
         assertNotNull(member.deletedAt)
         assertEquals(MemberStatus.DELETED, member.memberStatus)
+        assertEquals(MemberStatus.INACTIVE, member.statusBeforeDelete)
         assertNotNull(member.deleteEntryAt)
         assert(member.deleteEntryAt!! >= before)
         assert(member.deleteEntryAt!! <= after)
+    }
+
+    // --- restoreMember ---
+
+    private fun deletedMember(statusBeforeDelete: MemberStatus?): Member {
+        val member = memberWithId(1L)
+        member.email = "kim@example.com"
+        member.keycloakId = "kc-1"
+        member.memberStatus = MemberStatus.DELETED
+        member.statusBeforeDelete = statusBeforeDelete
+        member.deletedAt = Instant.now()
+        member.deleteEntryAt = Instant.now().plusSeconds(60)
+        return member
+    }
+
+    @Test
+    fun `restoreMember returns the member to its previous status`() {
+        val member = deletedMember(MemberStatus.ACTIVE)
+        `when`(memberRepository.findByPublicId(member.publicId)).thenReturn(Optional.of(member))
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+
+        val dto = memberService.restoreMember(member.publicId)
+
+        assertEquals(MemberStatus.ACTIVE, member.memberStatus)
+        assertEquals(MemberStatus.ACTIVE.name, dto.memberStatus)
+        assertNull(member.statusBeforeDelete)
+        assertNull(member.deletedAt)
+        assertNull(member.deleteEntryAt)
+    }
+
+    @Test
+    fun `restoreMember falls back to INACTIVE when no previous status was stored`() {
+        val member = deletedMember(statusBeforeDelete = null)
+        `when`(memberRepository.findByPublicId(member.publicId)).thenReturn(Optional.of(member))
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+
+        memberService.restoreMember(member.publicId)
+
+        assertEquals(MemberStatus.INACTIVE, member.memberStatus)
+    }
+
+    @Test
+    fun `restoreMember answers 409 when an active member uses the same email`() {
+        val member = deletedMember(MemberStatus.ACTIVE)
+        `when`(memberRepository.findByPublicId(member.publicId)).thenReturn(Optional.of(member))
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull("kim@example.com")).thenReturn(memberWithId(2L))
+
+        val ex = assertThrows<ResponseStatusException> { memberService.restoreMember(member.publicId) }
+
+        assertEquals(HttpStatus.CONFLICT, ex.statusCode)
+        assertNotNull(member.deletedAt)
+        verify(memberRepository, never()).save(any<Member>())
+    }
+
+    @Test
+    fun `restoreMember answers 409 when an active member uses the same Keycloak account`() {
+        val member = deletedMember(MemberStatus.ACTIVE)
+        `when`(memberRepository.findByPublicId(member.publicId)).thenReturn(Optional.of(member))
+        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull("kc-1")).thenReturn(memberWithId(2L))
+
+        val ex = assertThrows<ResponseStatusException> { memberService.restoreMember(member.publicId) }
+
+        assertEquals(HttpStatus.CONFLICT, ex.statusCode)
+        verify(memberRepository, never()).save(any<Member>())
+    }
+
+    @Test
+    fun `restoreMember refuses a member that is not deleted`() {
+        val member = memberWithId(1L)
+        `when`(memberRepository.findByPublicId(member.publicId)).thenReturn(Optional.of(member))
+
+        val ex = assertThrows<ResponseStatusException> { memberService.restoreMember(member.publicId) }
+
+        assertEquals(HttpStatus.BAD_REQUEST, ex.statusCode)
     }
 
     // --- registerMember ---
@@ -1039,16 +1115,30 @@ class MemberServiceTest {
     }
 
     @Test
-    fun `registerMember throws RuntimeException when Keycloak returns non-201`() {
+    fun `registerMember answers 409 when the Keycloak account already exists`() {
         val req = registerReq()
         `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
         `when`(memberRepository.findSimilarNames(req.firstName, req.lastName)).thenReturn(emptyList())
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
         setupKeycloakMock(statusCode = 409)
 
-        assertThrows<RuntimeException> { memberService.registerMember(req, CLIENT_IP) }
+        val ex = assertThrows<ResponseStatusException> { memberService.registerMember(req, CLIENT_IP) }
+        assertEquals(HttpStatus.CONFLICT, ex.statusCode)
+        assertEquals("이미 사용 중인 이메일입니다.", ex.reason)
         verify(operationalMetrics)
             .recordExternalCall(eq("keycloak"), eq("create_user"), eq(ExternalCallOutcome.CLIENT_ERROR), any())
+    }
+
+    @Test
+    fun `registerMember throws RuntimeException when Keycloak fails otherwise`() {
+        val req = registerReq()
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
+        `when`(memberRepository.findSimilarNames(req.firstName, req.lastName)).thenReturn(emptyList())
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+        setupKeycloakMock(statusCode = 500)
+
+        val ex = assertThrows<RuntimeException> { memberService.registerMember(req, CLIENT_IP) }
+        assert(ex !is ResponseStatusException)
     }
 
     @Test
