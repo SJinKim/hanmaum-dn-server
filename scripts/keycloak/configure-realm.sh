@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Brings one deployed realm to the target state from KEYCLOAK_ENVIRONMENTS.md (#235).
+# Brings one deployed realm to the target state from KEYCLOAK_ENVIRONMENTS.md (#235):
+# login theme and locales, brute-force protection (#244), audience scope and clients.
 #
 # Runs on the host that runs the Keycloak container and talks to it through kcadm inside
 # the container. Dry run by default; APPLY=1 writes. Re-running is safe: every step first
@@ -47,6 +48,12 @@ readonly BACKEND_ROLES=("manage-users")
 readonly LOGIN_THEME="hanmaum"
 readonly REALM_LOCALES='["ko","en"]'
 readonly REALM_DEFAULT_LOCALE="ko"
+# Brute-force protection (#244): 5 failures lock the account for 1 minute, each further
+# failure adds a minute up to 15. Never permanent, so a forgotten password cannot lock a
+# member out for good. Local dev uses looser values from the realm export.
+readonly BRUTE_FORCE='{"bruteForceProtected":true,"permanentLockout":false,"maxTemporaryLockouts":0,
+"bruteForceStrategy":"MULTIPLE","failureFactor":5,"waitIncrementSeconds":60,"maxFailureWaitSeconds":900,
+"minimumQuickLoginWaitSeconds":60,"quickLoginCheckMilliSeconds":1000,"maxDeltaTimeSeconds":43200}'
 readonly KCADM_CONFIG="/tmp/kcadm-hdn-235.config"
 
 command -v jq >/dev/null || { echo "jq is required" >&2; exit 1; }
@@ -152,6 +159,18 @@ ensure_realm_login_pages() {
     plan "update $(jq -r 'join(", ")' <<<"$drift")"
     kc_write update "realms/$KC_REALM" -s loginTheme="$LOGIN_THEME" -s internationalizationEnabled=true \
         -s supportedLocales="$REALM_LOCALES" -s defaultLocale="$REALM_DEFAULT_LOCALE" -s resetPasswordAllowed=true
+}
+
+ensure_realm_brute_force() {
+    log "realm brute-force protection $(jq -r '"failureFactor \(.failureFactor), wait \(.waitIncrementSeconds)s up to \(.maxFailureWaitSeconds)s"' <<<"$BRUTE_FORCE")"
+    local realm drift
+    realm="$(kc get "realms/$KC_REALM" --fields "$(jq -r 'keys | join(",")' <<<"$BRUTE_FORCE")")"
+    drift="$(jq -c --argjson t "$BRUTE_FORCE" '. as $r | [ $t | to_entries[] | select($r[.key] != .value) | .key ]' <<<"$realm")"
+    [[ "$drift" != "[]" ]] || return 0
+    plan "update $(jq -r 'join(", ")' <<<"$drift")"
+    local args=()
+    while IFS= read -r kv; do args+=(-s "$kv"); done < <(jq -r 'to_entries[] | "\(.key)=\(.value)"' <<<"$BRUTE_FORCE")
+    kc_write update "realms/$KC_REALM" "${args[@]}"
 }
 
 # $1 clientId, $2 redirects JSON, $3 web origins JSON, $4 direct grants true|false,
@@ -267,6 +286,7 @@ login
 kc get "realms/$KC_REALM" --fields realm >/dev/null
 
 ensure_realm_login_pages
+ensure_realm_brute_force
 ensure_audience_scope
 ensure_user_client "$DASHBOARD_CLIENT" "$dashboard_redirects" "$dashboard_origins" false "$dashboard_base_url"
 # Native app: no CORS, no browser origin.
