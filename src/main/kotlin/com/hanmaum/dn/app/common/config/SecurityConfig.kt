@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.common.config
 
 import com.hanmaum.dn.app.common.security.Roles
+import com.hanmaum.dn.app.common.security.accessTokenValidator
 import com.hanmaum.dn.app.common.security.securityProblemDetail
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.beans.factory.annotation.Value
@@ -20,13 +21,8 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer
 import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.core.authority.SimpleGrantedAuthority
-import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator
-import org.springframework.security.oauth2.core.OAuth2Error
-import org.springframework.security.oauth2.core.OAuth2TokenValidator
-import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.oauth2.jwt.JwtDecoder
-import org.springframework.security.oauth2.jwt.JwtTimestampValidator
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
 import org.springframework.security.web.AuthenticationEntryPoint
@@ -54,6 +50,10 @@ class SecurityConfig(
     // [AI-GUARD] Never add hardcoded realm names or issuer URLs to this list in code.
     @Value("\${app.security.allowed-issuers}")
     private val configuredIssuers: List<String>,
+    // The `aud` value Keycloak puts into access tokens for this API (#235, #236).
+    // No default in code: application.yml sets it, and a blank value stops the start.
+    @Value("\${app.security.audience}")
+    private val apiAudience: String,
     @Value("\${app.cors.allowed-origins:http://localhost:4200,http://localhost}")
     private val allowedOrigins: List<String>,
 ) {
@@ -161,29 +161,9 @@ class SecurityConfig(
         //   - Docker:       env var               → http://hanmaumApp-keycloak:8090/realms/...
         val jwtDecoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build()
 
-        // Issuers are declared in application-dev.yml / application-prod.yml — never hardcoded.
+        // Issuers and audience are declared in the yml files — never hardcoded.
         // [AI-GUARD] Do not add inline issuer URLs here; edit the yml files instead.
-        val issuerValidator =
-            OAuth2TokenValidator<Jwt> { jwt ->
-                val issuerClaim = jwt.getClaimAsString("iss")
-                if (configuredIssuers.contains(issuerClaim)) {
-                    OAuth2TokenValidatorResult.success()
-                } else {
-                    OAuth2TokenValidatorResult.failure(
-                        OAuth2Error(
-                            "invalid_issuer",
-                            "Dieser Issuer wird nicht akzeptiert: $issuerClaim",
-                            null,
-                        ),
-                    )
-                }
-            }
-
-        // 4. Standard-Validator (Zeitstempel) + Unser Issuer Validator kombinieren
-        val timestampValidator = JwtTimestampValidator()
-        val combinedValidator = DelegatingOAuth2TokenValidator(timestampValidator, issuerValidator)
-
-        jwtDecoder.setJwtValidator(combinedValidator)
+        jwtDecoder.setJwtValidator(accessTokenValidator(configuredIssuers, apiAudience))
 
         return jwtDecoder
     }
