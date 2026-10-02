@@ -1,7 +1,9 @@
 # Public routes
 
-Which backend paths answer without a token (#237, parent #234). The source is
-`SecurityConfig.filterChain`; `PublicRouteSecurityTest` checks every row below. Staging and prod
+Which backend paths answer without a token (#237, parent #234). The anonymous API routes are
+listed once in `common/config/PublicApiRoutes.kt`: `SecurityConfig.filterChain` permits exactly
+those, and `OpenApiConfig` marks exactly those with `security: []` in the spec (#239).
+`PublicRouteSecurityTest` checks every row below. Staging and prod
 run the same image and the same rules. Only Caddy sits in front of them.
 
 ## Matrix
@@ -44,6 +46,20 @@ The key is the client address. Caddy is the only ingress and sets `X-Forwarded-F
 overwriting what the client sent. `server.forward-headers-strategy: native` lets Tomcat take the
 address from that header only when the request comes from an internal proxy address (the Docker
 network). Without it, every caller would share Caddy's address and one limit.
+
+## Swagger UI with a token (local dev)
+
+Swagger UI runs only with the dev profile. Every operation in the spec carries the `bearerAuth`
+requirement (HTTP bearer, JWT) except the three anonymous rows above, which have `security: []`.
+
+1. Open `http://localhost:8080/swagger-ui.html`.
+2. Get an access token for the local realm `hanmaum`, for example from the dashboard's network tab.
+   It needs `aud=hanmaum-dn-api` (see `KEYCLOAK_ENVIRONMENTS.md`).
+3. Click "Authorize", paste the token without the `Bearer ` prefix.
+
+No OAuth flow is declared, so Swagger UI never asks for a password or client secret, and
+`persistAuthorization` is off, so the token is gone after a reload. Staging and prod have no
+Swagger UI by decision (#237), so a staging or prod token is never pasted into it.
 
 ## Checking a deployment
 
