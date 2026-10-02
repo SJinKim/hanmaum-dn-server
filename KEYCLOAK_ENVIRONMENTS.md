@@ -16,6 +16,7 @@ the prod host name may still change. The audience is the same everywhere.
 | JWKS (backend, internal) | `http://localhost:8091/realms/hanmaum/...` | `http://hanmaumApp-keycloak:8090/realms/hanmaum-dn-st/protocol/openid-connect/certs` | `http://hanmaumApp-keycloak:8090/realms/hanmaum-dn-prod/protocol/openid-connect/certs` |
 | API audience (`aud`) | `hanmaum-dn-api` | `hanmaum-dn-api` | `hanmaum-dn-api` |
 | Login theme, locales | `hanmaum`, `ko` (default) + `en` | `hanmaum`, `ko` (default) + `en` | `hanmaum`, `ko` (default) + `en` |
+| Brute-force lockout | after 20 failures, 10 s up to 60 s | after 5 failures, 1 min up to 15 min | after 5 failures, 1 min up to 15 min |
 | How the realm is set up | `--import-realm` from `infrastructure/docker/keycloak/export/` | `scripts/keycloak/configure-realm.sh` | `scripts/keycloak/configure-realm.sh` |
 
 The backend variables per environment are `KEYCLOAK_REALM` and
@@ -74,6 +75,31 @@ use the theme `hanmaum` (#243). Its design is the Figma file DN-Web. The files l
 - Theme files are cached by Keycloak. After changing them, restart the container:
   `docker restart hanmaumApp-keycloak`.
 - Mails still use the default email theme. A branded email theme is a separate issue.
+
+### Brute-force protection
+
+Keycloak counts failed logins per user and locks the account for a while (#244). This
+covers the dashboard login page and the app's password grant (`hanmaum-mobile`) alike.
+
+| Setting | Local dev (export) | Staging, Prod (`configure-realm.sh`) |
+|---|---|---|
+| `bruteForceProtected` | `true` | `true` |
+| `failureFactor` | 20 | 5 |
+| `waitIncrementSeconds` | 10 | 60 |
+| `maxFailureWaitSeconds` | 60 | 900 |
+| `minimumQuickLoginWaitSeconds` | 10 | 60 |
+| `permanentLockout`, `maxTemporaryLockouts` | `false`, 0 | `false`, 0 |
+
+Strategy `MULTIPLE`, `quickLoginCheckMilliSeconds=1000` and `maxDeltaTimeSeconds=43200`
+are the same everywhere. Local values are looser so that mistyping during development
+does not stall work for long.
+
+- The lock is never permanent: a member who forgot the password is not locked out for good.
+- A locked user gets the same "invalid credentials" answer as a wrong password, so the
+  response does not reveal whether the account exists or is locked.
+- `--import-realm` does not overwrite an existing local realm. An older local realm keeps
+  `bruteForceProtected=false` until it is set by hand or the realm is re-imported.
+- Unlocking a user: [`KEYCLOAK_RUNBOOK.md`](KEYCLOAK_RUNBOOK.md#unlock-a-locked-user).
 
 ## State found on 2026-09-29
 

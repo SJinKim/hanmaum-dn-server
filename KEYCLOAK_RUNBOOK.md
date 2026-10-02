@@ -7,6 +7,25 @@ the local `hanmaum` realm and to both deployed realms (`hanmaum-dn-st` and
 Realms, clients, redirect URIs, the API audience and the backend service-account role
 per environment are in [`KEYCLOAK_ENVIRONMENTS.md`](KEYCLOAK_ENVIRONMENTS.md) (#235).
 
+## Unlock a locked user
+
+Brute-force protection (#244) locks an account temporarily after repeated failed logins.
+The lock ends by itself (see [`KEYCLOAK_ENVIRONMENTS.md`](KEYCLOAK_ENVIRONMENTS.md#brute-force-protection)).
+To lift it earlier, for example after a member called in:
+
+1. Admin console: realm → Users → the user. A locked user shows a "Temporarily locked"
+   toggle. Turn it off.
+2. Or with kcadm inside the container, after `kcadm.sh config credentials` for the master realm:
+
+   ```bash
+   ID=$(kcadm.sh get users -r "$REALM" -q username="$USERNAME" -q exact=true --fields id --format csv --noquotes)
+   kcadm.sh get attack-detection/brute-force/users/$ID -r "$REALM"     # disabled, numFailures
+   kcadm.sh delete attack-detection/brute-force/users/$ID -r "$REALM"  # unlock
+   ```
+
+The unlock also resets the failure count. Check first that the failures came from the
+member and not from someone guessing (`lastIPFailure` in the `get` output).
+
 ## E-mail verification without a login gate
 
 The required state is:
