@@ -15,6 +15,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.security.authorization.AuthorizationDeniedException
 import org.springframework.web.HttpRequestMethodNotSupportedException
 import org.springframework.web.bind.MethodArgumentNotValidException
+import org.springframework.web.bind.MissingServletRequestParameterException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
@@ -138,6 +139,22 @@ class GlobalExceptionHandler {
                 status = HttpStatus.BAD_REQUEST.value(),
                 error = "Bad Request",
                 message = "${e.name}: 형식이 올바르지 않습니다.",
+            )
+        return ResponseEntity(response, HttpStatus.BAD_REQUEST)
+    }
+
+    /**
+     * A required query parameter left out — `GET /attendance/logs` without `date`, say.
+     * Without this the generic handler below answers 500 for a client mistake.
+     */
+    @ExceptionHandler(MissingServletRequestParameterException::class)
+    fun handleMissingParameter(e: MissingServletRequestParameterException): ResponseEntity<ErrorResponse> {
+        logger.warn("Missing request parameter: name={}", e.parameterName)
+        val response =
+            ErrorResponse(
+                status = HttpStatus.BAD_REQUEST.value(),
+                error = "Bad Request",
+                message = "${e.parameterName}: 필수 값입니다.",
             )
         return ResponseEntity(response, HttpStatus.BAD_REQUEST)
     }
