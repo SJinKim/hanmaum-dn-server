@@ -51,7 +51,7 @@
 
 ### Separate attendance deduplication from user-facing tracking
 - **Mistake**: Planned individual attendance logs and member statistics before stakeholders had agreed that person-level reporting was necessary.
-- **Rule**: For attendance V1, expose only church-group aggregates. Keep the minimum internal member reference required to enforce one check-in per person, but do not expose member identities, names, personal history, or person-level statistics until explicitly approved for a later version.
+- **Rule**: Expose person-level attendance only where it was explicitly approved, and keep it out of the aggregate path. `AttendanceService` hands out 순 aggregates only. The repo owner approved a person-level 체크인 명단 for ADMIN on 2026-09-26 (#224); it lives solely in `AttendanceRosterService` / `AttendanceLogController` behind `hasRole('ADMIN')`. Anything else that names a member needs its own approval first.
 
 ### Local-only data: run SQL directly, don't touch files
 - **Mistake**: When asked to add local test data, modified/created a seed file instead of running SQL directly against the local DB.

@@ -150,6 +150,31 @@ interface AttendanceLogRepository : JpaRepository<AttendanceLog, Long> {
         @Param("to") to: LocalDate,
     ): List<AttendanceLog>
 
+    /**
+     * The admin 체크인 명단 for one day, oldest check-in first. [definitionId] null means every
+     * definition of that day. Member and 순 are LEFT JOINs: a purged member's row stays, only
+     * without a name, and a member without a 순 has no group.
+     */
+    @Query(
+        """
+        SELECT l FROM AttendanceLog l
+        JOIN FETCH l.definition d
+        LEFT JOIN FETCH l.member
+        LEFT JOIN FETCH l.groupAtCheckIn
+        WHERE l.attendanceDate = :date
+          AND (:definitionId IS NULL OR d.id = :definitionId)
+          AND l.attended = true
+          AND l.deletedAt IS NULL
+        ORDER BY l.createdAt ASC, l.id ASC
+        """,
+    )
+    fun findRoster(
+        @Param("date") date: LocalDate,
+        @Param("definitionId") definitionId: Long?,
+    ): List<AttendanceLog>
+
+    fun findByPublicId(publicId: UUID): Optional<AttendanceLog>
+
     @Modifying(clearAutomatically = true)
     @Transactional
     @Query(
