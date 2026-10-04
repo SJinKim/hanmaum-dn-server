@@ -143,3 +143,15 @@ class EncryptedNewcomerFirstVisitDateConverter : EncryptedLocalDateConverter("ne
 
 @Converter
 class EncryptedNewcomerGraduationReasonConverter : EncryptedStringConverter("newcomer_graduations.assignment_reason")
+
+@Converter
+class EncryptedNewcomerVisitLastNameConverter : EncryptedStringConverter("newcomer_visits.last_name")
+
+@Converter
+class EncryptedNewcomerVisitFirstNameConverter : EncryptedStringConverter("newcomer_visits.first_name")
+
+@Converter
+class EncryptedNewcomerVisitGenderConverter : EncryptedGenderConverter("newcomer_visits.gender")
+
+@Converter
+class EncryptedNewcomerVisitNoteConverter : EncryptedStringConverter("newcomer_visits.note")
