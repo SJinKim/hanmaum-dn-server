@@ -169,6 +169,48 @@ class MemberAttendanceServiceTest {
     }
 
     @Test
+    fun `getHistory lists no missed occurrence from before the member joined`() {
+        // Joined Saturday 2026-08-15, 23:30 Berlin; the first Sunday they could attend is the 16th.
+        givenMember(createdAt = Instant.parse("2026-08-15T21:30:00Z"))
+        givenActiveDefinitions(sundayService)
+        givenLogs(LocalDate.of(2026, 8, 1), today, log(sundayService, LocalDate.of(2026, 8, 16)))
+
+        val result = service.getHistory("kc-001", LocalDate.of(2026, 8, 1), today)
+
+        assertEquals(
+            listOf(LocalDate.of(2026, 8, 30), LocalDate.of(2026, 8, 23), LocalDate.of(2026, 8, 16)),
+            result.entries.map { it.date },
+        )
+        // The echoed range is still the one asked for; only the derived rows are clamped.
+        assertEquals(LocalDate.of(2026, 8, 1), result.from)
+    }
+
+    @Test
+    fun `getHistory counts the joining day itself as attendable`() {
+        // Joined on Sunday 2026-08-23 at 07:00 Berlin, before the service.
+        givenMember(createdAt = Instant.parse("2026-08-23T05:00:00Z"))
+        givenActiveDefinitions(sundayService)
+        givenLogs(LocalDate.of(2026, 8, 1), today)
+
+        val result = service.getHistory("kc-001", LocalDate.of(2026, 8, 1), today)
+
+        assertEquals(listOf(LocalDate.of(2026, 8, 30), LocalDate.of(2026, 8, 23)), result.entries.map { it.date })
+    }
+
+    @Test
+    fun `getHistory still lists a check-in logged before the member row was created`() {
+        // An admin may record attendance by hand for a day before the account existed.
+        givenMember(createdAt = Instant.parse("2026-08-20T10:00:00Z"))
+        givenActiveDefinitions(sundayService)
+        givenLogs(LocalDate.of(2026, 8, 1), today, log(sundayService, LocalDate.of(2026, 8, 9)))
+
+        val result = service.getHistory("kc-001", LocalDate.of(2026, 8, 1), today)
+
+        assertTrue(result.entries.single { it.date == LocalDate.of(2026, 8, 9) }.checkedIn)
+        assertTrue(result.entries.none { it.date == LocalDate.of(2026, 8, 2) || it.date == LocalDate.of(2026, 8, 16) })
+    }
+
+    @Test
     fun `getHistory rejects a start date after the end date`() {
         givenMember()
 
@@ -227,6 +269,22 @@ class MemberAttendanceServiceTest {
     }
 
     @Test
+    fun `getSummary only counts occurrences since the member joined`() {
+        // Joined Tuesday 2026-08-11: of August's five Sundays only 16, 23 and 30 count.
+        givenMember(createdAt = Instant.parse("2026-08-11T09:00:00Z"))
+        givenActiveDefinitions(sundayService)
+        givenLogs(LocalDate.of(2026, 1, 1), today, log(sundayService, LocalDate.of(2026, 8, 16)))
+
+        val result = service.getSummary("kc-001")
+
+        assertEquals(1, result.monthAttended)
+        assertEquals(3, result.monthTotal)
+        assertEquals(1, result.yearAttended)
+        assertEquals(3, result.yearToDateTotal)
+        assertEquals(0.333, result.rate)
+    }
+
+    @Test
     fun `getSummary reports zero rather than dividing by zero when nothing is scheduled`() {
         givenMember()
         givenActiveDefinitions()
@@ -280,9 +338,12 @@ class MemberAttendanceServiceTest {
     private fun givenMember(
         id: Long = 1L,
         keycloakId: String = "kc-001",
+        // Long before every range the tests ask for, so only the tests about joining clamp.
+        createdAt: Instant = Instant.parse("2025-01-01T00:00:00Z"),
     ) {
         val member = Member(lastName = "김", firstName = "철수")
         setId(member, id)
+        member.createdAt = createdAt
         setField(member, Member::class.java, "keycloakId", keycloakId)
         `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull(keycloakId)).thenReturn(member)
     }
