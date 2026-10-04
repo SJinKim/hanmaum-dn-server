@@ -73,7 +73,6 @@ class NewcomerService(
                 assignmentReason = request.assignmentReason,
                 overallNotes = request.overallNotes,
                 postAssignmentAttendance = request.postAssignmentAttendance,
-                englishName = request.englishName,
                 kakaoId = request.kakaoId,
                 previousChurch = request.previousChurch,
                 churchExperience = request.churchExperience,
@@ -127,7 +126,6 @@ class NewcomerService(
                             .getFullName()
                             .lowercase()
                             .contains(needle) ||
-                        it.englishName?.lowercase()?.contains(needle) == true ||
                         it.member.email
                             ?.lowercase()
                             ?.contains(needle) == true ||
@@ -177,7 +175,6 @@ class NewcomerService(
         request.assignmentReason?.let { profile.assignmentReason = it }
         request.overallNotes?.let { profile.overallNotes = it }
         request.postAssignmentAttendance?.let { profile.postAssignmentAttendance = it }
-        request.englishName?.let { profile.englishName = it }
         request.kakaoId?.let { profile.kakaoId = it }
         request.previousChurch?.let { profile.previousChurch = it }
         request.churchExperience?.let { profile.churchExperience = it }

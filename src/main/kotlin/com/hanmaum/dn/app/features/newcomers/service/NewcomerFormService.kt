@@ -87,7 +87,6 @@ class NewcomerFormService(
                     CreateNewcomerRequest(
                         lastName = request.lastName,
                         firstName = request.firstName,
-                        englishName = request.englishName,
                         gender = request.gender,
                         birthDate = request.birthDate,
                         email = request.email,
@@ -136,7 +135,6 @@ class NewcomerFormService(
             listOfNotNull(
                 request.lastName,
                 request.firstName,
-                request.englishName,
                 request.phoneNumber,
                 request.email,
                 request.kakaoId,

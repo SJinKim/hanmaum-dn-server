@@ -111,7 +111,6 @@ class MemberReconciliationService(
         if (!merge) {
             throw NewcomerException(HttpStatus.CONFLICT, "Both members have newcomer history; use the merge action.")
         }
-        target.englishName = target.englishName ?: source.englishName
         target.kakaoId = target.kakaoId ?: source.kakaoId
         target.previousChurch = target.previousChurch ?: source.previousChurch
         target.workOrSchool = target.workOrSchool ?: source.workOrSchool

@@ -20,7 +20,6 @@ import java.time.LocalDate
 data class CreateNewcomerRequest(
     @field:NotBlank val lastName: String,
     @field:NotBlank val firstName: String,
-    val englishName: String? = null,
     val gender: Gender? = null,
     val birthDate: LocalDate? = null,
     @field:Email val email: String? = null,
@@ -54,7 +53,6 @@ data class CreateNewcomerRequest(
 data class UpdateNewcomerRequest(
     val lastName: String? = null,
     val firstName: String? = null,
-    val englishName: String? = null,
     val gender: Gender? = null,
     val birthDate: LocalDate? = null,
     @field:Email val email: String? = null,
@@ -91,7 +89,6 @@ data class NewcomerResponse(
     @Unredacted val memberPublicId: String,
     val lastName: String,
     val firstName: String,
-    val englishName: String? = null,
     val gender: Gender? = null,
     val birthDate: LocalDate? = null,
     val email: String? = null,

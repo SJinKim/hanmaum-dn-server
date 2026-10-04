@@ -35,7 +35,6 @@ data class PublicFormMetadataResponse(
 data class PublicNewcomerSubmissionRequest(
     @field:NotBlank val lastName: String,
     @field:NotBlank val firstName: String,
-    @field:NotBlank val englishName: String,
     val gender: Gender,
     val birthDate: LocalDate,
     @field:Size(max = 50) val phoneNumber: String,
