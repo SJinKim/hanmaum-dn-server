@@ -14,6 +14,8 @@ import com.hanmaum.dn.app.features.newcomers.repository.NewcomerProfileRepositor
 import com.hanmaum.dn.app.features.newcomers.repository.NewcomerVisitRepository
 import jakarta.persistence.EntityNotFoundException
 import org.slf4j.LoggerFactory
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.PageRequest
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -36,13 +38,26 @@ class NewcomerVisitService(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    /**
+     * The history, a page at a time (#265). Without bounds it is everything; one bound alone is
+     * open on the other side. Unlike [stats] there is no one-year cap.
+     */
     @Transactional(readOnly = true)
     fun list(
         from: LocalDate?,
         to: LocalDate?,
-    ): List<NewcomerVisitResponse> {
-        val (start, end) = range(from, to)
-        return visitRepo.findInRange(start, end).map { it.toResponse() }
+        page: Int,
+        size: Int,
+    ): Page<NewcomerVisitResponse> {
+        if (page < 0 || size !in 1..100) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "page must be non-negative and size must be between 1 and 100.")
+        }
+        val start = from ?: EARLIEST
+        val end = to ?: today()
+        if (start.isAfter(end)) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "시작일이 종료일보다 늦습니다.")
+        }
+        return visitRepo.findPageInRange(start, end, PageRequest.of(page, size)).map { it.toResponse() }
     }
 
     @Transactional
@@ -199,5 +214,8 @@ class NewcomerVisitService(
 
     private companion object {
         const val MAX_RANGE_DAYS = 365L
+
+        /** Lower bound of an open list; no visit predates the app. */
+        val EARLIEST: LocalDate = LocalDate.of(2000, 1, 1)
     }
 }

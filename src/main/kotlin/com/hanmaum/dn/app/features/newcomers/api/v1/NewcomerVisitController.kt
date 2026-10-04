@@ -11,6 +11,7 @@ import com.hanmaum.dn.app.features.newcomers.api.v1.dto.UpdateNewcomerVisitReque
 import com.hanmaum.dn.app.features.newcomers.service.NewcomerVisitService
 import io.swagger.v3.oas.annotations.Operation
 import jakarta.validation.Valid
+import org.springframework.data.domain.Page
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -43,7 +44,9 @@ class NewcomerVisitController(
     fun list(
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate?,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) to: LocalDate?,
-    ): ResponseEntity<ApiResponse<List<NewcomerVisitResponse>>> = ResponseEntity.ok(ApiResponse.success(service.list(from, to)))
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int,
+    ): ResponseEntity<ApiResponse<Page<NewcomerVisitResponse>>> = ResponseEntity.ok(ApiResponse.success(service.list(from, to, page, size)))
 
     @GetMapping("/stats")
     @NewcomerReadAccess

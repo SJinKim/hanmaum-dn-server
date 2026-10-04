@@ -6,6 +6,7 @@ import com.hanmaum.dn.app.features.announcements.repository.AnnouncementReposito
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
 import com.hanmaum.dn.app.features.members.service.MemberPurgeService
 import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
+import com.hanmaum.dn.app.features.newcomers.service.NewcomerVisitPurgeService
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
@@ -18,6 +19,7 @@ class CleanupService(
     private val announcementRepository: AnnouncementRepository,
     private val attendanceLogRepository: AttendanceLogRepository,
     private val memberPurgeService: MemberPurgeService,
+    private val newcomerVisitPurgeService: NewcomerVisitPurgeService,
     private val operationalMetrics: OperationalMetrics,
 ) {
     private val log = LoggerFactory.getLogger(CleanupService::class.java)
@@ -41,6 +43,9 @@ class CleanupService(
         }
         purge("Member", failures) {
             memberPurgeService.purgeExpired(now)
+        }
+        purge("NewcomerVisit", failures) {
+            newcomerVisitPurgeService.purgeExpired(now)
         }
 
         if (failures.isNotEmpty()) {
