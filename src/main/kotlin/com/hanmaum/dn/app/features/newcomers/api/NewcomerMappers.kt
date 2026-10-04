@@ -12,7 +12,6 @@ fun NewcomerProfile.toResponse(): NewcomerResponse =
         memberPublicId = member.publicId.toString(),
         lastName = member.lastName,
         firstName = member.firstName,
-        englishName = englishName,
         gender = member.gender,
         birthDate = member.birthDate,
         email = member.email,

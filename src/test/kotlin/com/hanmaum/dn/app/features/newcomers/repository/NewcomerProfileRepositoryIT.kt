@@ -64,7 +64,6 @@ class NewcomerProfileRepositoryIT {
             repository.saveAndFlush(
                 NewcomerProfile(
                     member = member,
-                    englishName = "Saebom Kim",
                     firstVisitDate = LocalDate.of(2026, 9, 18),
                     additionalNotes = "private note",
                 ),
@@ -73,10 +72,9 @@ class NewcomerProfileRepositoryIT {
 
         val raw =
             jdbcTemplate.queryForMap(
-                "SELECT english_name, first_visit_date, additional_notes FROM newcomer_profiles WHERE id = ?",
+                "SELECT first_visit_date, additional_notes FROM newcomer_profiles WHERE id = ?",
                 profile.id,
             )
-        assertFalse(raw.values.any { it.toString().contains("Saebom") })
         assertFalse(raw.values.any { it.toString().contains("2026-09-18") })
         assertFalse(raw.values.any { it.toString().contains("private note") })
         assertEquals(LocalDate.of(2026, 9, 18), repository.findByPublicIdAndDeletedAtIsNull(profile.publicId).get().firstVisitDate)

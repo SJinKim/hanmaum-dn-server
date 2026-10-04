@@ -124,9 +124,6 @@ class EncryptedNewcomerAssignmentReasonConverter : EncryptedStringConverter("new
 class EncryptedNewcomerOverallNotesConverter : EncryptedStringConverter("newcomer_profiles.overall_notes")
 
 @Converter
-class EncryptedNewcomerEnglishNameConverter : EncryptedStringConverter("newcomer_profiles.english_name")
-
-@Converter
 class EncryptedNewcomerKakaoIdConverter : EncryptedStringConverter("newcomer_profiles.kakao_id")
 
 @Converter

@@ -3,7 +3,6 @@ package com.hanmaum.dn.app.features.newcomers.domain
 import com.hanmaum.dn.app.common.jpa.BaseEntity
 import com.hanmaum.dn.app.common.pii.EncryptedNewcomerAdditionalNotesConverter
 import com.hanmaum.dn.app.common.pii.EncryptedNewcomerAssignmentReasonConverter
-import com.hanmaum.dn.app.common.pii.EncryptedNewcomerEnglishNameConverter
 import com.hanmaum.dn.app.common.pii.EncryptedNewcomerFirstVisitDateConverter
 import com.hanmaum.dn.app.common.pii.EncryptedNewcomerKakaoIdConverter
 import com.hanmaum.dn.app.common.pii.EncryptedNewcomerOverallNotesConverter
@@ -83,9 +82,6 @@ class NewcomerProfile(
     @Enumerated(EnumType.STRING)
     @Column(name = "post_assignment_attendance", length = 30)
     var postAssignmentAttendance: PostAssignmentAttendance? = null,
-    @Convert(converter = EncryptedNewcomerEnglishNameConverter::class)
-    @Column(name = "english_name", columnDefinition = "TEXT")
-    var englishName: String? = null,
     @Convert(converter = EncryptedNewcomerKakaoIdConverter::class)
     @Column(name = "kakao_id", columnDefinition = "TEXT")
     var kakaoId: String? = null,
