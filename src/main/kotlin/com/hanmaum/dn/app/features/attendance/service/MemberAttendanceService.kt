@@ -7,6 +7,7 @@ import com.hanmaum.dn.app.features.attendance.domain.AttendanceDefinition
 import com.hanmaum.dn.app.features.attendance.domain.AttendanceLog
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceDefinitionRepository
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
+import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.members.service.CurrentMemberResolver
 import org.springframework.http.HttpStatus
@@ -37,7 +38,8 @@ class MemberAttendanceService(
 ) {
     /**
      * The 최근 출석 list: every occurrence the active definitions scheduled in the range,
-     * marked 출석 or 미출석, newest first.
+     * marked 출석 or 미출석, newest first. 미출석 rows start no earlier than the day the
+     * member joined — before that there was no account to check in with.
      *
      * [from] defaults to [DEFAULT_WINDOW_DAYS] before [to]; [to] defaults to today and is
      * never allowed past it, because an occurrence that has not happened yet is not a
@@ -69,7 +71,7 @@ class MemberAttendanceService(
         val definitionsById = (definitions + logs.map { it.definition }).associateBy { it.id!! }
 
         val entries =
-            (scheduledOccurrences(definitions, rangeStart, rangeEnd) + attendedByOccurrence.keys)
+            (scheduledOccurrences(definitions, maxOf(rangeStart, member.joinedOn()), rangeEnd) + attendedByOccurrence.keys)
                 .distinct()
                 .map { occurrence ->
                     val log = attendedByOccurrence[occurrence]
@@ -83,7 +85,11 @@ class MemberAttendanceService(
         return MemberAttendanceHistoryResponse(from = rangeStart, to = rangeEnd, entries = entries)
     }
 
-    /** The 이번 달 출석 tile, the 올해 출석 figure, and the year rate behind them. */
+    /**
+     * The 이번 달 출석 tile, the 올해 출석 figure, and the year rate behind them, counted
+     * from the day the member joined so a newcomer's rate is not diluted by the months
+     * before.
+     */
     @Transactional(readOnly = true)
     fun getSummary(keycloakSubject: String): MemberAttendanceSummaryResponse {
         val member = requireMember(keycloakSubject)
@@ -91,6 +97,7 @@ class MemberAttendanceService(
         val monthStart = today.withDayOfMonth(1)
         val monthEnd = today.with(TemporalAdjusters.lastDayOfMonth())
         val yearStart = today.withDayOfYear(1)
+        val joinedOn = member.joinedOn()
 
         val definitions = activeDefinitions()
         // One query covers both windows: the month is a slice of the year to date.
@@ -102,8 +109,8 @@ class MemberAttendanceService(
 
         // Counting against the schedule rather than against every log keeps a numerator
         // from exceeding its denominator when a definition is deactivated mid-year.
-        val scheduledThisMonth = scheduledOccurrences(definitions, monthStart, monthEnd)
-        val scheduledYearToDate = scheduledOccurrences(definitions, yearStart, today)
+        val scheduledThisMonth = scheduledOccurrences(definitions, maxOf(monthStart, joinedOn), monthEnd)
+        val scheduledYearToDate = scheduledOccurrences(definitions, maxOf(yearStart, joinedOn), today)
         val monthAttended = scheduledThisMonth.count { it in attendedThisYear }
         val yearAttended = scheduledYearToDate.count { it in attendedThisYear }
 
@@ -141,6 +148,13 @@ class MemberAttendanceService(
     private fun activeDefinitions(): List<AttendanceDefinition> = definitionRepo.findAll(activeOnly = true)
 
     private fun requireMember(keycloakSubject: String) = currentMemberResolver.require(keycloakSubject)
+
+    /**
+     * The first day the member could have checked in: the day their row was created, in
+     * the church's zone. Approval comes later, but no column records it, and
+     * registration_date is a church date admins may set years back.
+     */
+    private fun Member.joinedOn(): LocalDate = createdAt?.atZone(clock.zone)?.toLocalDate() ?: LocalDate.MIN
 
     private fun AttendanceDefinition.toEntry(
         date: LocalDate,
