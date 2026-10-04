@@ -26,6 +26,8 @@ import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
+import org.springframework.data.domain.PageImpl
+import org.springframework.data.domain.PageRequest
 import org.springframework.http.HttpStatus
 import org.springframework.web.server.ResponseStatusException
 import java.time.Clock
@@ -103,24 +105,36 @@ class NewcomerVisitServiceTest {
     // ─── list ─────────────────────────────────────────────────────────────────
 
     @Test
-    fun `list without bounds covers today only`() {
-        `when`(visitRepo.findInRange(sunday, sunday)).thenReturn(listOf(visit()))
+    fun `list without bounds covers everything up to today`() {
+        `when`(visitRepo.findPageInRange(LocalDate.of(2000, 1, 1), sunday, PageRequest.of(0, 20)))
+            .thenReturn(PageImpl(listOf(visit()), PageRequest.of(0, 20), 1))
 
-        assertEquals(1, service.list(null, null).size)
+        val page = service.list(null, null, 0, 20)
+
+        assertEquals(1, page.totalElements)
+        assertEquals("홍길동", page.content.single().fullName)
+    }
+
+    @Test
+    fun `list has no one-year cap`() {
+        val from = sunday.minusYears(3)
+        `when`(visitRepo.findPageInRange(from, sunday, PageRequest.of(1, 50)))
+            .thenReturn(PageImpl(emptyList(), PageRequest.of(1, 50), 0))
+
+        assertEquals(0, service.list(from, sunday, 1, 50).totalElements)
     }
 
     @Test
     fun `list with from after to is a 400`() {
-        val ex = assertThrows<ResponseStatusException> { service.list(sunday, sunday.minusDays(1)) }
+        val ex = assertThrows<ResponseStatusException> { service.list(sunday, sunday.minusDays(1), 0, 20) }
 
         assertEquals(HttpStatus.BAD_REQUEST, ex.statusCode)
     }
 
     @Test
-    fun `list over more than a year is a 400`() {
-        val ex = assertThrows<ResponseStatusException> { service.list(sunday.minusDays(366), sunday) }
-
-        assertEquals(HttpStatus.BAD_REQUEST, ex.statusCode)
+    fun `list with a size over 100 or a negative page is a 400`() {
+        assertEquals(HttpStatus.BAD_REQUEST, assertThrows<ResponseStatusException> { service.list(null, null, 0, 101) }.statusCode)
+        assertEquals(HttpStatus.BAD_REQUEST, assertThrows<ResponseStatusException> { service.list(null, null, -1, 20) }.statusCode)
     }
 
     // ─── update / delete ──────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ import com.hanmaum.dn.app.features.announcements.repository.AnnouncementReposito
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
 import com.hanmaum.dn.app.features.members.service.MemberPurgeService
 import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
+import com.hanmaum.dn.app.features.newcomers.service.NewcomerVisitPurgeService
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
@@ -30,6 +31,8 @@ class CleanupServiceTest {
     @Mock private lateinit var attendanceLogRepository: AttendanceLogRepository
 
     @Mock private lateinit var memberPurgeService: MemberPurgeService
+
+    @Mock private lateinit var newcomerVisitPurgeService: NewcomerVisitPurgeService
 
     @Mock private lateinit var operationalMetrics: OperationalMetrics
 
@@ -69,6 +72,7 @@ class CleanupServiceTest {
         verify(announcementRepository).hardDeleteExpired(any())
         verify(attendanceLogRepository).hardDeleteExpired(any())
         verify(memberPurgeService).purgeExpired(any())
+        verify(newcomerVisitPurgeService).purgeExpired(any())
     }
 
     @Test
@@ -87,5 +91,6 @@ class CleanupServiceTest {
         verify(announcementRepository).hardDeleteExpired(any())
         verify(attendanceLogRepository).hardDeleteExpired(any())
         verify(memberPurgeService).purgeExpired(any())
+        verify(newcomerVisitPurgeService).purgeExpired(any())
     }
 }

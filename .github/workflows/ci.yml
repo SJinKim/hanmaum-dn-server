@@ -59,6 +59,7 @@ jobs:
           ./gradlew test --no-daemon
           ./gradlew test -PincludeIntegration \
             --tests "com.hanmaum.dn.app.features.newcomers.repository.NewcomerProfileRepositoryIT" \
+            --tests "com.hanmaum.dn.app.features.newcomers.repository.NewcomerVisitRepositoryIT" \
             --tests "com.hanmaum.dn.app.features.events.repository.EventRsvpLogRepositoryIT" \
             --tests "com.hanmaum.dn.app.features.groups.repository.GroupLeaderRepositoryIT" \
             --no-daemon

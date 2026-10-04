@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase
 import org.springframework.context.annotation.Import
+import org.springframework.data.domain.PageRequest
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
 import java.time.Instant
@@ -52,6 +53,50 @@ class NewcomerVisitRepositoryIT {
         val rows = repository.findInRange(sunday.minusWeeks(1), sunday)
 
         assertEquals(listOf("길순", "길동"), rows.map { it.firstName })
+    }
+
+    @Test
+    fun `findPageInRange pages in the same order and counts only active rows`() {
+        visit("길동", date = sunday.minusYears(2))
+        visit("길순")
+        visit("길자").deletedAt = Instant.now()
+        visit("길남", date = sunday.minusWeeks(2))
+        entityManager.flush()
+        entityManager.clear()
+
+        val first = repository.findPageInRange(LocalDate.of(2000, 1, 1), sunday, PageRequest.of(0, 2))
+        val second = repository.findPageInRange(LocalDate.of(2000, 1, 1), sunday, PageRequest.of(1, 2))
+
+        assertEquals(3, first.totalElements)
+        assertEquals(listOf("길순", "길남"), first.content.map { it.firstName })
+        assertEquals(listOf("길동"), second.content.map { it.firstName })
+    }
+
+    @Test
+    fun `hardDeleteVisitedBefore removes old visits, deleted or not`() {
+        visit("길동", date = sunday.minusYears(3).minusDays(1))
+        visit("길자", date = sunday.minusYears(4)).deletedAt = Instant.now()
+        visit("길순", date = sunday.minusYears(3))
+        entityManager.flush()
+
+        val removed = repository.hardDeleteVisitedBefore(sunday.minusYears(3))
+
+        assertEquals(2, removed)
+        assertEquals(listOf("길순"), repository.findAll().map { it.firstName })
+    }
+
+    @Test
+    fun `hardDeleteSoftDeletedBefore removes only rows deleted before the cutoff`() {
+        val cutoff = Instant.parse("2026-06-01T00:00:00Z")
+        visit("길동").deletedAt = cutoff.minusSeconds(60)
+        visit("길자").deletedAt = cutoff.plusSeconds(60)
+        visit("길순")
+        entityManager.flush()
+
+        val removed = repository.hardDeleteSoftDeletedBefore(cutoff)
+
+        assertEquals(1, removed)
+        assertEquals(setOf("길자", "길순"), repository.findAll().map { it.firstName }.toSet())
     }
 
     @Test

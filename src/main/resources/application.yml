@@ -90,3 +90,7 @@ app:
     retention-days: 30
   member-retention:
     days: ${MEMBER_RETENTION_DAYS:30}
+  # 방문 기록 (#265): visits older than this many years are deleted by the cleanup job.
+  newcomer-visits:
+    retention-years: ${NEWCOMER_VISIT_RETENTION_YEARS:3}
+    deleted-retention-days: ${NEWCOMER_VISIT_DELETED_RETENTION_DAYS:30}

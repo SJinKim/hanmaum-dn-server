@@ -13,6 +13,8 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.context.annotation.Import
+import org.springframework.data.domain.PageImpl
+import org.springframework.data.domain.PageRequest
 import org.springframework.http.MediaType
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.oauth2.jwt.JwtDecoder
@@ -72,7 +74,7 @@ class NewcomerVisitControllerTest {
 
     @Test
     fun `GET visits returns the rows for a newcomer viewer`() {
-        `when`(service.list(sunday, sunday)).thenReturn(listOf(sampleRow()))
+        `when`(service.list(sunday, sunday, 0, 20)).thenReturn(PageImpl(listOf(sampleRow()), PageRequest.of(0, 20), 1))
 
         mockMvc
             .perform(
@@ -81,8 +83,22 @@ class NewcomerVisitControllerTest {
                     .param("to", "2026-06-14")
                     .with(token("NEWCOMER_VIEWER")),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.data[0].fullName").value("홍길동"))
-            .andExpect(jsonPath("$.data[0].visitDate").value("2026-06-14"))
+            .andExpect(jsonPath("$.data.content[0].fullName").value("홍길동"))
+            .andExpect(jsonPath("$.data.content[0].visitDate").value("2026-06-14"))
+    }
+
+    @Test
+    fun `GET visits without bounds passes the page through`() {
+        `when`(service.list(null, null, 2, 50)).thenReturn(PageImpl(listOf(sampleRow()), PageRequest.of(2, 50), 101))
+
+        mockMvc
+            .perform(
+                get("/api/v1/newcomers/visits")
+                    .param("page", "2")
+                    .param("size", "50")
+                    .with(token("NEWCOMER_VIEWER")),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.content[0].fullName").value("홍길동"))
     }
 
     @Test
