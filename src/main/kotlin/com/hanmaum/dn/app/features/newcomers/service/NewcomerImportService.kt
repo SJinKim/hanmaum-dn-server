@@ -4,6 +4,7 @@ import com.hanmaum.dn.app.common.domainvalue.Baptism
 import com.hanmaum.dn.app.common.domainvalue.Gender
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.members.domain.Member
+import com.hanmaum.dn.app.features.members.domain.MemberOrigin
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerIdentityStatus
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerImportRecord
@@ -294,6 +295,7 @@ class NewcomerImportService(
                 registrationDate = registrationDate ?: LocalDate.now(),
                 memberStatus = MemberStatus.PENDING,
                 baptism = baptism,
+                origin = MemberOrigin.NEWCOMER_FORM,
             )
 
         fun fingerprint(): String =

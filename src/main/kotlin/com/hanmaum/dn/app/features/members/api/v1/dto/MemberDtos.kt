@@ -101,6 +101,12 @@ data class MemberSummaryDto(
     @Unredacted val graduated: Boolean = false,
     /** Day the member left the community. Null exactly when [graduated] is false. */
     @Unredacted val graduatedOn: LocalDate? = null,
+    /** How the record was created: MANUAL, NEWCOMER_FORM or APP. Never changes after insert. */
+    @Unredacted val origin: String = "MANUAL",
+    /** Lifecycle of the member's 새가족 profile (SUBMITTED, IN_CARE, GRADUATED, ARCHIVED), or null without one. */
+    @Unredacted val newcomerStatus: String? = null,
+    /** True while an app (Keycloak) account is linked to the record. False is a normal state, not an error. */
+    @Unredacted val appLinked: Boolean = false,
 )
 
 /**

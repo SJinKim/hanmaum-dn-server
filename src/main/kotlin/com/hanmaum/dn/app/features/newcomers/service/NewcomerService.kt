@@ -4,6 +4,7 @@ import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
 import com.hanmaum.dn.app.features.members.domain.Member
+import com.hanmaum.dn.app.features.members.domain.MemberOrigin
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
 import com.hanmaum.dn.app.features.newcomers.api.toResponse
@@ -57,6 +58,7 @@ class NewcomerService(
                     baptism = request.baptism,
                     profileImageUrl = request.profileImageUrl,
                     keycloakId = null,
+                    origin = MemberOrigin.NEWCOMER_FORM,
                 ),
             )
         val profile =

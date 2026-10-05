@@ -13,6 +13,7 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.SummaryTrainingDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UserTrainingDto
 import com.hanmaum.dn.app.features.members.domain.Member
+import com.hanmaum.dn.app.features.newcomers.domain.NewcomerLifecycle
 import java.time.LocalDate
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
@@ -169,6 +170,7 @@ fun Member.toSummaryDto(
     activeMinistries: List<String> = emptyList(),
     groupLeaderSince: LocalDate? = null,
     graduatedOn: LocalDate? = null,
+    newcomerStatus: NewcomerLifecycle? = null,
 ): MemberSummaryDto =
     MemberSummaryDto(
         publicId = this.publicId.toString(),
@@ -190,6 +192,9 @@ fun Member.toSummaryDto(
         groupLeaderSince = groupLeaderSince,
         graduated = graduatedOn != null,
         graduatedOn = graduatedOn,
+        origin = this.origin.name,
+        newcomerStatus = newcomerStatus?.name,
+        appLinked = this.keycloakId != null,
     )
 
 /** Minimal identity projection for name pickers. Decryption happens on entity load. */

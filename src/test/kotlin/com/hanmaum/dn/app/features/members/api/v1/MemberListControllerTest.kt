@@ -2,9 +2,11 @@ package com.hanmaum.dn.app.features.members.api.v1
 
 import com.hanmaum.dn.app.common.config.SecurityConfig
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberSummaryDto
+import com.hanmaum.dn.app.features.members.domain.MemberOrigin
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.members.service.MemberPurgeService
 import com.hanmaum.dn.app.features.members.service.MemberService
+import com.hanmaum.dn.app.features.newcomers.domain.NewcomerLifecycle
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.springframework.beans.factory.annotation.Autowired
@@ -104,6 +106,65 @@ class MemberListControllerTest {
             page = 1,
             size = 50,
         )
+    }
+
+    @Test
+    fun `GET members forwards the origin, newcomer-status and app-link filters and returns the fields`() {
+        val response =
+            PageImpl(
+                listOf(
+                    MemberSummaryDto(
+                        publicId = UUID.randomUUID().toString(),
+                        lastName = "홍",
+                        firstName = "길동",
+                        memberStatus = "ACTIVE",
+                        origin = "NEWCOMER_FORM",
+                        newcomerStatus = "IN_CARE",
+                        appLinked = false,
+                    ),
+                ),
+            )
+        `when`(
+            memberService.getMembers(
+                search = null,
+                status = null,
+                baptism = null,
+                groupPublicId = null,
+                unassigned = null,
+                trainingCode = null,
+                ministryPublicId = null,
+                updatedFrom = null,
+                updatedTo = null,
+                origin = MemberOrigin.NEWCOMER_FORM,
+                newcomerStatus = NewcomerLifecycle.IN_CARE,
+                appLinked = false,
+                sort = null,
+                page = 0,
+                size = 20,
+            ),
+        ).thenReturn(response)
+
+        mockMvc
+            .perform(
+                get("/api/v1/members")
+                    .param("origin", "NEWCOMER_FORM")
+                    .param("newcomerStatus", "IN_CARE")
+                    .param("appLinked", "false")
+                    .with(jwt().authorities(SimpleGrantedAuthority("ROLE_ADMIN"))),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.content[0].origin").value("NEWCOMER_FORM"))
+            .andExpect(jsonPath("$.data.content[0].newcomerStatus").value("IN_CARE"))
+            .andExpect(jsonPath("$.data.content[0].appLinked").value(false))
+    }
+
+    @Test
+    fun `GET members rejects an unknown origin`() {
+        mockMvc
+            .perform(
+                get("/api/v1/members")
+                    .param("origin", "IMPORT")
+                    .with(jwt().authorities(SimpleGrantedAuthority("ROLE_ADMIN"))),
+            ).andExpect(status().isBadRequest)
     }
 
     @Test

@@ -28,11 +28,14 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.SummaryTrainingDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMyProfileRequest
 import com.hanmaum.dn.app.features.members.domain.Member
+import com.hanmaum.dn.app.features.members.domain.MemberOrigin
 import com.hanmaum.dn.app.features.members.repository.MemberGraduationRepository
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
 import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
 import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
+import com.hanmaum.dn.app.features.newcomers.domain.NewcomerLifecycle
+import com.hanmaum.dn.app.features.newcomers.repository.NewcomerProfileRepository
 import com.hanmaum.dn.app.features.training.api.toDto
 import com.hanmaum.dn.app.features.training.domain.TrainingCode
 import com.hanmaum.dn.app.features.training.domain.TrainingStatus
@@ -71,6 +74,7 @@ class MemberService(
     private val trainingRepository: TrainingRepository,
     private val ministryAssignmentRepository: MinistryAssignmentRepository,
     private val ministryRepository: MinistryRepository,
+    private val newcomerProfileRepository: NewcomerProfileRepository,
     private val keycloak: Keycloak,
     private val currentMemberResolver: CurrentMemberResolver,
     private val operationalMetrics: OperationalMetrics,
@@ -114,6 +118,9 @@ class MemberService(
         size: Int,
         updatedFrom: LocalDate? = null,
         updatedTo: LocalDate? = null,
+        origin: MemberOrigin? = null,
+        newcomerStatus: NewcomerLifecycle? = null,
+        appLinked: Boolean? = null,
     ): Page<MemberSummaryDto> {
         if (groupPublicId != null && unassigned == true) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "groupPublicId and unassigned=true cannot be combined")
@@ -134,6 +141,10 @@ class MemberService(
             ministryPublicId
                 ?.let(ministryAssignmentRepository::findActiveMemberIdsByMinistryPublicId)
                 ?.toSet()
+        val newcomerMemberIds =
+            newcomerStatus
+                ?.let(newcomerProfileRepository::findMemberIdsByLifecycleStatus)
+                ?.toSet()
         val members =
             memberRepository
                 .findActiveMembers(search?.takeIf { it.isNotBlank() }.orEmpty(), status, baptism)
@@ -142,6 +153,9 @@ class MemberService(
                 .filter { unassigned != true || it.group == null }
                 .filter { trainingMemberIds == null || it.id?.let(trainingMemberIds::contains) == true }
                 .filter { ministryMemberIds == null || it.id?.let(ministryMemberIds::contains) == true }
+                .filter { origin == null || it.origin == origin }
+                .filter { newcomerMemberIds == null || it.id?.let(newcomerMemberIds::contains) == true }
+                .filter { appLinked == null || (it.keycloakId != null) == appLinked }
                 .filter { member ->
                     if (updatedFrom == null && updatedTo == null) {
                         true
@@ -263,6 +277,14 @@ class MemberService(
                     .findOpenByMemberIds(memberIds)
                     .associate { it.memberId to it.graduatedOn }
             }
+        val newcomerStatusByMember: Map<Long, NewcomerLifecycle> =
+            if (memberIds.isEmpty()) {
+                emptyMap()
+            } else {
+                newcomerProfileRepository
+                    .findLifecycleByMemberIds(memberIds)
+                    .associate { it.memberId to it.lifecycleStatus }
+            }
 
         val summaries =
             pageMembers.map {
@@ -272,6 +294,7 @@ class MemberService(
                     activeMinistries = it.id?.let(activeMinistriesByMember::get).orEmpty(),
                     groupLeaderSince = it.id?.let(leaderSinceByMember::get),
                     graduatedOn = it.id?.let(graduatedOnByMember::get),
+                    newcomerStatus = it.id?.let(newcomerStatusByMember::get),
                 )
             }
         return PageImpl(summaries, pageable, members.size.toLong())
@@ -814,6 +837,7 @@ class MemberService(
                 zipCode = req.zipCode,
                 registrationDate = LocalDate.now(),
                 memberStatus = MemberStatus.PENDING,
+                origin = MemberOrigin.APP,
             )
 
         val savedMember = memberRepository.save(newMember)

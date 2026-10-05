@@ -13,8 +13,10 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberMinistriesReq
 import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberTrainingsRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMyProfileRequest
+import com.hanmaum.dn.app.features.members.domain.MemberOrigin
 import com.hanmaum.dn.app.features.members.service.MemberPurgeService
 import com.hanmaum.dn.app.features.members.service.MemberService
+import com.hanmaum.dn.app.features.newcomers.domain.NewcomerLifecycle
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.enums.ParameterIn
 import io.swagger.v3.oas.annotations.media.ArraySchema
@@ -50,7 +52,8 @@ class MemberController(
 ) {
     /**
      * GET /api/v1/members
-     * Role: ADMIN, NOTE_TAKER — paginated member list with optional search, group, training, ministry, and UTC activity-date filters.
+     * Role: ADMIN, NOTE_TAKER — paginated member list with optional search, group, training, ministry, UTC activity-date,
+     * origin, newcomer-status and app-link filters.
      * Default: page=0 size=20 sorted by lastName ASC.
      */
     @GetMapping
@@ -71,6 +74,9 @@ class MemberController(
         @RequestParam(required = false) ministryPublicId: UUID?,
         @RequestParam(required = false) updatedFrom: LocalDate?,
         @RequestParam(required = false) updatedTo: LocalDate?,
+        @RequestParam(required = false) origin: MemberOrigin?,
+        @RequestParam(required = false) newcomerStatus: NewcomerLifecycle?,
+        @RequestParam(required = false) appLinked: Boolean?,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int,
         request: HttpServletRequest,
@@ -90,6 +96,9 @@ class MemberController(
                 ministryPublicId = ministryPublicId,
                 updatedFrom = updatedFrom,
                 updatedTo = updatedTo,
+                origin = origin,
+                newcomerStatus = newcomerStatus,
+                appLinked = appLinked,
                 sort = sort,
                 page = page,
                 size = size,

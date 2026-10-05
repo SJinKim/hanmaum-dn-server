@@ -128,6 +128,10 @@ class Member(
     var statusBeforeDelete: MemberStatus? = null,
     @Column(name = "push_enabled", nullable = false)
     var pushEnabled: Boolean = true,
+    /** Creation path, see [MemberOrigin]. Not PII. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "origin", nullable = false, updatable = false, length = 20)
+    val origin: MemberOrigin = MemberOrigin.MANUAL,
 ) : BaseEntity() {
     fun getFullName(): String = "$lastName$firstName" // Korean: no space between surname and given name
 
@@ -143,5 +147,5 @@ class Member(
     // generated toString() would either miss new fields or, if it touched the lazy `group`
     // association, risk a LazyInitializationException outside a Hibernate session. Only
     // non-PII fields are listed here on purpose — add new ones explicitly, never blanket.
-    override fun toString(): String = "Member(id=$id, publicId=$publicId, memberStatus=$memberStatus)"
+    override fun toString(): String = "Member(id=$id, publicId=$publicId, memberStatus=$memberStatus, origin=$origin)"
 }
