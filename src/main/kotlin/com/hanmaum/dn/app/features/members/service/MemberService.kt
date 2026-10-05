@@ -36,6 +36,7 @@ import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentReposit
 import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerLifecycle
 import com.hanmaum.dn.app.features.newcomers.repository.NewcomerProfileRepository
+import com.hanmaum.dn.app.features.newcomers.service.MemberReconciliationIntake
 import com.hanmaum.dn.app.features.training.api.toDto
 import com.hanmaum.dn.app.features.training.domain.TrainingCode
 import com.hanmaum.dn.app.features.training.domain.TrainingStatus
@@ -82,6 +83,7 @@ class MemberService(
     @Value("\${app.member-retention.days:30}") private val memberRetentionDays: Long = 30,
     // Self-registration is anonymous and creates a Keycloak user per call (#237).
     @Value("\${app.registration.rate-limit-per-ten-minutes:10}") registrationRateLimit: Int = 10,
+    private val reconciliationIntake: MemberReconciliationIntake? = null,
 ) {
     private val log = LoggerFactory.getLogger(MemberService::class.java)
     private val registrationLimiter = SlidingWindowRateLimiter(registrationRateLimit, Duration.ofMinutes(10))
@@ -930,6 +932,11 @@ class MemberService(
                 .addKeyValue("realm", realm)
                 .log("Keycloak user creation returned an invalid response")
         }
+
+        // The email lookup above only catches an earlier entry that carried the same email.
+        // A newcomer form without one, or with another, is found by name instead and goes to
+        // review; it is never merged from here (#270).
+        if (existingUnclaimedMember == null) reconciliationIntake?.openForPossibleMatches(savedMember)
 
         log
             .atInfo()

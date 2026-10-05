@@ -1,12 +1,16 @@
 package com.hanmaum.dn.app.features.newcomers.service
 
 import com.hanmaum.dn.app.features.members.domain.Member
+import com.hanmaum.dn.app.features.members.domain.MemberOrigin
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.newcomers.domain.MemberReconciliation
 import com.hanmaum.dn.app.features.newcomers.domain.ReconciliationStatus
 import com.hanmaum.dn.app.features.newcomers.repository.MemberReconciliationRepository
 import com.hanmaum.dn.app.features.newcomers.repository.NewcomerProfileRepository
 import org.junit.jupiter.api.assertThrows
+import org.keycloak.admin.client.Keycloak
+import org.mockito.kotlin.any
+import org.mockito.kotlin.doThrow
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -71,6 +75,57 @@ class MemberReconciliationServiceTest {
         assertEquals(ReconciliationStatus.DISMISSED, dismissed.status)
         assertEquals(ReconciliationStatus.DISMISSED, repeated.status)
         assertEquals("kc-admin", review.resolvedBy)
+    }
+
+    @Test
+    fun `linking a form submission keeps the app subject and only fills a missing email`() {
+        val formRegistration =
+            member(1).apply {
+                email = "form@example.com"
+                phoneNumber = "0151 2345678"
+            }
+        val appMember =
+            member(2).apply {
+                keycloakId = "kc-app"
+                email = "login@example.com"
+            }
+        val review =
+            MemberReconciliation(formRegistration, "FORM_EMAIL_MATCH").apply {
+                candidateMemberIds += appMember.id!!
+            }
+        whenever(reviews.findForUpdate(review.publicId)).thenReturn(review)
+        whenever(members.findForUpdateByPublicIdAndDeletedAtIsNull(appMember.publicId)).thenReturn(Optional.of(appMember))
+        whenever(profiles.findByMemberIdAndDeletedAtIsNull(1)).thenReturn(null)
+        whenever(profiles.findByMemberIdAndDeletedAtIsNull(2)).thenReturn(null)
+        whenever(members.saveAndFlush(formRegistration)).thenReturn(formRegistration)
+        whenever(members.save(appMember)).thenReturn(appMember)
+        whenever(reviews.saveAndFlush(review)).thenReturn(review)
+
+        val response = service.link(review.publicId, appMember.publicId, 0, "kc-admin", false)
+
+        assertEquals(ReconciliationStatus.LINKED, response.status)
+        assertEquals("kc-app", appMember.keycloakId)
+        assertEquals("login@example.com", appMember.email)
+        assertNotNull(formRegistration.deletedAt)
+    }
+
+    @Test
+    fun `email verification is unknown when keycloak cannot be reached`() {
+        val keycloak = mock<Keycloak> { on { realm(any()) } doThrow IllegalStateException("down") }
+        val withKeycloak = MemberReconciliationService(reviews, members, profiles, keycloak, "test-realm")
+        val registration =
+            Member(lastName = "김", firstName = "새봄", origin = MemberOrigin.NEWCOMER_FORM).apply {
+                id = 1
+                keycloakId = "kc-registration"
+            }
+        val review = MemberReconciliation(registration, "POSSIBLE_NAME_BIRTH_MATCH")
+        whenever(reviews.findForUpdate(review.publicId)).thenReturn(review)
+        whenever(reviews.saveAndFlush(review)).thenReturn(review)
+
+        val response = withKeycloak.dismiss(review.publicId, 0, "kc-admin")
+
+        assertNull(response.registrationMember.emailVerified)
+        assertEquals(MemberOrigin.NEWCOMER_FORM, response.registrationMember.origin)
     }
 
     private fun member(id: Long): Member = Member(lastName = "김", firstName = "새봄").apply { this.id = id }

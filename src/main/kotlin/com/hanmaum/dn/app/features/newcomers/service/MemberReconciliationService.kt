@@ -10,6 +10,9 @@ import com.hanmaum.dn.app.features.newcomers.domain.ReconciliationStatus
 import com.hanmaum.dn.app.features.newcomers.repository.MemberReconciliationRepository
 import com.hanmaum.dn.app.features.newcomers.repository.NewcomerProfileRepository
 import jakarta.persistence.EntityNotFoundException
+import org.keycloak.admin.client.Keycloak
+import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
@@ -24,7 +27,11 @@ class MemberReconciliationService(
     private val repository: MemberReconciliationRepository,
     private val memberRepository: MemberRepository,
     private val newcomerProfileRepository: NewcomerProfileRepository,
+    private val keycloak: Keycloak? = null,
+    @Value("\${app.keycloak.realm:hanmaum}") private val realm: String = "hanmaum",
 ) {
+    private val log = LoggerFactory.getLogger(MemberReconciliationService::class.java)
+
     @Transactional(readOnly = true)
     fun list(
         status: ReconciliationStatus,
@@ -59,9 +66,10 @@ class MemberReconciliationService(
             throw NewcomerException(HttpStatus.BAD_REQUEST, "The selected member is not a current candidate.")
         }
         val registration = review.registrationMember
-        val subject =
-            registration.keycloakId ?: throw NewcomerException(HttpStatus.CONFLICT, "The registration is no longer linked to an account.")
-        if (selected.keycloakId != null && selected.keycloakId != subject) {
+        // A newcomer form entry has no account. Linking it keeps whatever account the selected
+        // member already has (#270).
+        val subject = registration.keycloakId
+        if (subject != null && selected.keycloakId != null && selected.keycloakId != subject) {
             throw NewcomerException(HttpStatus.CONFLICT, "The selected member is already linked to another account.")
         }
 
@@ -70,8 +78,8 @@ class MemberReconciliationService(
         registration.memberStatus = MemberStatus.DELETED
         registration.deletedAt = Instant.now()
         memberRepository.saveAndFlush(registration)
-        mergeSubmittedProfile(registration, selected)
-        selected.keycloakId = subject
+        mergeSubmittedProfile(registration, selected, emailIsLogin = subject != null)
+        if (subject != null) selected.keycloakId = subject
         memberRepository.save(selected)
 
         review.status = ReconciliationStatus.LINKED
@@ -125,16 +133,21 @@ class MemberReconciliationService(
         newcomerProfileRepository.saveAll(listOf(target, source))
     }
 
+    /**
+     * [emailIsLogin] is true when the source brings the account along. Otherwise the target's
+     * email may be its Keycloak login, so a form entry only fills a missing one.
+     */
     private fun mergeSubmittedProfile(
         source: Member,
         target: Member,
+        emailIsLogin: Boolean,
     ) {
         target.firstName = source.firstName
         target.lastName = source.lastName
         target.birthDate = source.birthDate ?: target.birthDate
         target.gender = source.gender ?: target.gender
         target.phoneNumber = source.phoneNumber ?: target.phoneNumber
-        target.email = source.email ?: target.email
+        target.email = if (emailIsLogin) source.email ?: target.email else target.email ?: source.email
         target.street = source.street ?: target.street
         target.houseNumber = source.houseNumber ?: target.houseNumber
         target.zipCode = source.zipCode ?: target.zipCode
@@ -160,7 +173,7 @@ class MemberReconciliationService(
         repository.findByPublicIdAndDeletedAtIsNull(publicId) ?: throw EntityNotFoundException("Reconciliation not found")
 
     private fun toResponse(review: MemberReconciliation): ReconciliationResponse {
-        val candidates = memberRepository.findAllById(review.candidateMemberIds).map(Member::toReconciliationResponse)
+        val candidates = memberRepository.findAllById(review.candidateMemberIds).map { it.toReconciliationResponse() }
         return ReconciliationResponse(
             publicId = review.publicId.toString(),
             status = review.status,
@@ -178,15 +191,33 @@ class MemberReconciliationService(
             resolvedAt = review.resolvedAt,
         )
     }
-}
 
-private fun Member.toReconciliationResponse() =
-    ReconciliationMemberResponse(
-        publicId = publicId.toString(),
-        firstName = firstName,
-        lastName = lastName,
-        email = email,
-        birthDate = birthDate,
-        phoneNumber = phoneNumber,
-        linked = keycloakId != null,
-    )
+    private fun Member.toReconciliationResponse() =
+        ReconciliationMemberResponse(
+            publicId = publicId.toString(),
+            firstName = firstName,
+            lastName = lastName,
+            email = email,
+            emailVerified = keycloakId?.let(::emailVerified),
+            birthDate = birthDate,
+            phoneNumber = phoneNumber,
+            linked = keycloakId != null,
+            origin = origin,
+        )
+
+    /** Null when the account cannot be read, so a Keycloak outage never breaks the list (#271). */
+    private fun emailVerified(keycloakId: String): Boolean? {
+        val client = keycloak ?: return null
+        return try {
+            client
+                .realm(realm)
+                .users()
+                .get(keycloakId)
+                .toRepresentation()
+                .isEmailVerified
+        } catch (e: Exception) {
+            log.warn("Keycloak email verification lookup failed error={}", e.javaClass.simpleName)
+            null
+        }
+    }
+}

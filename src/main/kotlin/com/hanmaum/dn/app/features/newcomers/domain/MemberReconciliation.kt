@@ -22,6 +22,7 @@ enum class ReconciliationReason {
     POSSIBLE_NAME_BIRTH_MATCH,
     MULTIPLE_CANDIDATES,
     PROFILE_VALUE_CONFLICT,
+    FORM_EMAIL_MATCH,
 }
 
 @Entity

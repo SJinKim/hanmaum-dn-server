@@ -5,15 +5,13 @@ import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.domain.MemberClaimConflict
 import com.hanmaum.dn.app.features.members.repository.MemberClaimConflictRepository
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
-import com.hanmaum.dn.app.features.newcomers.domain.MemberReconciliation
 import com.hanmaum.dn.app.features.newcomers.domain.ReconciliationReason
-import com.hanmaum.dn.app.features.newcomers.domain.ReconciliationStatus
 import com.hanmaum.dn.app.features.newcomers.repository.MemberReconciliationRepository
 import com.hanmaum.dn.app.features.newcomers.repository.NewcomerProfileRepository
+import com.hanmaum.dn.app.features.newcomers.service.MemberReconciliationIntake
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
-import java.text.Normalizer
 import java.time.Instant
 import java.time.LocalDate
 
@@ -46,6 +44,7 @@ class CurrentMemberResolver(
     private val newcomerProfileRepository: NewcomerProfileRepository? = null,
 ) {
     private val log = LoggerFactory.getLogger(CurrentMemberResolver::class.java)
+    private val intake = reconciliationRepository?.let { MemberReconciliationIntake(memberRepository, it) }
 
     /**
      * Resolves by Keycloak subject alone. Read-only, and the right choice wherever the email
@@ -79,9 +78,12 @@ class CurrentMemberResolver(
                 ?: throw MemberProfileNotFoundException()
         if (!emailVerified || email.isNullOrBlank() || registration.email != null) return registration
         val candidate = memberRepository.findByEmailAndDeletedAtIsNullForUpdate(email) ?: return registration
-        if (candidate.id == registration.id || candidate.keycloakId != null || !sameIdentity(registration, candidate)) {
+        if (candidate.id == registration.id ||
+            candidate.keycloakId != null ||
+            !MemberReconciliationIntake.sameIdentity(registration, candidate)
+        ) {
             recordConflict(registration, candidate, "IDENTITY_MISMATCH")
-            createReview(registration, listOf(candidate), ReconciliationReason.EMAIL_MATCH_IDENTITY_MISMATCH)
+            intake?.open(registration, listOf(candidate), listOf(ReconciliationReason.EMAIL_MATCH_IDENTITY_MISMATCH))
             log.info("Member claim skipped registrationId={} candidateId={} reason={}", registration.id, candidate.id, "identity_mismatch")
             return registration
         }
@@ -89,7 +91,7 @@ class CurrentMemberResolver(
         val conflicts = conflictingFields(registration, candidate)
         if (conflicts.isNotEmpty()) {
             recordConflict(registration, candidate, "PROFILE_VALUE_CONFLICT", conflicts)
-            createReview(registration, listOf(candidate), ReconciliationReason.PROFILE_VALUE_CONFLICT, conflicts)
+            intake?.open(registration, listOf(candidate), listOf(ReconciliationReason.PROFILE_VALUE_CONFLICT), conflicts)
             return registration
         }
 
@@ -105,26 +107,6 @@ class CurrentMemberResolver(
         copyRegisteredValues(registration, candidate)
         moveNewcomerProfile(registration, candidate)
         return memberRepository.save(candidate)
-    }
-
-    private fun sameIdentity(
-        registration: Member,
-        candidate: Member,
-    ): Boolean =
-        registration.birthDate != null &&
-            registration.birthDate == candidate.birthDate &&
-            normalizeName(registration.lastName, registration.firstName) == normalizeName(candidate.lastName, candidate.firstName)
-
-    private fun normalizeName(
-        lastName: String,
-        firstName: String,
-    ): String {
-        val normalized = Normalizer.normalize("$lastName $firstName", Normalizer.Form.NFC)
-        return if (normalized.all { it.isWhitespace() || Character.UnicodeScript.of(it.code) == Character.UnicodeScript.HANGUL }) {
-            normalized.filterNot(Char::isWhitespace)
-        } else {
-            normalized.trim().replace(MULTIPLE_WHITESPACE, " ").lowercase()
-        }
     }
 
     private fun copyRegisteredValues(
@@ -150,26 +132,6 @@ class CurrentMemberResolver(
             source.member = candidate
             profiles.save(source)
         }
-    }
-
-    private fun createReview(
-        registration: Member,
-        candidates: List<Member>,
-        reason: ReconciliationReason,
-        conflicts: Set<String> = emptySet(),
-    ) {
-        val registrationId = registration.id ?: return
-        val reviews = reconciliationRepository ?: return
-        if (reviews.findAllByRegistrationMemberIdAndDeletedAtIsNull(registrationId).any {
-                it.status in
-                    setOf(ReconciliationStatus.OPEN, ReconciliationStatus.DISMISSED)
-            }
-        ) {
-            return
-        }
-        val review = MemberReconciliation(registration, reason.name, conflicts.sorted().joinToString(",").ifBlank { null })
-        review.candidateMemberIds += candidates.mapNotNull(Member::id)
-        reviews.save(review)
     }
 
     private fun conflictingFields(
@@ -206,9 +168,5 @@ class CurrentMemberResolver(
                 MemberClaimConflict(registration, candidate, reason, fields.sorted().joinToString(",").ifBlank { null }),
             )
         }
-    }
-
-    companion object {
-        private val MULTIPLE_WHITESPACE = Regex("\\s+")
     }
 }

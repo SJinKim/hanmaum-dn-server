@@ -1099,6 +1099,39 @@ class MemberServiceTest {
     }
 
     @Test
+    fun `registerMember checks a fresh account against existing members`() {
+        val intake = org.mockito.kotlin.mock<com.hanmaum.dn.app.features.newcomers.service.MemberReconciliationIntake>()
+        val withIntake =
+            MemberService(
+                memberRepository,
+                churchGroupRepository,
+                groupLeaderRepository,
+                memberGraduationRepository,
+                userTrainingRepository,
+                trainingRepository,
+                ministryAssignmentRepository,
+                ministryRepository,
+                newcomerProfileRepository,
+                keycloak,
+                CurrentMemberResolver(memberRepository, org.mockito.kotlin.mock()),
+                operationalMetrics,
+                "test-realm",
+                reconciliationIntake = intake,
+            )
+        val req = registerReq()
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
+        `when`(memberRepository.findSimilarNames(req.firstName, req.lastName)).thenReturn(emptyList())
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+        setupKeycloakMock()
+
+        withIntake.registerMember(req, CLIENT_IP)
+
+        org.mockito.kotlin
+            .verify(intake)
+            .openForPossibleMatches(any())
+    }
+
+    @Test
     fun `registerMember stages a separate account when an unclaimed email already exists`() {
         val existing = memberWithId(1L)
         `when`(memberRepository.findByEmailAndDeletedAtIsNull("test@example.com")).thenReturn(existing)

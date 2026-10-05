@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.newcomers.api.v1.dto
 
+import com.hanmaum.dn.app.features.members.domain.MemberOrigin
 import com.hanmaum.dn.app.features.newcomers.domain.ReconciliationStatus
 import dev.zacsweers.redacted.annotations.Redacted
 import dev.zacsweers.redacted.annotations.Unredacted
@@ -16,6 +17,9 @@ data class ReconciliationMemberResponse(
     val birthDate: LocalDate?,
     val phoneNumber: String?,
     @Unredacted val linked: Boolean,
+    /** From Keycloak for members with an account; null without one or when Keycloak is unreachable. */
+    @Unredacted val emailVerified: Boolean? = null,
+    @Unredacted val origin: MemberOrigin = MemberOrigin.MANUAL,
 )
 
 @Redacted

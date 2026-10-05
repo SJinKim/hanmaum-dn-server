@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.newcomers.service
 
 import com.hanmaum.dn.app.common.security.SlidingWindowRateLimiter
+import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.CreateFormLinkRequest
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.CreateNewcomerRequest
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.FormLinkResponse
@@ -9,6 +10,7 @@ import com.hanmaum.dn.app.features.newcomers.api.v1.dto.PublicNewcomerSubmission
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.PublicSubmissionResponse
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerFormLink
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerFormSubmission
+import com.hanmaum.dn.app.features.newcomers.domain.ReconciliationReason
 import com.hanmaum.dn.app.features.newcomers.repository.NewcomerFormLinkRepository
 import com.hanmaum.dn.app.features.newcomers.repository.NewcomerFormSubmissionRepository
 import com.hanmaum.dn.app.features.newcomers.repository.NewcomerProfileRepository
@@ -32,6 +34,8 @@ class NewcomerFormService(
     private val newcomerService: NewcomerService,
     @Value("\${app.newcomer-form.consent-version:v1}") private val consentVersion: String,
     @Value("\${app.newcomer-form.rate-limit-per-minute:10}") private val rateLimitPerMinute: Int,
+    private val memberRepository: MemberRepository? = null,
+    private val reconciliationIntake: MemberReconciliationIntake? = null,
 ) {
     private val random = SecureRandom()
     private val rateLimiter = SlidingWindowRateLimiter(rateLimitPerMinute, Duration.ofMinutes(1))
@@ -81,6 +85,15 @@ class NewcomerFormService(
         submissionRepository.findByFormLinkIdAndIdempotencyHash(link.id!!, idempotencyHash)?.let {
             return PublicSubmissionResponse(it.newcomerProfile.publicId.toString(), it.createdAt)
         }
+        // An email that already belongs to a member is not an error the visitor can fix: they
+        // most likely registered in the app first. The form is kept without the email and the
+        // pair goes to review, where the office decides whether it is the same person (#270).
+        val existingByEmail =
+            request.email
+                ?.trim()
+                ?.lowercase()
+                ?.takeIf(String::isNotBlank)
+                ?.let { memberRepository?.findByEmailAndDeletedAtIsNull(it) }
         val created =
             try {
                 newcomerService.create(
@@ -89,7 +102,7 @@ class NewcomerFormService(
                         firstName = request.firstName,
                         gender = request.gender,
                         birthDate = request.birthDate,
-                        email = request.email,
+                        email = if (existingByEmail == null) request.email else null,
                         phoneNumber = request.phoneNumber,
                         street = request.street,
                         houseNumber = request.houseNumber,
@@ -115,6 +128,11 @@ class NewcomerFormService(
         profile.consentVersion = consentVersion
         profile.consentedAt = Instant.now()
         profileRepository.save(profile)
+        if (existingByEmail != null) {
+            reconciliationIntake?.open(profile.member, listOf(existingByEmail), listOf(ReconciliationReason.FORM_EMAIL_MATCH))
+        } else {
+            reconciliationIntake?.openForPossibleMatches(profile.member)
+        }
         val submission = submissionRepository.save(NewcomerFormSubmission(link, profile, idempotencyHash))
         link.useCount++
         linkRepository.save(link)
