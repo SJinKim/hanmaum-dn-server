@@ -17,6 +17,7 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberTrainingsRequ
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMyProfileRequest
 import com.hanmaum.dn.app.features.members.domain.Member
+import com.hanmaum.dn.app.features.members.domain.MemberOrigin
 import com.hanmaum.dn.app.features.members.repository.MemberGraduationRepository
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.ministry.domain.Ministry
@@ -26,6 +27,9 @@ import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentStatus
 import com.hanmaum.dn.app.features.ministry.repository.MemberMinistryView
 import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
 import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
+import com.hanmaum.dn.app.features.newcomers.domain.NewcomerLifecycle
+import com.hanmaum.dn.app.features.newcomers.repository.NewcomerLifecycleView
+import com.hanmaum.dn.app.features.newcomers.repository.NewcomerProfileRepository
 import com.hanmaum.dn.app.features.training.domain.Training
 import com.hanmaum.dn.app.features.training.domain.TrainingCode
 import com.hanmaum.dn.app.features.training.domain.TrainingCohort
@@ -87,6 +91,8 @@ class MemberServiceTest {
 
     @Mock private lateinit var ministryRepository: MinistryRepository
 
+    @Mock private lateinit var newcomerProfileRepository: NewcomerProfileRepository
+
     @Mock private lateinit var keycloak: Keycloak
 
     @Mock private lateinit var operationalMetrics: OperationalMetrics
@@ -113,6 +119,7 @@ class MemberServiceTest {
                 trainingRepository,
                 ministryAssignmentRepository,
                 ministryRepository,
+                newcomerProfileRepository,
                 keycloak,
                 CurrentMemberResolver(memberRepository, org.mockito.kotlin.mock()),
                 operationalMetrics,
@@ -379,6 +386,56 @@ class MemberServiceTest {
         val result = memberService.getMembers(null, null, null, null, null, null, null, null, 0, 20)
 
         assertEquals(2, result.totalElements)
+    }
+
+    @Test
+    fun `getMembers filters by origin, newcomer status and app link`() {
+        val manual = memberWithId(1L)
+        val form = Member(lastName = "홍", firstName = "길동", origin = MemberOrigin.NEWCOMER_FORM).apply { id = 2L }
+        val formLinked =
+            Member(lastName = "홍", firstName = "길순", origin = MemberOrigin.NEWCOMER_FORM, keycloakId = "kc-3").apply { id = 3L }
+        `when`(memberRepository.findActiveMembers(anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(listOf(manual, form, formLinked))
+        `when`(newcomerProfileRepository.findMemberIdsByLifecycleStatus(NewcomerLifecycle.IN_CARE)).thenReturn(listOf(2L, 3L))
+
+        val result =
+            memberService.getMembers(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                20,
+                origin = MemberOrigin.NEWCOMER_FORM,
+                newcomerStatus = NewcomerLifecycle.IN_CARE,
+                appLinked = false,
+            )
+
+        assertEquals(listOf(form.publicId.toString()), result.content.map { it.publicId })
+    }
+
+    @Test
+    fun `getMembers reports origin, newcomer status and app link per member`() {
+        val form = Member(lastName = "홍", firstName = "길동", origin = MemberOrigin.NEWCOMER_FORM).apply { id = 1L }
+        val app = Member(lastName = "Mustermann", firstName = "Max", origin = MemberOrigin.APP, keycloakId = "kc-2").apply { id = 2L }
+        `when`(memberRepository.findActiveMembers(anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(listOf(form, app))
+        `when`(newcomerProfileRepository.findLifecycleByMemberIds(listOf(1L, 2L)))
+            .thenReturn(listOf(NewcomerLifecycleView(1L, NewcomerLifecycle.SUBMITTED)))
+
+        val result = memberService.getMembers(null, null, null, null, null, null, null, null, 0, 20)
+
+        val byId = result.content.associateBy { it.publicId }
+        val formSummary = byId.getValue(form.publicId.toString())
+        assertEquals("NEWCOMER_FORM", formSummary.origin)
+        assertEquals("SUBMITTED", formSummary.newcomerStatus)
+        assertEquals(false, formSummary.appLinked)
+        val appSummary = byId.getValue(app.publicId.toString())
+        assertEquals("APP", appSummary.origin)
+        assertNull(appSummary.newcomerStatus)
+        assertEquals(true, appSummary.appLinked)
     }
 
     @Test
@@ -1019,6 +1076,7 @@ class MemberServiceTest {
                 trainingRepository,
                 ministryAssignmentRepository,
                 ministryRepository,
+                newcomerProfileRepository,
                 keycloak,
                 CurrentMemberResolver(memberRepository, org.mockito.kotlin.mock()),
                 operationalMetrics,
