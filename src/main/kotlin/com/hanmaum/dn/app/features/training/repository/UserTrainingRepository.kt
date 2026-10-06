@@ -91,6 +91,39 @@ interface UserTrainingRepository : JpaRepository<UserTraining, Long> {
         statuses: Collection<TrainingStatus>,
     ): Int
 
+    /**
+     * Distinct members per course who hold one of [statuses], for the 양육 단계 chart of the
+     * 통계 screen (#229). Courses without anyone in them are not returned.
+     */
+    @Query(
+        """
+        SELECT new com.hanmaum.dn.app.features.training.repository.TrainingStageCount(
+            t.code, t.name, t.nameKo, t.sortOrder, COUNT(DISTINCT ut.member.id)
+        )
+        FROM UserTraining ut
+        JOIN ut.training t
+        JOIN ut.member m
+        WHERE t.code IN :codes
+          AND ut.status IN :statuses
+          AND ut.deletedAt IS NULL
+          AND m.deletedAt IS NULL
+        GROUP BY t.code, t.name, t.nameKo, t.sortOrder
+        ORDER BY t.sortOrder ASC
+        """,
+    )
+    fun countMembersByTrainingCode(
+        @Param("codes") codes: Collection<TrainingCode>,
+        @Param("statuses") statuses: Collection<TrainingStatus>,
+    ): List<TrainingStageCount>
+
     /** Replace-set support: removes a member's existing rows before re-insert. */
     fun deleteByMemberId(memberId: Long)
 }
+
+data class TrainingStageCount(
+    val code: TrainingCode,
+    val name: String,
+    val nameKo: String?,
+    val sortOrder: Int,
+    val count: Long,
+)

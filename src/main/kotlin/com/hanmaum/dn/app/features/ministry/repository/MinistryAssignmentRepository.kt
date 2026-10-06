@@ -174,6 +174,30 @@ interface MinistryAssignmentRepository :
         @Param("ministryPublicId") ministryPublicId: java.util.UUID,
     ): List<Long>
 
+    /**
+     * Members currently serving per active ministry, largest first, for the 사역별 인원 chart
+     * of the 통계 screen (#229). Pending and rejected registrations do not count.
+     */
+    @Query(
+        """
+        SELECT new com.hanmaum.dn.app.features.ministry.repository.MinistryHeadcount(
+            ministry.name, COUNT(DISTINCT a.member.id)
+        )
+        FROM MinistryAssignment a
+        JOIN a.ministry ministry
+        JOIN a.member member
+        WHERE a.endDate IS NULL
+          AND a.status = com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentStatus.ACTIVE
+          AND a.deletedAt IS NULL
+          AND member.deletedAt IS NULL
+          AND ministry.isMinistryActive = true
+          AND ministry.deletedAt IS NULL
+        GROUP BY ministry.name
+        ORDER BY COUNT(DISTINCT a.member.id) DESC, ministry.name ASC
+        """,
+    )
+    fun countCurrentMembersByMinistry(): List<MinistryHeadcount>
+
     // NOTE: deliberately NOT clearAutomatically=true. Clearing the persistence context
     // here detaches the already-loaded `member` (and its lazy `group`), which made
     // MemberService.replaceMemberMinistries throw LazyInitializationException when it
@@ -198,3 +222,8 @@ interface MinistryAssignmentRepository :
         @Param("now") now: Instant,
     ): Int
 }
+
+data class MinistryHeadcount(
+    val ministryName: String,
+    val count: Long,
+)
