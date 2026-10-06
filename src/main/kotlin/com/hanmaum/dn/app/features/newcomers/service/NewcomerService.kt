@@ -54,7 +54,8 @@ class NewcomerService(
                     zipCode = request.zipCode,
                     city = request.city,
                     registrationDate = request.registrationDate ?: LocalDate.now(),
-                    memberStatus = MemberStatus.PENDING,
+                    // No account, so nothing to approve: PENDING is the app-approval queue (#275).
+                    memberStatus = MemberStatus.ACTIVE,
                     baptism = request.baptism,
                     profileImageUrl = request.profileImageUrl,
                     keycloakId = null,

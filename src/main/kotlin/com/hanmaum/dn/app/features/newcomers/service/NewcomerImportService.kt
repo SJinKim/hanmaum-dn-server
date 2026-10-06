@@ -293,7 +293,8 @@ class NewcomerImportService(
                 phoneNumber = phone,
                 email = email,
                 registrationDate = registrationDate ?: LocalDate.now(),
-                memberStatus = MemberStatus.PENDING,
+                // Same as the form: no account, nothing to approve (#275).
+                memberStatus = MemberStatus.ACTIVE,
                 baptism = baptism,
                 origin = MemberOrigin.NEWCOMER_FORM,
             )

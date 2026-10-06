@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.newcomers.service
 
+import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
@@ -11,6 +12,7 @@ import com.hanmaum.dn.app.features.newcomers.domain.NewcomerProfile
 import com.hanmaum.dn.app.features.newcomers.repository.NewcomerProfileRepository
 import org.junit.jupiter.api.assertThrows
 import org.mockito.kotlin.any
+import org.mockito.kotlin.check
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -40,6 +42,16 @@ class NewcomerServiceTest {
         assertNull(response.assignedGroup)
         verify(members).save(any<Member>())
         verify(profiles).save(any<NewcomerProfile>())
+    }
+
+    @Test
+    fun `create starts the member active so it never waits for app approval`() {
+        whenever(members.save(any<Member>())).thenAnswer { it.arguments[0] as Member }
+        whenever(profiles.save(any<NewcomerProfile>())).thenAnswer { it.arguments[0] as NewcomerProfile }
+
+        service.create(CreateNewcomerRequest(lastName = "김", firstName = "새봄"))
+
+        verify(members).save(check<Member> { assertEquals(MemberStatus.ACTIVE, it.memberStatus) })
     }
 
     @Test

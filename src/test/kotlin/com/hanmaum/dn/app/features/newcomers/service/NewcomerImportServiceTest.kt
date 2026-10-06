@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.newcomers.service
 
+import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerProfile
@@ -88,6 +89,8 @@ class NewcomerImportServiceTest {
                 assertEquals(java.time.LocalDate.of(2026, 9, 20), profile.firstVisitDate)
             },
         )
+        // An imported newcomer has no account, so it is not queued for approval (#275).
+        verify(members).save(org.mockito.kotlin.check<Member> { assertEquals(MemberStatus.ACTIVE, it.memberStatus) })
     }
 
     @Test
