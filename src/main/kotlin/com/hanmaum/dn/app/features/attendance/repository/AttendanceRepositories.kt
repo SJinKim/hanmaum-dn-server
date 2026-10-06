@@ -173,6 +173,52 @@ interface AttendanceLogRepository : JpaRepository<AttendanceLog, Long> {
         @Param("definitionId") definitionId: Long?,
     ): List<AttendanceLog>
 
+    /**
+     * Accepted check-ins per service and day in a date range, for the 통계 screen (#229).
+     * One row is one service that was actually held, which is what the attendance rate
+     * divides by.
+     */
+    @Query(
+        """
+        SELECT new com.hanmaum.dn.app.features.attendance.repository.AttendanceServiceDayCount(
+            l.definition.id, l.attendanceDate, COUNT(l)
+        )
+        FROM AttendanceLog l
+        WHERE l.attendanceDate BETWEEN :from AND :to
+          AND l.attended = true
+          AND l.deletedAt IS NULL
+        GROUP BY l.definition.id, l.attendanceDate
+        """,
+    )
+    fun countByServiceAndDayBetween(
+        @Param("from") from: LocalDate,
+        @Param("to") to: LocalDate,
+    ): List<AttendanceServiceDayCount>
+
+    /**
+     * Distinct attendees per division of the 순 they checked in with, for the 통계 screen
+     * (#229). Check-ins without a 순 or from a purged member are left out.
+     */
+    @Query(
+        """
+        SELECT new com.hanmaum.dn.app.features.attendance.repository.DivisionAttendeeCount(
+            g.division, COUNT(DISTINCT l.member.id)
+        )
+        FROM AttendanceLog l
+        JOIN l.groupAtCheckIn g
+        WHERE l.attendanceDate BETWEEN :from AND :to
+          AND l.attended = true
+          AND l.deletedAt IS NULL
+          AND l.member IS NOT NULL
+        GROUP BY g.division
+        ORDER BY g.division ASC
+        """,
+    )
+    fun countAttendeesByDivisionBetween(
+        @Param("from") from: LocalDate,
+        @Param("to") to: LocalDate,
+    ): List<DivisionAttendeeCount>
+
     fun findByPublicId(publicId: UUID): Optional<AttendanceLog>
 
     @Modifying(clearAutomatically = true)
@@ -198,3 +244,14 @@ interface ChurchGroupAttendanceCountView {
     val outsideCount: Long
     val unconfirmedCount: Long
 }
+
+data class AttendanceServiceDayCount(
+    val definitionId: Long,
+    val attendanceDate: LocalDate,
+    val count: Long,
+)
+
+data class DivisionAttendeeCount(
+    val division: String?,
+    val count: Long,
+)
