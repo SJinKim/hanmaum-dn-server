@@ -1,11 +1,11 @@
 package com.hanmaum.dn.app.features.statistics.api.v1
 
+import com.hanmaum.dn.app.common.dto.ApiResponse
 import com.hanmaum.dn.app.features.statistics.api.v1.dto.DashboardStatsDto
 import com.hanmaum.dn.app.features.statistics.service.StatisticsPeriod
 import com.hanmaum.dn.app.features.statistics.service.StatisticsService
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Schema
-import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
@@ -25,8 +25,8 @@ class StatisticsController(
         )
         @RequestParam(defaultValue = StatisticsPeriod.DEFAULT)
         period: String,
-    ): ResponseEntity<DashboardStatsDto> {
+    ): ResponseEntity<ApiResponse<DashboardStatsDto>> {
         val stats = statisticsService.getDashboardStats(StatisticsPeriod.fromParam(period))
-        return ResponseEntity(stats, HttpStatus.OK)
+        return ResponseEntity.ok(ApiResponse.success(data = stats))
     }
 }
