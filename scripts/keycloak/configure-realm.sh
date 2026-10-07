@@ -46,7 +46,7 @@ readonly BACKEND_CLIENT="dn-backend-admin"
 readonly BACKEND_ROLES=("manage-users")
 # Login theme from infrastructure/docker/keycloak/themes (#243); Korean first, English second.
 readonly LOGIN_THEME="hanmaum"
-readonly REALM_LOCALES='["ko","en"]'
+readonly REALM_LOCALES='["ko","en","de"]'
 readonly REALM_DEFAULT_LOCALE="ko"
 # Brute-force protection (#244): 5 failures lock the account for 1 minute, each further
 # failure adds a minute up to 15. Never permanent, so a forgotten password cannot lock a
