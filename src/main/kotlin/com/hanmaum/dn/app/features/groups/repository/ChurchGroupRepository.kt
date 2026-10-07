@@ -24,6 +24,8 @@ interface GroupMeetingRepository : JpaRepository<GroupMeeting, Long> {
 
     // Finde alle Meetings (für Pastor View)
     fun findAllByOrderByMeetingTimeDesc(): List<GroupMeeting>
+
+    fun findByPublicId(publicId: UUID): Optional<GroupMeeting>
 }
 
 @Repository

@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.context.annotation.Import
+import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt
 import org.springframework.test.context.ActiveProfiles
@@ -32,6 +33,8 @@ class StatisticsControllerTest {
     @MockitoBean private lateinit var memberRepository: MemberRepository
 
     @MockitoBean private lateinit var jwtDecoder: JwtDecoder
+
+    private fun admin() = jwt().jwt { it.subject("kc-001") }.authorities(SimpleGrantedAuthority("ROLE_ADMIN"))
 
     private fun stats(period: StatisticsPeriod) =
         DashboardStatsDto(
@@ -55,7 +58,7 @@ class StatisticsControllerTest {
         `when`(statisticsService.getDashboardStats(StatisticsPeriod.YEAR)).thenReturn(stats(StatisticsPeriod.YEAR))
 
         mockMvc
-            .perform(get("/api/v1/statistics/dashboard").with(jwt().jwt { it.subject("kc-001") }))
+            .perform(get("/api/v1/statistics/dashboard").with(admin()))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.success").value(true))
             .andExpect(jsonPath("$.data.totalMembers").value(42))
@@ -71,7 +74,7 @@ class StatisticsControllerTest {
             .perform(
                 get("/api/v1/statistics/dashboard")
                     .param("period", "quarter")
-                    .with(jwt().jwt { it.subject("kc-001") }),
+                    .with(admin()),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.data.period").value("quarter"))
     }
@@ -81,5 +84,12 @@ class StatisticsControllerTest {
         mockMvc
             .perform(get("/api/v1/statistics/dashboard"))
             .andExpect(status().isUnauthorized)
+    }
+
+    @Test
+    fun `GET dashboard is forbidden for a plain member`() {
+        mockMvc
+            .perform(get("/api/v1/statistics/dashboard").with(jwt().jwt { it.subject("kc-002") }))
+            .andExpect(status().isForbidden)
     }
 }

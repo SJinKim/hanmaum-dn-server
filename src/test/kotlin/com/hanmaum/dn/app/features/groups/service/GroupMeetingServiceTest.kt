@@ -5,26 +5,34 @@ import com.hanmaum.dn.app.features.groups.api.v1.dto.CreateMeetingRequest
 import com.hanmaum.dn.app.features.groups.api.v1.dto.ReportEntry
 import com.hanmaum.dn.app.features.groups.api.v1.dto.SubmitMeetingReportRequest
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
+import com.hanmaum.dn.app.features.groups.domain.GroupLeader
 import com.hanmaum.dn.app.features.groups.domain.GroupMeeting
 import com.hanmaum.dn.app.features.groups.domain.MeetingAttendance
 import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
+import com.hanmaum.dn.app.features.groups.repository.GroupLeaderRepository
 import com.hanmaum.dn.app.features.groups.repository.GroupMeetingRepository
 import com.hanmaum.dn.app.features.groups.repository.MeetingAttendanceRepository
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.members.service.CurrentMemberResolver
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
-import org.mockito.ArgumentMatchers.anyLong
 import org.mockito.InjectMocks
 import org.mockito.Mock
+import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
+import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.argumentCaptor
+import org.springframework.http.HttpStatus
+import org.springframework.web.server.ResponseStatusException
+import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.util.Optional
@@ -40,8 +48,14 @@ class GroupMeetingServiceTest {
 
     @Mock private lateinit var memberRepo: MemberRepository
 
+    @Mock private lateinit var leaderRepo: GroupLeaderRepository
+
+    @Mock private lateinit var currentMember: CurrentMemberResolver
+
     @InjectMocks
     private lateinit var groupMeetingService: GroupMeetingService
+
+    private val subject = "kc-001"
 
     private fun group(
         id: Long,
@@ -54,8 +68,8 @@ class GroupMeetingServiceTest {
 
     private fun member(
         id: Long,
-        firstName: String = "철수",
-        lastName: String = "김",
+        firstName: String = "길동",
+        lastName: String = "홍",
         grp: ChurchGroup? = null,
     ): Member {
         val m = Member(lastName = lastName, firstName = firstName)
@@ -78,173 +92,206 @@ class GroupMeetingServiceTest {
         return m
     }
 
+    private fun leader(
+        group: ChurchGroup,
+        member: Member,
+    ) = GroupLeader(group = group, member = member, startDate = LocalDate.of(2026, 1, 1))
+
     // --- createMeeting ---
 
     @Test
     fun `createMeeting throws EntityNotFoundException when group not found`() {
-        `when`(groupRepo.findById(anyLong())).thenReturn(Optional.empty())
+        `when`(groupRepo.findByPublicIdAndDeletedAtIsNull(any())).thenReturn(Optional.empty())
 
         assertThrows<EntityNotFoundException> {
             groupMeetingService.createMeeting(
-                CreateMeetingRequest(groupId = 1L, meetingTime = OffsetDateTime.now(), location = "교회"),
+                CreateMeetingRequest(groupId = UUID.randomUUID(), meetingTime = OffsetDateTime.now(), location = "교회"),
             )
         }
     }
 
     @Test
-    fun `createMeeting saves meeting and returns its id`() {
+    fun `createMeeting looks the group up by publicId and returns the meeting publicId`() {
         val g = group(1L)
         val saved = meeting(42L, g)
-        `when`(groupRepo.findById(1L)).thenReturn(Optional.of(g))
+        `when`(groupRepo.findByPublicIdAndDeletedAtIsNull(g.publicId)).thenReturn(Optional.of(g))
         `when`(meetingRepo.save(any<GroupMeeting>())).thenReturn(saved)
 
-        val id =
+        val publicId =
             groupMeetingService.createMeeting(
                 CreateMeetingRequest(
-                    groupId = 1L,
+                    groupId = g.publicId,
                     meetingTime = OffsetDateTime.of(2026, 4, 6, 14, 0, 0, 0, ZoneOffset.UTC),
                     location = "교회",
                 ),
             )
 
-        assertEquals(42L, id)
+        assertEquals(saved.publicId, publicId)
     }
 
     // --- submitReport ---
 
     @Test
     fun `submitReport throws EntityNotFoundException when meeting not found`() {
-        `when`(meetingRepo.findById(anyLong())).thenReturn(Optional.empty())
+        `when`(meetingRepo.findByPublicId(any())).thenReturn(Optional.empty())
 
         assertThrows<EntityNotFoundException> {
-            groupMeetingService.submitReport(99L, SubmitMeetingReportRequest(entries = emptyList()))
+            groupMeetingService.submitReport(UUID.randomUUID(), SubmitMeetingReportRequest(entries = emptyList()), subject, true)
         }
     }
 
     @Test
     fun `submitReport deletes old attendances before saving new ones`() {
-        val g = group(1L)
-        val m = meeting(10L, g)
-        `when`(meetingRepo.findById(10L)).thenReturn(Optional.of(m))
+        val m = meeting(10L, group(1L))
+        `when`(meetingRepo.findByPublicId(m.publicId)).thenReturn(Optional.of(m))
         `when`(attendanceRepo.saveAll(any<Iterable<MeetingAttendance>>())).thenReturn(emptyList())
 
-        groupMeetingService.submitReport(10L, SubmitMeetingReportRequest(entries = emptyList()))
+        groupMeetingService.submitReport(m.publicId, SubmitMeetingReportRequest(entries = emptyList()), subject, true)
 
         verify(attendanceRepo).deleteAllByMeetingId(10L)
         verify(attendanceRepo).saveAll(any<Iterable<MeetingAttendance>>())
     }
 
     @Test
-    fun `submitReport maps isPresent=true to PRESENT status`() {
-        val g = group(1L)
-        val m = meeting(10L, g)
-        val member1 = member(1L)
+    fun `submitReport maps isPresent to PRESENT and ABSENT`() {
+        val m = meeting(10L, group(1L))
+        val present = member(1L)
+        val absent = member(2L)
         val req =
             SubmitMeetingReportRequest(
-                entries = listOf(ReportEntry(memberId = member1.publicId.toString(), isPresent = true, prayerRequest = "건강")),
+                entries =
+                    listOf(
+                        ReportEntry(memberId = present.publicId.toString(), isPresent = true, prayerRequest = "건강"),
+                        ReportEntry(memberId = absent.publicId.toString(), isPresent = false, prayerRequest = null),
+                    ),
             )
-        `when`(meetingRepo.findById(10L)).thenReturn(Optional.of(m))
-        `when`(memberRepo.findByPublicId(any<UUID>())).thenReturn(Optional.of(member1))
+        `when`(meetingRepo.findByPublicId(m.publicId)).thenReturn(Optional.of(m))
+        `when`(memberRepo.findByPublicId(present.publicId)).thenReturn(Optional.of(present))
+        `when`(memberRepo.findByPublicId(absent.publicId)).thenReturn(Optional.of(absent))
         val captor = argumentCaptor<Iterable<MeetingAttendance>>()
         `when`(attendanceRepo.saveAll(any<Iterable<MeetingAttendance>>())).thenReturn(emptyList())
 
-        groupMeetingService.submitReport(10L, req)
+        groupMeetingService.submitReport(m.publicId, req, subject, true)
 
         verify(attendanceRepo).saveAll(captor.capture())
         val saved = captor.firstValue.toList()
         assertEquals("PRESENT", saved[0].status)
         assertEquals("건강", saved[0].prayerRequest)
+        assertEquals("ABSENT", saved[1].status)
     }
 
     @Test
-    fun `submitReport maps isPresent=false to ABSENT status`() {
+    fun `submitReport lets the active leader of the meeting's group report`() {
         val g = group(1L)
         val m = meeting(10L, g)
-        val member1 = member(1L)
-        val req =
-            SubmitMeetingReportRequest(
-                entries = listOf(ReportEntry(memberId = member1.publicId.toString(), isPresent = false, prayerRequest = null)),
-            )
-        `when`(meetingRepo.findById(10L)).thenReturn(Optional.of(m))
-        `when`(memberRepo.findByPublicId(any<UUID>())).thenReturn(Optional.of(member1))
-        val captor = argumentCaptor<Iterable<MeetingAttendance>>()
+        val caller = member(5L, grp = g)
+        `when`(meetingRepo.findByPublicId(m.publicId)).thenReturn(Optional.of(m))
+        `when`(currentMember.require(subject)).thenReturn(caller)
+        `when`(leaderRepo.findActiveByGroupId(1L)).thenReturn(leader(g, caller))
         `when`(attendanceRepo.saveAll(any<Iterable<MeetingAttendance>>())).thenReturn(emptyList())
 
-        groupMeetingService.submitReport(10L, req)
+        groupMeetingService.submitReport(m.publicId, SubmitMeetingReportRequest(entries = emptyList()), subject, false)
 
-        verify(attendanceRepo).saveAll(captor.capture())
-        val saved = captor.firstValue.toList()
-        assertEquals("ABSENT", saved[0].status)
+        verify(attendanceRepo).deleteAllByMeetingId(10L)
+    }
+
+    @Test
+    fun `submitReport rejects a leader of another group with 403`() {
+        val g = group(1L)
+        val m = meeting(10L, g)
+        val otherLeader = member(6L, grp = group(2L))
+        `when`(meetingRepo.findByPublicId(m.publicId)).thenReturn(Optional.of(m))
+        `when`(currentMember.require(subject)).thenReturn(otherLeader)
+        `when`(leaderRepo.findActiveByGroupId(1L)).thenReturn(leader(g, member(5L, grp = g)))
+
+        val ex =
+            assertThrows<ResponseStatusException> {
+                groupMeetingService.submitReport(m.publicId, SubmitMeetingReportRequest(entries = emptyList()), subject, false)
+            }
+
+        assertEquals(HttpStatus.FORBIDDEN, ex.statusCode)
+        verify(attendanceRepo, never()).deleteAllByMeetingId(anyOrNull())
+    }
+
+    @Test
+    fun `submitReport rejects a non-admin when the group has no active leader`() {
+        val g = group(1L)
+        val m = meeting(10L, g)
+        `when`(meetingRepo.findByPublicId(m.publicId)).thenReturn(Optional.of(m))
+        `when`(currentMember.require(subject)).thenReturn(member(5L, grp = g))
+        `when`(leaderRepo.findActiveByGroupId(1L)).thenReturn(null)
+
+        assertThrows<ResponseStatusException> {
+            groupMeetingService.submitReport(m.publicId, SubmitMeetingReportRequest(entries = emptyList()), subject, false)
+        }
     }
 
     // --- getMeetingDetails ---
 
     @Test
     fun `getMeetingDetails throws EntityNotFoundException when meeting not found`() {
-        `when`(meetingRepo.findById(anyLong())).thenReturn(Optional.empty())
+        `when`(meetingRepo.findByPublicId(any())).thenReturn(Optional.empty())
 
         assertThrows<EntityNotFoundException> {
-            groupMeetingService.getMeetingDetails(99L, UUID.randomUUID().toString(), false)
+            groupMeetingService.getMeetingDetails(UUID.randomUUID(), subject, false)
         }
     }
 
     @Test
-    fun `getMeetingDetails throws IllegalAccessException when non-admin from different group`() {
-        val g1 = group(1L, "그룹1")
-        val g2 = group(2L, "그룹2")
-        val m = meeting(10L, g1)
-        val requester = member(2L, grp = g2)
-        `when`(meetingRepo.findById(10L)).thenReturn(Optional.of(m))
-        `when`(memberRepo.findByPublicId(any<UUID>())).thenReturn(Optional.of(requester))
+    fun `getMeetingDetails rejects a non-admin from another group with 403`() {
+        val m = meeting(10L, group(1L, "그룹1"))
+        `when`(meetingRepo.findByPublicId(m.publicId)).thenReturn(Optional.of(m))
+        `when`(currentMember.require(subject)).thenReturn(member(2L, grp = group(2L, "그룹2")))
 
-        assertThrows<IllegalAccessException> {
-            groupMeetingService.getMeetingDetails(10L, requester.publicId.toString(), false)
-        }
+        val ex =
+            assertThrows<ResponseStatusException> {
+                groupMeetingService.getMeetingDetails(m.publicId, subject, false)
+            }
+
+        assertEquals(HttpStatus.FORBIDDEN, ex.statusCode)
+        verify(attendanceRepo, never()).findAllByMeetingId(anyOrNull())
     }
 
     @Test
-    fun `getMeetingDetails allows non-admin from same group`() {
+    fun `getMeetingDetails allows a non-admin from the same group`() {
         val g = group(1L, "다니엘조")
         val m = meeting(10L, g)
-        val requester = member(2L, grp = g)
-        `when`(meetingRepo.findById(10L)).thenReturn(Optional.of(m))
-        `when`(memberRepo.findByPublicId(any<UUID>())).thenReturn(Optional.of(requester))
+        `when`(meetingRepo.findByPublicId(m.publicId)).thenReturn(Optional.of(m))
+        `when`(currentMember.require(subject)).thenReturn(member(2L, grp = g))
         `when`(attendanceRepo.findAllByMeetingId(10L)).thenReturn(emptyList())
 
-        val detail = groupMeetingService.getMeetingDetails(10L, requester.publicId.toString(), false)
+        val detail = groupMeetingService.getMeetingDetails(m.publicId, subject, false)
 
-        assertEquals(10L, detail.id)
+        assertEquals(m.publicId, detail.publicId)
         assertEquals("다니엘조", detail.groupName)
     }
 
     @Test
-    fun `getMeetingDetails allows admin regardless of group`() {
-        val g1 = group(1L, "그룹1")
-        val g2 = group(2L, "그룹2")
-        val m = meeting(10L, g1)
-        val admin = member(99L, grp = g2)
-        `when`(meetingRepo.findById(10L)).thenReturn(Optional.of(m))
+    fun `getMeetingDetails lets an admin read any group without resolving a member`() {
+        val m = meeting(10L, group(1L, "그룹1"))
+        `when`(meetingRepo.findByPublicId(m.publicId)).thenReturn(Optional.of(m))
         `when`(attendanceRepo.findAllByMeetingId(10L)).thenReturn(emptyList())
 
-        val detail = groupMeetingService.getMeetingDetails(10L, admin.publicId.toString(), true)
+        val detail = groupMeetingService.getMeetingDetails(m.publicId, subject, true)
 
         assertEquals("그룹1", detail.groupName)
+        verifyNoInteractions(currentMember)
     }
 
     @Test
     fun `getMeetingDetails maps attendees with memberName and status`() {
         val g = group(1L)
         val m = meeting(10L, g)
-        val att = member(2L, "영희", "이", grp = g)
+        val att = member(2L, "길동", "홍", grp = g)
         val attendance = MeetingAttendance(meeting = m, member = att, status = "PRESENT", prayerRequest = "기도요청")
-        `when`(meetingRepo.findById(10L)).thenReturn(Optional.of(m))
+        `when`(meetingRepo.findByPublicId(m.publicId)).thenReturn(Optional.of(m))
         `when`(attendanceRepo.findAllByMeetingId(10L)).thenReturn(listOf(attendance))
 
-        val detail = groupMeetingService.getMeetingDetails(10L, att.publicId.toString(), true)
+        val detail = groupMeetingService.getMeetingDetails(m.publicId, subject, true)
 
         assertEquals(1, detail.attendees.size)
         with(detail.attendees[0]) {
-            assertEquals("이 영희", memberName)
+            assertEquals("홍 길동", memberName)
             assertEquals(att.publicId.toString(), memberId)
             assertEquals("PRESENT", status)
             assertEquals("기도요청", prayerRequest)
@@ -254,24 +301,23 @@ class GroupMeetingServiceTest {
     // --- getMeetings ---
 
     @Test
-    fun `getMeetings returns all meetings ordered by time for admin`() {
+    fun `getMeetings returns all meetings for admin`() {
         val g = group(1L)
-        val meetings = listOf(meeting(1L, g), meeting(2L, g))
-        `when`(meetingRepo.findAllByOrderByMeetingTimeDesc()).thenReturn(meetings)
+        `when`(meetingRepo.findAllByOrderByMeetingTimeDesc()).thenReturn(listOf(meeting(1L, g), meeting(2L, g)))
 
-        val result = groupMeetingService.getMeetings("any-id", true)
+        val result = groupMeetingService.getMeetings(subject, true)
 
         assertEquals(2, result.size)
+        verifyNoInteractions(currentMember)
     }
 
     @Test
-    fun `getMeetings returns only own group meetings for non-admin`() {
+    fun `getMeetings returns only the caller's group for non-admin`() {
         val g = group(1L, "다니엘조")
-        val requester = member(2L, grp = g)
-        `when`(memberRepo.findByPublicId(any<UUID>())).thenReturn(Optional.of(requester))
+        `when`(currentMember.require(subject)).thenReturn(member(2L, grp = g))
         `when`(meetingRepo.findAllByGroupIdOrderByMeetingTimeDesc(1L)).thenReturn(listOf(meeting(1L, g)))
 
-        val result = groupMeetingService.getMeetings(requester.publicId.toString(), false)
+        val result = groupMeetingService.getMeetings(subject, false)
 
         assertEquals(1, result.size)
         assertEquals("다니엘조", result[0].groupName)
@@ -279,11 +325,8 @@ class GroupMeetingServiceTest {
 
     @Test
     fun `getMeetings returns empty list when non-admin has no group`() {
-        val requester = member(2L, grp = null)
-        `when`(memberRepo.findByPublicId(any<UUID>())).thenReturn(Optional.of(requester))
+        `when`(currentMember.require(subject)).thenReturn(member(2L, grp = null))
 
-        val result = groupMeetingService.getMeetings(requester.publicId.toString(), false)
-
-        assertTrue(result.isEmpty())
+        assertTrue(groupMeetingService.getMeetings(subject, false).isEmpty())
     }
 }

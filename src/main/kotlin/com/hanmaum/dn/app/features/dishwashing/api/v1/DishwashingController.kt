@@ -5,6 +5,7 @@ import com.hanmaum.dn.app.features.dishwashing.api.v1.dto.DishwashingDayDto
 import com.hanmaum.dn.app.features.dishwashing.service.DishwashingService
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.HttpStatus
+import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
@@ -26,6 +27,7 @@ class DishwashingController(
 
     // Für Admin (Erstellen / Überschreiben für einen Tag)
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     @ResponseStatus(HttpStatus.CREATED)
     fun createSchedule(
         @RequestBody req: CreateDishwashingRequest,
@@ -35,6 +37,7 @@ class DishwashingController(
 
     // Für Admin (Löschen)
     @DeleteMapping
+    @PreAuthorize("hasRole('ADMIN')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun deleteSchedule(
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) date: LocalDate,

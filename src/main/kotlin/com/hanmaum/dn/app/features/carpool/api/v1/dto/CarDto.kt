@@ -3,10 +3,11 @@ package com.hanmaum.dn.app.features.carpool.api.v1.dto
 import com.fasterxml.jackson.annotation.JsonProperty
 import java.time.LocalDate
 import java.time.LocalTime
+import java.util.UUID
 
 // Was die App anzeigt
 data class CarDto(
-    val id: Long,
+    val publicId: UUID,
     val driverName: String, // Vorname + Nachname
     val carName: String?,
     val maxSeats: Int,
@@ -20,9 +21,9 @@ data class CarDto(
     val isJoinedByMe: Boolean, // True, wenn der User, der anfragt, hier drin sitzt
 )
 
-// Auto erstellen (Admin oder Fahrer)
+// Auto erstellen. Fahrer ist der Aufrufer; nur ein Admin darf einen anderen Fahrer setzen.
 data class CreateCarRequest(
-    val driverMemberId: String, // Wir nutzen hier die PUBLIC_ID (UUID) des Fahrers!
+    val driverMemberId: UUID? = null,
     val sessionDate: LocalDate,
     val name: String?,
     val maxSeats: Int,

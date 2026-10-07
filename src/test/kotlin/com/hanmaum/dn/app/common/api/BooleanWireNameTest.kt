@@ -130,7 +130,7 @@ class BooleanWireNameTest {
 
     private fun carDto() =
         CarDto(
-            id = 1L,
+            publicId = java.util.UUID.randomUUID(),
             driverName = "김철수",
             carName = null,
             maxSeats = 4,

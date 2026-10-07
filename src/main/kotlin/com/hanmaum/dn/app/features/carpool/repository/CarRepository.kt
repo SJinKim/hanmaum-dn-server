@@ -6,11 +6,14 @@ import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.stereotype.Repository
 import java.time.LocalDate
 import java.util.Optional
+import java.util.UUID
 
 @Repository
 interface CarRepository : JpaRepository<Car, Long> {
     // Finde alle Autos für ein bestimmtes Datum (z.B. nächsten Sonntag)
     fun findAllBySessionDate(date: LocalDate): List<Car>
+
+    fun findByPublicId(publicId: UUID): Optional<Car>
 }
 
 @Repository
