@@ -3,6 +3,7 @@ package com.hanmaum.dn.app.common.config
 import com.hanmaum.dn.app.common.api.ApiErrorCode
 import com.hanmaum.dn.app.common.api.ErrorResponse
 import com.hanmaum.dn.app.common.security.securityProblemDetail
+import com.hanmaum.dn.app.features.attendance.service.AttendanceWindowOverlapException
 import com.hanmaum.dn.app.features.courseapplication.service.CourseApplicationException
 import com.hanmaum.dn.app.features.members.service.MemberProfileNotFoundException
 import com.hanmaum.dn.app.features.newcomers.service.NewcomerException
@@ -84,6 +85,23 @@ class GlobalExceptionHandler {
                 fieldErrors = e.fieldErrors,
             )
         return ResponseEntity(response, e.status)
+    }
+
+    /** 409 with the window it collided with, so the dashboard can name it next to the times. */
+    @ExceptionHandler(AttendanceWindowOverlapException::class)
+    fun handleAttendanceWindowOverlap(e: AttendanceWindowOverlapException): ResponseEntity<ErrorResponse> {
+        logger.warn("Attendance window rejected: overlaps definition {}", e.conflicting.publicId)
+        val status = HttpStatus.CONFLICT
+        val response =
+            ErrorResponse(
+                status = status.value(),
+                error = status.reasonPhrase,
+                message = e.message ?: status.reasonPhrase,
+                code = ApiErrorCode.ATTENDANCE_WINDOW_OVERLAP,
+                fieldErrors = e.fieldErrors,
+                conflictingDefinition = e.conflicting,
+            )
+        return ResponseEntity(response, status)
     }
 
     @ExceptionHandler(MethodArgumentNotValidException::class)

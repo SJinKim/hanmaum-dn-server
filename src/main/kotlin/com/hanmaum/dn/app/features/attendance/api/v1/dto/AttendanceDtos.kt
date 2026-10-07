@@ -25,6 +25,18 @@ data class DefinitionDto(
 )
 
 /**
+ * The active definition a new or changed check-in window overlaps, carried in
+ * ErrorResponse.conflictingDefinition with code ATTENDANCE_WINDOW_OVERLAP.
+ */
+data class ConflictingDefinitionDto(
+    val publicId: String,
+    val title: String,
+    val dayOfWeek: DayOfWeek,
+    val windowStart: LocalTime,
+    val windowEnd: LocalTime,
+)
+
+/**
  * Optional body for POST /attendance/check-in. Omitting it entirely is equivalent to
  * sending one without a position.
  *

@@ -31,8 +31,12 @@ interface AttendanceDefinitionRepository : JpaRepository<AttendanceDefinition, L
         @Param("activeOnly") activeOnly: Boolean,
     ): List<AttendanceDefinition>
 
-    /** Active definitions for a given day of week — used during check-in window lookup. */
-    fun findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNull(dayOfWeek: DayOfWeek): List<AttendanceDefinition>
+    /**
+     * Active definitions for a given day of week, earliest window first — used by the check-in
+     * lookup and the overlap check. The order makes check-in deterministic should two windows
+     * ever overlap after all, e.g. rows written before the overlap check existed.
+     */
+    fun findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(dayOfWeek: DayOfWeek): List<AttendanceDefinition>
 }
 
 @Repository
