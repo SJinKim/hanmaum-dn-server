@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.common.api
 
+import com.hanmaum.dn.app.features.attendance.api.v1.dto.ConflictingDefinitionDto
 import java.time.OffsetDateTime
 import java.time.ZoneId
 
@@ -19,4 +20,9 @@ data class ErrorResponse(
      * fields — e.g. {"email": "올바른 이메일 주소여야 합니다."}. Null otherwise.
      */
     val fieldErrors: Map<String, String>? = null,
+    /**
+     * The attendance definition a rejected window collided with. Set only together with
+     * [ApiErrorCode.ATTENDANCE_WINDOW_OVERLAP]; null otherwise.
+     */
+    val conflictingDefinition: ConflictingDefinitionDto? = null,
 )

@@ -7,9 +7,12 @@ import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceCheckInReques
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceCheckInResponse
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceGroupCountsResponse
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.ChurchGroupAttendanceCountResponse
+import com.hanmaum.dn.app.features.attendance.api.v1.dto.ConflictingDefinitionDto
 import com.hanmaum.dn.app.features.attendance.service.AttendanceService
+import com.hanmaum.dn.app.features.attendance.service.AttendanceWindowOverlapException
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import org.mockito.Mockito.`when`
+import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.eq
 import org.springframework.beans.factory.annotation.Autowired
@@ -27,7 +30,9 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalTime
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertFalse
@@ -72,6 +77,39 @@ class AttendanceControllerTest {
             .andExpect(jsonPath("$.data.memberPublicId").doesNotExist())
             .andExpect(jsonPath("$.data.memberName").doesNotExist())
             .andExpect(jsonPath("$.data.createdAt").doesNotExist())
+    }
+
+    @Test
+    fun `POST definitions answers an overlapping window with 409 and the conflicting definition`() {
+        val conflictingId = UUID.randomUUID().toString()
+        `when`(attendanceService.createDefinition(any()))
+            .thenThrow(
+                AttendanceWindowOverlapException(
+                    ConflictingDefinitionDto(
+                        publicId = conflictingId,
+                        title = "1부 예배",
+                        dayOfWeek = DayOfWeek.SUNDAY,
+                        windowStart = LocalTime.of(10, 0),
+                        windowEnd = LocalTime.of(12, 0),
+                    ),
+                ),
+            )
+
+        mockMvc
+            .perform(
+                post("/api/v1/attendance/definitions")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """{"title":"2부 예배","dayOfWeek":"SUNDAY","windowStart":"11:30:00","windowEnd":"13:00:00"}""",
+                    ).with(jwt().authorities(SimpleGrantedAuthority("ROLE_ADMIN"))),
+            ).andExpect(status().isConflict)
+            .andExpect(jsonPath("$.code").value("ATTENDANCE_WINDOW_OVERLAP"))
+            .andExpect(jsonPath("$.fieldErrors.windowStart").exists())
+            .andExpect(jsonPath("$.fieldErrors.windowEnd").exists())
+            .andExpect(jsonPath("$.conflictingDefinition.publicId").value(conflictingId))
+            .andExpect(jsonPath("$.conflictingDefinition.title").value("1부 예배"))
+            .andExpect(jsonPath("$.conflictingDefinition.windowStart").value("10:00:00"))
+            .andExpect(jsonPath("$.conflictingDefinition.windowEnd").value("12:00:00"))
     }
 
     @Test

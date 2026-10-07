@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.attendance.api.v1
 
+import com.hanmaum.dn.app.common.api.ErrorResponse
 import com.hanmaum.dn.app.common.dto.ApiResponse
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceCheckInRequest
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceCheckInResponse
@@ -8,6 +9,8 @@ import com.hanmaum.dn.app.features.attendance.api.v1.dto.CreateDefinitionRequest
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.DefinitionDto
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.UpdateDefinitionRequest
 import com.hanmaum.dn.app.features.attendance.service.AttendanceService
+import io.swagger.v3.oas.annotations.media.Content
+import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.Valid
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.HttpStatus
@@ -38,6 +41,13 @@ class AttendanceController(
     @PostMapping("/definitions")
     @PreAuthorize("hasRole('ADMIN')")
     @OpenApiResponse(responseCode = "201", description = "Attendance definition created")
+    @OpenApiResponse(
+        responseCode = "409",
+        description =
+            "The window overlaps another active definition on the same day (code ATTENDANCE_WINDOW_OVERLAP); " +
+                "conflictingDefinition names it.",
+        content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+    )
     fun createDefinition(
         @Valid @RequestBody request: CreateDefinitionRequest,
     ): ResponseEntity<ApiResponse<DefinitionDto>> {
@@ -58,6 +68,14 @@ class AttendanceController(
 
     @PatchMapping("/definitions/{publicId}")
     @PreAuthorize("hasRole('ADMIN')")
+    @OpenApiResponse(responseCode = "200", description = "Attendance definition updated")
+    @OpenApiResponse(
+        responseCode = "409",
+        description =
+            "The window overlaps another active definition on the same day (code ATTENDANCE_WINDOW_OVERLAP); " +
+                "conflictingDefinition names it.",
+        content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+    )
     fun updateDefinition(
         @PathVariable publicId: UUID,
         @Valid @RequestBody request: UpdateDefinitionRequest,

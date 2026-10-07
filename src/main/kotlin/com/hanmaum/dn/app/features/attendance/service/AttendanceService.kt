@@ -5,6 +5,7 @@ import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceCheckInReques
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceCheckInResponse
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceGroupCountsResponse
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.ChurchGroupAttendanceCountResponse
+import com.hanmaum.dn.app.features.attendance.api.v1.dto.ConflictingDefinitionDto
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.CreateDefinitionRequest
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.DefinitionDto
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.UpdateDefinitionRequest
@@ -21,8 +22,10 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 import java.time.Clock
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.util.UUID
 
 @Service
@@ -42,6 +45,9 @@ class AttendanceService(
     fun createDefinition(req: CreateDefinitionRequest): DefinitionDto {
         if (!req.windowEnd.isAfter(req.windowStart)) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "종료 시간은 시작 시간 이후여야 합니다.")
+        }
+        if (req.isActive) {
+            requireNoOverlap(req.dayOfWeek, req.windowStart, req.windowEnd, excludeId = null)
         }
         val definition =
             AttendanceDefinition(
@@ -80,8 +86,40 @@ class AttendanceService(
         if (!effectiveEnd.isAfter(effectiveStart)) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "종료 시간은 시작 시간 이후여야 합니다.")
         }
+        // Covers reactivation too: isActive=true on an inactive row is checked like a new window.
+        if (definition.isActive) {
+            requireNoOverlap(definition.dayOfWeek, effectiveStart, effectiveEnd, excludeId = definition.id)
+        }
 
         return definition.toDto()
+    }
+
+    /**
+     * Rejects a window that shares any minute with another active window on [day]. Windows are
+     * half-open, `[start, end)`, so one ending at 11:00 and the next starting at 11:00 touch
+     * without overlapping.
+     */
+    private fun requireNoOverlap(
+        day: DayOfWeek,
+        start: LocalTime,
+        end: LocalTime,
+        excludeId: Long?,
+    ) {
+        val conflicting =
+            definitionRepo
+                .findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(day)
+                .firstOrNull { other ->
+                    other.id != excludeId && start.isBefore(other.windowEnd) && other.windowStart.isBefore(end)
+                } ?: return
+        throw AttendanceWindowOverlapException(
+            ConflictingDefinitionDto(
+                publicId = conflicting.publicId.toString(),
+                title = conflicting.title,
+                dayOfWeek = conflicting.dayOfWeek,
+                windowStart = conflicting.windowStart,
+                windowEnd = conflicting.windowEnd,
+            ),
+        )
     }
 
     @Transactional
@@ -109,7 +147,7 @@ class AttendanceService(
 
         val matchingDefinition =
             definitionRepo
-                .findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNull(currentDay)
+                .findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(currentDay)
                 .firstOrNull { def ->
                     !currentTime.isBefore(def.windowStart) && currentTime.isBefore(def.windowEnd)
                 } ?: throw ResponseStatusException(

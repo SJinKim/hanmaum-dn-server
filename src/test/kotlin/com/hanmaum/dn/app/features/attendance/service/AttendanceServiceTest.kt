@@ -211,6 +211,113 @@ class AttendanceServiceTest {
     }
 
     @Test
+    fun `createDefinition rejects a window overlapping an active one and names it`() {
+        val existing = makeDefinition(id = 2L, windowStart = LocalTime.of(10, 0), windowEnd = LocalTime.of(12, 0))
+        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
+            .thenReturn(listOf(existing))
+        val request =
+            CreateDefinitionRequest(
+                title = "2부 예배",
+                dayOfWeek = DayOfWeek.SUNDAY,
+                windowStart = LocalTime.of(11, 30),
+                windowEnd = LocalTime.of(13, 0),
+            )
+
+        val exception = assertThrows<AttendanceWindowOverlapException> { service.createDefinition(request) }
+
+        assertEquals(existing.publicId.toString(), exception.conflicting.publicId)
+        assertEquals("주일예배", exception.conflicting.title)
+        assertEquals(LocalTime.of(10, 0), exception.conflicting.windowStart)
+        assertEquals(LocalTime.of(12, 0), exception.conflicting.windowEnd)
+        assertEquals(setOf("windowStart", "windowEnd"), exception.fieldErrors.keys)
+        verify(definitionRepo, never()).save(any())
+    }
+
+    @Test
+    fun `createDefinition accepts a window that only touches the previous one`() {
+        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
+            .thenReturn(listOf(makeDefinition(id = 2L, windowStart = LocalTime.of(10, 0), windowEnd = LocalTime.of(12, 0))))
+        `when`(definitionRepo.save(any())).thenAnswer { it.arguments[0] }
+        val request =
+            CreateDefinitionRequest(
+                title = "2부 예배",
+                dayOfWeek = DayOfWeek.SUNDAY,
+                windowStart = LocalTime.of(12, 0),
+                windowEnd = LocalTime.of(13, 0),
+            )
+
+        val result = service.createDefinition(request)
+
+        assertEquals(LocalTime.of(12, 0), result.windowStart)
+        verify(definitionRepo).save(any())
+    }
+
+    @Test
+    fun `createDefinition skips the overlap check for an inactive definition`() {
+        `when`(definitionRepo.save(any())).thenAnswer { it.arguments[0] }
+        val request =
+            CreateDefinitionRequest(
+                title = "보류된 예배",
+                dayOfWeek = DayOfWeek.SUNDAY,
+                windowStart = LocalTime.of(10, 30),
+                windowEnd = LocalTime.of(11, 30),
+                isActive = false,
+            )
+
+        service.createDefinition(request)
+
+        verify(definitionRepo, never()).findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(any())
+    }
+
+    @Test
+    fun `updateDefinition does not collide with the definition being edited`() {
+        val definition = makeDefinition(id = 1L)
+        `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(definition.publicId))
+            .thenReturn(Optional.of(definition))
+        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
+            .thenReturn(listOf(definition))
+
+        val result =
+            service.updateDefinition(definition.publicId, UpdateDefinitionRequest(windowEnd = LocalTime.of(12, 30)))
+
+        assertEquals(LocalTime.of(12, 30), result.windowEnd)
+    }
+
+    @Test
+    fun `updateDefinition rejects moving a window into another one`() {
+        val definition = makeDefinition(id = 1L, windowStart = LocalTime.of(8, 0), windowEnd = LocalTime.of(9, 0))
+        val other = makeDefinition(id = 2L, windowStart = LocalTime.of(10, 0), windowEnd = LocalTime.of(12, 0))
+        `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(definition.publicId))
+            .thenReturn(Optional.of(definition))
+        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
+            .thenReturn(listOf(definition, other))
+
+        val exception =
+            assertThrows<AttendanceWindowOverlapException> {
+                service.updateDefinition(definition.publicId, UpdateDefinitionRequest(windowEnd = LocalTime.of(10, 30)))
+            }
+
+        assertEquals(other.publicId.toString(), exception.conflicting.publicId)
+    }
+
+    @Test
+    fun `updateDefinition rejects reactivating a window that overlaps an active one`() {
+        val definition = makeDefinition(id = 1L, windowStart = LocalTime.of(11, 0), windowEnd = LocalTime.of(13, 0), isActive = false)
+        val other = makeDefinition(id = 2L, windowStart = LocalTime.of(10, 0), windowEnd = LocalTime.of(12, 0))
+        `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(definition.publicId))
+            .thenReturn(Optional.of(definition))
+        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
+            .thenReturn(listOf(other))
+
+        val exception =
+            assertThrows<AttendanceWindowOverlapException> {
+                service.updateDefinition(definition.publicId, UpdateDefinitionRequest(isActive = true))
+            }
+
+        assertEquals(other.publicId.toString(), exception.conflicting.publicId)
+    }
+
+    @Test
     fun `deactivateDefinition keeps history addressable and marks definition inactive`() {
         val definition = makeDefinition()
         `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(definition.publicId))
@@ -228,7 +335,7 @@ class AttendanceServiceTest {
         val member = makeMember(group = group)
         val definition = makeDefinition()
         `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
-        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNull(DayOfWeek.SUNDAY))
+        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
             .thenReturn(listOf(definition))
         `when`(
             logRepo.insertIfAbsent(
@@ -258,11 +365,27 @@ class AttendanceServiceTest {
     }
 
     @Test
+    fun `checkIn picks the earliest window when two overlap`() {
+        val member = makeMember()
+        val early = makeDefinition(id = 1L, windowStart = LocalTime.of(10, 0), windowEnd = LocalTime.of(11, 0))
+        val late = makeDefinition(id = 2L, windowStart = LocalTime.of(10, 15), windowEnd = LocalTime.of(12, 0))
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
+        // The repository orders by windowStart; rows from before the overlap check can still overlap.
+        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
+            .thenReturn(listOf(early, late))
+        `when`(logRepo.insertIfAbsent(any(), any(), any(), anyOrNull(), any(), any())).thenReturn(1)
+
+        val result = service.checkIn("kc-001")
+
+        assertEquals(early.publicId.toString(), result.definitionPublicId)
+    }
+
+    @Test
     fun `checkIn stores and returns the verdict the geofence service produced`() {
         val member = makeMember()
         val definition = makeDefinition()
         `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
-        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNull(DayOfWeek.SUNDAY))
+        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
             .thenReturn(listOf(definition))
         `when`(churchGeofenceService.evaluate(eq(50.128), eq(8.584), eq(12.0)))
             .thenReturn(CheckInPresence.IN_PLACE)
@@ -290,7 +413,7 @@ class AttendanceServiceTest {
         val member = makeMember()
         val definition = makeDefinition()
         `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
-        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNull(DayOfWeek.SUNDAY))
+        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
             .thenReturn(listOf(definition))
         `when`(churchGeofenceService.evaluate(anyOrNull(), anyOrNull(), anyOrNull()))
             .thenReturn(CheckInPresence.UNCONFIRMED)
@@ -308,7 +431,7 @@ class AttendanceServiceTest {
         val member = makeMember()
         val definition = makeDefinition()
         `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
-        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNull(DayOfWeek.SUNDAY))
+        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
             .thenReturn(listOf(definition))
         `when`(logRepo.insertIfAbsent(any(), eq(1L), eq(1L), eq(null), eq(attendanceDate), any())).thenReturn(1)
 
@@ -322,7 +445,7 @@ class AttendanceServiceTest {
         val member = makeMember()
         val definition = makeDefinition()
         `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
-        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNull(DayOfWeek.SUNDAY))
+        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
             .thenReturn(listOf(definition))
         `when`(logRepo.insertIfAbsent(any(), eq(1L), eq(1L), eq(null), eq(attendanceDate), any())).thenReturn(0)
 
@@ -336,7 +459,7 @@ class AttendanceServiceTest {
         val member = makeMember()
         val definition = makeDefinition(windowStart = LocalTime.of(12, 0), windowEnd = LocalTime.of(13, 0))
         `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
-        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNull(DayOfWeek.SUNDAY))
+        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
             .thenReturn(listOf(definition))
 
         val exception = assertThrows<ResponseStatusException> { service.checkIn("kc-001") }

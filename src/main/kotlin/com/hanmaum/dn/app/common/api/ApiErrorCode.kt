@@ -47,4 +47,14 @@ enum class ApiErrorCode {
 
     /** The application belongs to a training the caller has already completed. */
     COURSE_APPLICATION_NOT_CANCELLABLE,
+
+    /**
+     * An attendance definition's check-in window overlaps another active one on the same day.
+     *
+     * Check-in picks a single window, so two windows that share a minute would leave the
+     * later one unreachable for that stretch. fieldErrors names windowStart and windowEnd,
+     * and conflictingDefinition names the window it collided with, so the admin can move
+     * one of the two. Windows that merely touch (one ends when the next starts) are fine.
+     */
+    ATTENDANCE_WINDOW_OVERLAP,
 }
