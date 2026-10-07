@@ -7,46 +7,36 @@ import com.hanmaum.dn.app.features.carpool.domain.CarPassenger
 import com.hanmaum.dn.app.features.carpool.repository.CarPassengerRepository
 import com.hanmaum.dn.app.features.carpool.repository.CarRepository
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.members.service.CurrentMemberResolver
 import jakarta.persistence.EntityNotFoundException
+import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.server.ResponseStatusException
 import java.time.LocalDate
 import java.util.UUID
 
+/**
+ * Every write acts for the caller, who comes from the JWT (#286). The member used to be a
+ * request parameter, so anyone signed in could join, leave or drive as someone else.
+ */
 @Service
 class CarpoolService(
     private val carRepository: CarRepository,
     private val passengerRepository: CarPassengerRepository,
     private val memberRepository: MemberRepository,
+    private val currentMember: CurrentMemberResolver,
 ) {
-    // 1. Liste holen (mit Info: Sitze ich drin?)
     @Transactional(readOnly = true)
     fun getCarsForDate(
         date: LocalDate,
-        currentMemberPublicId: String?,
+        callerSubject: String,
     ): List<CarDto> {
-        val cars = carRepository.findAllBySessionDate(date)
+        val callerId = currentMember.require(callerSubject).id!!
 
-        // Wir brauchen die interne ID des Users, um zu prüfen, ob er mitfährt
-        val currentMemberId =
-            currentMemberPublicId?.let {
-                memberRepository
-                    .findByPublicId(UUID.fromString(it))
-                    .orElse(null)
-                    ?.id
-            }
-
-        return cars.map { car ->
-            // Prüfen ob User Passagier ist (könnte man performanter lösen, reicht aber für MVP)
-            val isJoined =
-                if (currentMemberId != null) {
-                    passengerRepository.findByCarIdAndMemberId(car.id!!, currentMemberId).isPresent
-                } else {
-                    false
-                }
-
+        return carRepository.findAllBySessionDate(date).map { car ->
             CarDto(
-                id = car.id!!,
+                publicId = car.publicId,
                 driverName = "${car.driver.firstName} ${car.driver.lastName}",
                 carName = car.name,
                 maxSeats = car.maxSeats,
@@ -54,18 +44,31 @@ class CarpoolService(
                 departureLocation = car.departureLocation,
                 departureTime = car.departureTime,
                 isFull = car.currentPassengers >= car.maxSeats,
-                isJoinedByMe = isJoined,
+                isJoinedByMe = passengerRepository.findByCarIdAndMemberId(car.id!!, callerId).isPresent,
             )
         }
     }
 
-    // 2. Auto erstellen
+    /** The caller drives unless an admin names someone else. */
     @Transactional
-    fun createCar(req: CreateCarRequest): Long {
+    fun createCar(
+        req: CreateCarRequest,
+        callerSubject: String,
+        isAdmin: Boolean,
+    ): UUID {
+        val caller = currentMember.require(callerSubject)
         val driver =
-            memberRepository
-                .findByPublicId(UUID.fromString(req.driverMemberId))
-                .orElseThrow { EntityNotFoundException("Driver not found") }
+            when (val requested = req.driverMemberId) {
+                null, caller.publicId -> caller
+                else -> {
+                    if (!isAdmin) {
+                        throw ResponseStatusException(HttpStatus.FORBIDDEN, "Only an admin may set another driver.")
+                    }
+                    memberRepository
+                        .findByPublicId(requested)
+                        .orElseThrow { EntityNotFoundException("Driver not found") }
+                }
+            }
 
         val car =
             Car(
@@ -76,26 +79,17 @@ class CarpoolService(
                 departureLocation = req.departureLocation,
                 departureTime = req.departureTime,
             )
-        return carRepository.save(car).id!!
+        return carRepository.save(car).publicId
     }
 
-    // 3. Einsteigen (Join)
     @Transactional
     fun joinCar(
-        carId: Long,
-        memberPublicId: String,
+        carPublicId: UUID,
+        callerSubject: String,
     ) {
-        val car =
-            carRepository
-                .findById(carId)
-                .orElseThrow { EntityNotFoundException("Car not found") }
+        val car = findCar(carPublicId)
+        val member = currentMember.require(callerSubject)
 
-        val member =
-            memberRepository
-                .findByPublicId(UUID.fromString(memberPublicId))
-                .orElseThrow { EntityNotFoundException("Member not found") }
-
-        // Validierungen
         if (car.currentPassengers >= car.maxSeats) {
             throw IllegalStateException("Car is full")
         }
@@ -103,37 +97,31 @@ class CarpoolService(
             throw IllegalStateException("You are already in a car for this date")
         }
 
-        // Passagier speichern
         passengerRepository.save(CarPassenger(car = car, member = member))
-
-        // Counter erhöhen
         car.currentPassengers += 1
         carRepository.save(car)
     }
 
-    // 4. Aussteigen (Leave)
     @Transactional
     fun leaveCar(
-        carId: Long,
-        memberPublicId: String,
+        carPublicId: UUID,
+        callerSubject: String,
     ) {
-        val member =
-            memberRepository
-                .findByPublicId(UUID.fromString(memberPublicId))
-                .orElseThrow { EntityNotFoundException("Member not found") }
+        val car = findCar(carPublicId)
+        val member = currentMember.require(callerSubject)
 
         val passengerEntry =
             passengerRepository
-                .findByCarIdAndMemberId(carId, member.id!!)
+                .findByCarIdAndMemberId(car.id!!, member.id!!)
                 .orElseThrow { EntityNotFoundException("You are not in this car") }
 
-        val car = passengerEntry.car
-
-        // Löschen
         passengerRepository.delete(passengerEntry)
-
-        // Counter verringern
         car.currentPassengers -= 1
         carRepository.save(car)
     }
+
+    private fun findCar(publicId: UUID): Car =
+        carRepository
+            .findByPublicId(publicId)
+            .orElseThrow { EntityNotFoundException("Car not found") }
 }

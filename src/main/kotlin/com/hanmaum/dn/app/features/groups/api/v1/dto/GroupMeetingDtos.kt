@@ -2,11 +2,12 @@ package com.hanmaum.dn.app.features.groups.api.v1.dto
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import java.time.OffsetDateTime
+import java.util.UUID
 
 // --- RESPONSE (Anzeige) ---
 // Übersicht für die Liste
 data class GroupMeetingDto(
-    val id: Long,
+    val publicId: UUID,
     val groupName: String,
     val meetingTime: OffsetDateTime,
     val location: String,
@@ -16,7 +17,7 @@ data class GroupMeetingDto(
 
 // Detailansicht (Nur für eigene Gruppe oder Pastor!)
 data class MeetingDetailDto(
-    val id: Long,
+    val publicId: UUID,
     val groupName: String,
     val meetingTime: OffsetDateTime,
     val location: String,
@@ -35,7 +36,7 @@ data class AttendanceEntryDto(
 
 // Admin: Erstellt das Treffen (Ort & Zeit)
 data class CreateMeetingRequest(
-    val groupId: Long,
+    val groupId: UUID, // Public UUID der Gruppe
     val meetingTime: OffsetDateTime,
     val location: String,
     val description: String = "순모임",
