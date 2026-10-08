@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.bulletin.service
 
 import com.hanmaum.dn.app.common.pii.PiiCryptoConfiguration
+import com.hanmaum.dn.app.features.bulletin.api.v1.dto.UpdateBulletinRequest
 import com.hanmaum.dn.app.features.bulletin.domain.BulletinAnnouncement
 import com.hanmaum.dn.app.features.bulletin.domain.BulletinSharingBlock
 import com.hanmaum.dn.app.features.bulletin.domain.BulletinSharingBlockType
@@ -64,6 +65,13 @@ class BulletinEditionServiceIT {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     fun `two editions published at the same moment get two consecutive VOLs`() {
         val drafts = listOf(sunday, sunday.plusWeeks(1)).map { service.createDraft(it, null, null, "kc-001") }
+        drafts.forEach {
+            service.update(
+                it.publicId,
+                UpdateBulletinRequest(version = it.version, sermonTitle = "주일 말씀", sermonPreacher = "홍길동", songs = listOf("찬양 A")),
+                "kc-001",
+            )
+        }
         val ready = CountDownLatch(2)
         val start = CountDownLatch(1)
         val executor = Executors.newFixedThreadPool(2)
@@ -92,6 +100,7 @@ class BulletinEditionServiceIT {
     fun `a copied draft holds the source's lists in order as rows of its own`() {
         val source = service.createDraft(sunday, null, null, "kc-001")
         source.sermonTitle = "주일 말씀"
+        source.sermonPreacher = "홍길동"
         source.songs.addAll(listOf("찬양 A", "찬양 B", "찬양 C"))
         source.announcements.addAll(listOf(BulletinAnnouncement("소식 1"), BulletinAnnouncement("소식 2", "본문")))
         source.sharingBlocks.add(BulletinSharingBlock(BulletinSharingBlockType.SCRIPTURE, "말씀", "요 3:16"))

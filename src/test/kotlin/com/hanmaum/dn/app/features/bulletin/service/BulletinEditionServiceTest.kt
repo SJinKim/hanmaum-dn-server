@@ -1,5 +1,8 @@
 package com.hanmaum.dn.app.features.bulletin.service
 
+import com.hanmaum.dn.app.features.bulletin.api.v1.dto.BulletinAnnouncementDto
+import com.hanmaum.dn.app.features.bulletin.api.v1.dto.BulletinSharingBlockDto
+import com.hanmaum.dn.app.features.bulletin.api.v1.dto.UpdateBulletinRequest
 import com.hanmaum.dn.app.features.bulletin.domain.BulletinAnnouncement
 import com.hanmaum.dn.app.features.bulletin.domain.BulletinEdition
 import com.hanmaum.dn.app.features.bulletin.domain.BulletinService
@@ -7,6 +10,7 @@ import com.hanmaum.dn.app.features.bulletin.domain.BulletinSharingBlock
 import com.hanmaum.dn.app.features.bulletin.domain.BulletinSharingBlockType
 import com.hanmaum.dn.app.features.bulletin.domain.BulletinStatus
 import com.hanmaum.dn.app.features.bulletin.repository.BulletinEditionRepository
+import com.hanmaum.dn.app.features.bulletin.repository.BulletinSectionTitleRepository
 import com.hanmaum.dn.app.features.bulletin.repository.BulletinServiceRepository
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -20,6 +24,7 @@ import org.mockito.kotlin.verify
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.orm.ObjectOptimisticLockingFailureException
 import org.springframework.web.server.ResponseStatusException
 import java.time.Clock
 import java.time.Instant
@@ -36,6 +41,8 @@ class BulletinEditionServiceTest {
 
     @Mock private lateinit var services: BulletinServiceRepository
 
+    @Mock private lateinit var sectionTitles: BulletinSectionTitleRepository
+
     @Mock private lateinit var jdbcTemplate: JdbcTemplate
 
     private val service3 = BulletinService(name = "3부 예배", startTime = LocalTime.of(13, 30), sortOrder = 3, isBulletinDefault = true)
@@ -49,7 +56,7 @@ class BulletinEditionServiceTest {
     private fun serviceAt(
         clock: Clock = tuesday,
         volumeOffset: Int = 0,
-    ) = BulletinEditionService(editions, services, jdbcTemplate, clock, volumeOffset)
+    ) = BulletinEditionService(editions, services, sectionTitles, jdbcTemplate, clock, volumeOffset)
 
     private fun edition(
         date: LocalDate,
@@ -59,6 +66,14 @@ class BulletinEditionServiceTest {
         it.status = status
         it.volume = volume
     }
+
+    /** The fields publishing requires. */
+    private fun BulletinEdition.complete() =
+        apply {
+            sermonTitle = "주일 말씀"
+            sermonPreacher = "홍길동"
+            songs.add("찬양 A")
+        }
 
     private fun stubSave() {
         `when`(editions.saveAndFlush(any<BulletinEdition>())).thenAnswer { it.arguments[0] }
@@ -190,7 +205,7 @@ class BulletinEditionServiceTest {
 
     @Test
     fun `first publish takes max VOL plus one under the advisory lock`() {
-        val draft = edition(LocalDate.of(2026, 10, 11))
+        val draft = edition(LocalDate.of(2026, 10, 11)).complete()
         `when`(editions.findByPublicIdAndDeletedAtIsNull(draft.publicId)).thenReturn(draft)
         `when`(editions.findMaxVolume()).thenReturn(41)
         stubSave()
@@ -205,7 +220,7 @@ class BulletinEditionServiceTest {
 
     @Test
     fun `the very first VOL starts after the configured offset`() {
-        val draft = edition(LocalDate.of(2026, 10, 11))
+        val draft = edition(LocalDate.of(2026, 10, 11)).complete()
         `when`(editions.findByPublicIdAndDeletedAtIsNull(draft.publicId)).thenReturn(draft)
         `when`(editions.findMaxVolume()).thenReturn(null)
         stubSave()
@@ -217,7 +232,7 @@ class BulletinEditionServiceTest {
 
     @Test
     fun `withdraw keeps the VOL and a republish neither changes nor recounts it`() {
-        val published = edition(LocalDate.of(2026, 10, 11), BulletinStatus.PUBLISHED, volume = 42)
+        val published = edition(LocalDate.of(2026, 10, 11), BulletinStatus.PUBLISHED, volume = 42).complete()
         `when`(editions.findByPublicIdAndDeletedAtIsNull(published.publicId)).thenReturn(published)
         stubSave()
 
@@ -241,6 +256,114 @@ class BulletinEditionServiceTest {
 
         assertEquals(HttpStatus.CONFLICT, assertThrows<ResponseStatusException> { serviceAt().publish(published.publicId, "x") }.statusCode)
         assertEquals(HttpStatus.CONFLICT, assertThrows<ResponseStatusException> { serviceAt().withdraw(draft.publicId, "x") }.statusCode)
+    }
+
+    @Test
+    fun `an incomplete edition is a 422 naming every missing field and takes no VOL`() {
+        val draft = edition(LocalDate.of(2026, 10, 11)).apply { sermonTitle = "주일 말씀" }
+        `when`(editions.findByPublicIdAndDeletedAtIsNull(draft.publicId)).thenReturn(draft)
+
+        val e = assertThrows<BulletinIncompleteException> { serviceAt().publish(draft.publicId, "kc-001") }
+
+        assertEquals(setOf("sermonPreacher", "songs"), e.fieldErrors.keys)
+        assertEquals(BulletinStatus.DRAFT, draft.status)
+        assertNull(draft.volume)
+        verify(editions, never()).findMaxVolume()
+        verify(editions, never()).saveAndFlush(any<BulletinEdition>())
+    }
+
+    // ─── update ─────────────────────────────────────────────────────────────
+
+    private fun request(
+        version: Long = 0,
+        sharingBlocks: List<BulletinSharingBlockDto> = emptyList(),
+    ) = UpdateBulletinRequest(
+        version = version,
+        sermonTitle = "  주일 말씀 ",
+        sermonPreacher = " ",
+        songs = listOf(" 찬양 B ", "찬양 C"),
+        announcements = listOf(BulletinAnnouncementDto(" 소식 ", " ")),
+        sharingBlocks = sharingBlocks,
+    )
+
+    @Test
+    fun `update replaces content and lists, trimming text and turning blanks into null`() {
+        val draft =
+            edition(LocalDate.of(2026, 10, 11)).complete().apply {
+                openingPrayerBy = "Max Mustermann"
+                announcements.add(BulletinAnnouncement("옛 소식"))
+            }
+        `when`(editions.findByPublicIdAndDeletedAtIsNull(draft.publicId)).thenReturn(draft)
+        `when`(sectionTitles.findAll()).thenReturn(emptyList())
+        stubSave()
+
+        val view = serviceAt().update(draft.publicId, request(), "kc-002")
+
+        assertEquals("주일 말씀", draft.sermonTitle)
+        assertNull(draft.sermonPreacher)
+        assertNull(draft.openingPrayerBy)
+        assertEquals(listOf("찬양 B", "찬양 C"), draft.songs)
+        assertEquals(listOf("소식" to null), draft.announcements.map { it.title to it.body })
+        assertEquals("kc-002", draft.updatedBy)
+        assertEquals(listOf("찬양 B", "찬양 C"), view.songs)
+    }
+
+    @Test
+    fun `update with a stale version is an optimistic lock failure`() {
+        val draft = edition(LocalDate.of(2026, 10, 11)).apply { version = 3 }
+        `when`(editions.findByPublicIdAndDeletedAtIsNull(draft.publicId)).thenReturn(draft)
+
+        assertThrows<ObjectOptimisticLockingFailureException> { serviceAt().update(draft.publicId, request(version = 2), "kc-001") }
+        verify(editions, never()).saveAndFlush(any<BulletinEdition>())
+    }
+
+    @Test
+    fun `a published edition must be withdrawn before it can be edited`() {
+        val published = edition(LocalDate.of(2026, 10, 11), BulletinStatus.PUBLISHED, volume = 1)
+        `when`(editions.findByPublicIdAndDeletedAtIsNull(published.publicId)).thenReturn(published)
+
+        val e = assertThrows<ResponseStatusException> { serviceAt().update(published.publicId, request(), "kc-001") }
+        assertEquals(HttpStatus.CONFLICT, e.statusCode)
+    }
+
+    @Test
+    fun `a reference on anything but a SCRIPTURE block is a 400`() {
+        val draft = edition(LocalDate.of(2026, 10, 11))
+        `when`(editions.findByPublicIdAndDeletedAtIsNull(draft.publicId)).thenReturn(draft)
+        val blocks =
+            listOf(
+                BulletinSharingBlockDto(
+                    BulletinSharingBlockType.entries.first { it != BulletinSharingBlockType.SCRIPTURE },
+                    "본문",
+                    "요 3:16",
+                ),
+            )
+
+        val e = assertThrows<ResponseStatusException> { serviceAt().update(draft.publicId, request(sharingBlocks = blocks), "kc-001") }
+        assertEquals(HttpStatus.BAD_REQUEST, e.statusCode)
+    }
+
+    // ─── delete ─────────────────────────────────────────────────────────────
+
+    @Test
+    fun `a never published draft is soft-deleted`() {
+        val draft = edition(LocalDate.of(2026, 10, 11))
+        `when`(editions.findByPublicIdAndDeletedAtIsNull(draft.publicId)).thenReturn(draft)
+
+        serviceAt().delete(draft.publicId)
+
+        assertEquals(tuesday.instant(), draft.deletedAt)
+        verify(editions).save(draft)
+    }
+
+    @Test
+    fun `anything that ever had a VOL cannot be deleted`() {
+        val withdrawn = edition(LocalDate.of(2026, 10, 11), BulletinStatus.WITHDRAWN, volume = 5)
+        `when`(editions.findByPublicIdAndDeletedAtIsNull(withdrawn.publicId)).thenReturn(withdrawn)
+
+        val e = assertThrows<ResponseStatusException> { serviceAt().delete(withdrawn.publicId) }
+        assertEquals(HttpStatus.CONFLICT, e.statusCode)
+        assertNull(withdrawn.deletedAt)
     }
 
     // ─── current edition ────────────────────────────────────────────────────
