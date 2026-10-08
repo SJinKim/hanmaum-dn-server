@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.context.annotation.Import
+import org.springframework.http.MediaType
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt
@@ -20,6 +21,7 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.util.UUID
 import kotlin.test.Test
@@ -92,5 +94,25 @@ class BulletinControllersTest {
     fun `a member sees 404 while nothing is published`() {
         `when`(editions.currentView()).thenReturn(null)
         mockMvc.perform(get("/api/v1/bulletins/current").with(withRole(null))).andExpect(status().isNotFound)
+    }
+
+    private fun saveSongs(vararg songs: String) =
+        mockMvc.perform(
+            put("/api/v1/admin/bulletins/$editionId")
+                .with(withRole("ADMIN"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"version":0,"songs":[${songs.joinToString(",") { "\"$it\"" }}]}"""),
+        )
+
+    @Test
+    fun `a blank or too long song is rejected before the service`() {
+        saveSongs("   ").andExpect(status().isBadRequest)
+        saveSongs("가".repeat(201)).andExpect(status().isBadRequest)
+        verifyNoInteractions(editions)
+    }
+
+    @Test
+    fun `a song of 200 characters passes`() {
+        saveSongs("가".repeat(200)).andExpect(status().isOk)
     }
 }

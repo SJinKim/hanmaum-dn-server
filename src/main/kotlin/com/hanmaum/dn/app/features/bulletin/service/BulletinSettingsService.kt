@@ -34,6 +34,7 @@ class BulletinSettingsService(
         request: BulletinServiceRequest,
         by: String,
     ): BulletinServiceResponse {
+        requireActiveIfDefault(request)
         if (request.isBulletinDefault) clearDefault()
         val service =
             BulletinService(
@@ -62,9 +63,7 @@ class BulletinSettingsService(
         if (service.isBulletinDefault && !request.isBulletinDefault) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "Mark another service as default instead")
         }
-        if (service.isBulletinDefault && !request.active) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "The default service cannot be deactivated")
-        }
+        requireActiveIfDefault(request)
         if (request.isBulletinDefault && !service.isBulletinDefault) clearDefault()
 
         service.name = request.name.trim()
@@ -132,4 +131,11 @@ class BulletinSettingsService(
     private fun findService(publicId: UUID): BulletinService =
         services.findByPublicIdAndDeletedAtIsNull(publicId)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Service not found")
+
+    /** Checks the requested state, not the stored one, so promoting an inactive service fails too. */
+    private fun requireActiveIfDefault(request: BulletinServiceRequest) {
+        if (request.isBulletinDefault && !request.active) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "The default service cannot be deactivated")
+        }
+    }
 }

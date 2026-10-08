@@ -139,4 +139,29 @@ class BulletinSettingsServiceTest {
 
         verify(services, never()).findByIsBulletinDefaultTrueAndDeletedAtIsNull()
     }
+
+    @Test
+    fun `a new service cannot start as an inactive default`() {
+        val e = assertThrows<ResponseStatusException> { settings.createService(request(isDefault = true, active = false), "kc-001") }
+
+        assertEquals(HttpStatus.CONFLICT, e.statusCode)
+        verify(services, never()).findByIsBulletinDefaultTrueAndDeletedAtIsNull()
+        verify(services, never()).saveAndFlush(any<BulletinService>())
+    }
+
+    @Test
+    fun `an inactive service cannot be promoted to default`() {
+        val target = service("2부 예배")
+        `when`(services.findByPublicIdAndDeletedAtIsNull(target.publicId)).thenReturn(target)
+
+        val e =
+            assertThrows<ResponseStatusException> {
+                settings.updateService(target.publicId, request(isDefault = true, active = false), "kc-001")
+            }
+
+        assertEquals(HttpStatus.CONFLICT, e.statusCode)
+        assertFalse(target.isBulletinDefault)
+        verify(services, never()).findByIsBulletinDefaultTrueAndDeletedAtIsNull()
+        verify(services, never()).saveAndFlush(any<BulletinService>())
+    }
 }
