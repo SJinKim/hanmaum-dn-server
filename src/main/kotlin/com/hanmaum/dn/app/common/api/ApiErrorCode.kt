@@ -57,4 +57,12 @@ enum class ApiErrorCode {
      * one of the two. Windows that merely touch (one ends when the next starts) are fine.
      */
     ATTENDANCE_WINDOW_OVERLAP,
+
+    /**
+     * A 주보 is missing a field it needs before it can be published.
+     *
+     * fieldErrors names each one (sermonTitle, sermonPreacher, songs), so the editor can mark
+     * them. The draft itself is unchanged and can still be saved as it is.
+     */
+    BULLETIN_INCOMPLETE,
 }

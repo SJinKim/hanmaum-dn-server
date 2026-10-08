@@ -1,7 +1,10 @@
 package com.hanmaum.dn.app.features.bulletin.repository
 
 import com.hanmaum.dn.app.features.bulletin.domain.BulletinEdition
+import com.hanmaum.dn.app.features.bulletin.domain.BulletinService
 import com.hanmaum.dn.app.features.bulletin.domain.BulletinStatus
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import java.time.LocalDate
@@ -30,4 +33,19 @@ interface BulletinEditionRepository : JpaRepository<BulletinEdition, Long> {
         status: BulletinStatus,
         serviceDate: LocalDate,
     ): BulletinEdition?
+
+    fun findAllByDeletedAtIsNull(pageable: Pageable): Page<BulletinEdition>
+
+    fun findAllByStatusAndDeletedAtIsNull(
+        status: BulletinStatus,
+        pageable: Pageable,
+    ): Page<BulletinEdition>
+
+    fun findByServiceDateAndStatusAndDeletedAtIsNull(
+        serviceDate: LocalDate,
+        status: BulletinStatus,
+    ): BulletinEdition?
+
+    /** Deleted editions included: their rows still point at the service. */
+    fun existsByService(service: BulletinService): Boolean
 }

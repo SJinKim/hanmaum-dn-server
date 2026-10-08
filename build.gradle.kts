@@ -88,7 +88,12 @@ dependencies {
 
 kotlin {
     compilerOptions {
-        freeCompilerArgs.addAll("-Xjsr305=strict", "-Xannotation-default-target=param-property")
+        freeCompilerArgs.addAll(
+            "-Xjsr305=strict",
+            "-Xannotation-default-target=param-property",
+            // Without it, constraints on list elements (List<@NotBlank String>) never reach the validator.
+            "-Xemit-jvm-type-annotations",
+        )
     }
 }
 

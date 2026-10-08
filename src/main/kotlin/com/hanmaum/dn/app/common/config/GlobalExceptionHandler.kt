@@ -4,6 +4,7 @@ import com.hanmaum.dn.app.common.api.ApiErrorCode
 import com.hanmaum.dn.app.common.api.ErrorResponse
 import com.hanmaum.dn.app.common.security.securityProblemDetail
 import com.hanmaum.dn.app.features.attendance.service.AttendanceWindowOverlapException
+import com.hanmaum.dn.app.features.bulletin.service.BulletinIncompleteException
 import com.hanmaum.dn.app.features.courseapplication.service.CourseApplicationException
 import com.hanmaum.dn.app.features.members.service.MemberProfileNotFoundException
 import com.hanmaum.dn.app.features.newcomers.service.NewcomerException
@@ -13,6 +14,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
+import org.springframework.orm.ObjectOptimisticLockingFailureException
 import org.springframework.security.authorization.AuthorizationDeniedException
 import org.springframework.web.HttpRequestMethodNotSupportedException
 import org.springframework.web.bind.MethodArgumentNotValidException
@@ -100,6 +102,36 @@ class GlobalExceptionHandler {
                 code = ApiErrorCode.ATTENDANCE_WINDOW_OVERLAP,
                 fieldErrors = e.fieldErrors,
                 conflictingDefinition = e.conflicting,
+            )
+        return ResponseEntity(response, status)
+    }
+
+    /** 422 naming the fields a 주보 still lacks before it can be published. */
+    @ExceptionHandler(BulletinIncompleteException::class)
+    fun handleBulletinIncomplete(e: BulletinIncompleteException): ResponseEntity<ErrorResponse> {
+        logger.warn("Bulletin publish rejected: fields={}", e.fieldErrors.keys)
+        val status = HttpStatus.UNPROCESSABLE_CONTENT
+        val response =
+            ErrorResponse(
+                status = status.value(),
+                error = status.reasonPhrase,
+                message = e.message ?: status.reasonPhrase,
+                code = ApiErrorCode.BULLETIN_INCOMPLETE,
+                fieldErrors = e.fieldErrors,
+            )
+        return ResponseEntity(response, status)
+    }
+
+    /** Someone else saved the same row first; the client reloads and tries again. */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException::class)
+    fun handleOptimisticLock(e: ObjectOptimisticLockingFailureException): ResponseEntity<ErrorResponse> {
+        logger.warn("Concurrent update rejected: entity={}", e.persistentClassName)
+        val status = HttpStatus.CONFLICT
+        val response =
+            ErrorResponse(
+                status = status.value(),
+                error = status.reasonPhrase,
+                message = "다른 사용자가 먼저 수정했습니다. 새로고침 후 다시 시도해 주세요.",
             )
         return ResponseEntity(response, status)
     }
