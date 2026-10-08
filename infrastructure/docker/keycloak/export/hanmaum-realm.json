@@ -2142,7 +2142,8 @@
   "internationalizationEnabled": true,
   "supportedLocales": [
     "ko",
-    "en"
+    "en",
+    "de"
   ],
   "defaultLocale": "ko",
   "loginTheme": "hanmaum",

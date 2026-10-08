@@ -113,14 +113,17 @@ use the theme `hanmaum` (#243). Its design is the Figma file DN-Web. The files l
 host, so theme files travel with either one. The mount itself only exists once the container
 was created from a compose file that has it (see the section above).
 
-- Realm settings: `loginTheme=hanmaum`, internationalization on, locales `ko` and `en`,
+- Realm settings: `loginTheme=hanmaum`, internationalization on, locales `ko`, `en`, and `de`,
   default `ko`, and `resetPasswordAllowed=true` for the 비밀번호 찾기 link. The reset mail
   needs the realm's SMTP settings. The local export has them; `configure-realm.sh` sets them elsewhere.
 - The script checks that Keycloak actually offers the theme before it points a realm at it.
   If the mount is missing it reports that and changes nothing, because a realm with an
   unknown theme shows broken login pages.
-- The app's own login form (password grant) does not render any Keycloak page, so the
-  theme does not affect it.
+- The mobile app uses a native PKCE browser session (mobile #268/#198). It passes
+  its selected language as `ui_locales`; login and password reset use this theme.
+  Reset confirmations are deliberately conditional on a matching account existing.
+  Deploy the theme and apply `configure-realm.sh` in ST before device verification;
+  adding message files alone does not enable German in a running realm.
 - Theme files are cached by Keycloak. After changing them, restart the container:
   `docker restart hanmaumApp-keycloak`.
 - Mails still use the default email theme. A branded email theme is a separate issue.
