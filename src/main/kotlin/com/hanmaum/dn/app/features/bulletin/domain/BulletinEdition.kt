@@ -42,7 +42,7 @@ class BulletinEdition(
     @Column(name = "volume", unique = true)
     var volume: Int? = null
 
-    // ─── Snapshot of the service, taken on publish ───────────────────────────
+    // ─── Snapshot of the service, taken when the edition is created ──────────
     @Column(name = "service_name", length = 50)
     var serviceName: String? = null
 
@@ -110,4 +110,54 @@ class BulletinEdition(
     @CollectionTable(name = "bulletin_sharing_block", joinColumns = [JoinColumn(name = "edition_id")])
     @OrderColumn(name = "position")
     val sharingBlocks: MutableList<BulletinSharingBlock> = mutableListOf()
+
+    /** Stores the service's name and start as they are now; later edits to the service don't reach this edition. */
+    fun snapshotService() {
+        serviceName = service.name
+        serviceStartTime = service.startTime
+    }
+
+    /**
+     * Takes over every content field and list of [source], lists in their order. Date, status,
+     * VOL, service and audit fields stay this edition's own (HDN-290).
+     */
+    fun copyContentFrom(source: BulletinEdition) {
+        openingPrayerBy = source.openingPrayerBy
+        offeringSongBy = source.offeringSongBy
+        scriptureReference = source.scriptureReference
+        sermonTitle = source.sermonTitle
+        sermonPreacher = source.sermonPreacher
+        responsePrayerBy = source.responsePrayerBy
+        responseSong = source.responseSong
+        songs.clear()
+        songs.addAll(source.songs)
+        announcements.clear()
+        announcements.addAll(source.announcements.map { BulletinAnnouncement(it.title, it.body) })
+        sharingBlocks.clear()
+        sharingBlocks.addAll(source.sharingBlocks.map { BulletinSharingBlock(it.type, it.text, it.reference) })
+    }
+
+    /** [assignedVolume] is used only on the first publish; a republished edition keeps its VOL. */
+    fun publish(
+        assignedVolume: Int,
+        now: Instant,
+        by: String,
+    ) {
+        check(status != BulletinStatus.PUBLISHED) { "Edition is already published" }
+        if (volume == null) volume = assignedVolume
+        status = BulletinStatus.PUBLISHED
+        publishedAt = now
+        withdrawnAt = null
+        updatedBy = by
+    }
+
+    fun withdraw(
+        now: Instant,
+        by: String,
+    ) {
+        check(status == BulletinStatus.PUBLISHED) { "Only a published edition can be withdrawn" }
+        status = BulletinStatus.WITHDRAWN
+        withdrawnAt = now
+        updatedBy = by
+    }
 }
