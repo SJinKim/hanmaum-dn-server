@@ -18,33 +18,48 @@ import org.springframework.web.server.ResponseStatusException
 import java.time.LocalDate
 import io.swagger.v3.oas.annotations.responses.ApiResponse as OpenApiResponse
 
-/** Published 주보 for members (HDN-146). Drafts and withdrawn editions never show here. */
+/** Visible published 주보 for members; Sunday editions open Friday in Europe/Berlin. */
 @RestController
 @RequestMapping("/bulletins")
 @PreAuthorize("isAuthenticated()")
 class BulletinController(
     private val service: BulletinEditionService,
 ) {
-    /** This week's edition; 404 is the normal empty state before anything is published. */
+    /** Latest visible edition; 404 is the normal empty state when none is available. */
     @GetMapping("/current")
-    @Operation(operationId = "getCurrentBulletin")
+    @Operation(
+        operationId = "getCurrentBulletin",
+        description =
+            "Latest published edition with serviceDate <= today in Europe/Berlin plus 2 calendar days. " +
+                "Sunday editions open Friday at 00:00; older editions remain available.",
+    )
     @OpenApiResponse(responseCode = "200", description = "The current published edition")
-    @OpenApiResponse(responseCode = "404", description = "Nothing published yet")
+    @OpenApiResponse(responseCode = "404", description = "No published edition within the visibility window")
     fun current(): ResponseEntity<ApiResponse<BulletinEditionResponse>> {
         val edition = service.currentView() ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "No bulletin published")
         return ResponseEntity.ok(ApiResponse.success(edition))
     }
 
     @GetMapping
-    @Operation(operationId = "getBulletinByDate")
-    @OpenApiResponse(responseCode = "404", description = "No published edition for that Sunday")
+    @Operation(
+        operationId = "getBulletinByDate",
+        description =
+            "Published edition for a Sunday within today in Europe/Berlin plus 2 calendar days. " +
+                "Later Sundays are hidden even when already published.",
+    )
+    @OpenApiResponse(responseCode = "404", description = "No visible published edition for that Sunday")
     fun byDate(
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) date: LocalDate,
     ): ResponseEntity<ApiResponse<BulletinEditionResponse>> = ResponseEntity.ok(ApiResponse.success(service.publishedView(date)))
 
-    /** Published editions, newest first. */
+    /** Visible published editions, newest first. */
     @GetMapping("/history")
-    @Operation(operationId = "listBulletinHistory")
+    @Operation(
+        operationId = "listBulletinHistory",
+        description =
+            "Published editions with serviceDate <= today in Europe/Berlin plus 2 calendar days, newest first. " +
+                "The visibility filter applies before pagination and totals.",
+    )
     fun history(
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int,

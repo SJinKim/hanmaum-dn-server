@@ -9,6 +9,10 @@
 ## Lessons
 <!-- Claude appends here after each correction -->
 
+### Publication does not imply immediate member visibility
+- **Mistake**: The current bulletin opened before Friday, while history and direct date access exposed all published future Sundays.
+- **Rule**: A Sunday bulletin becomes member-visible only on Friday at 00:00 Europe/Berlin (`serviceDate <= Berlin today + 2 calendar days`). Apply the same cutoff to current, direct and history reads, filtering in the database before pagination/counting. Admin publication is independent; test every member path and the midnight boundary.
+
 ### Confirm where an application appears before choosing a new table
 - **Mistake**: Assumed ministry self-applications needed a separate table while the intended team workflow shows new applicants directly as `PENDING` rows in the existing 팀원 table.
 - **Rule**: For a new approval flow, confirm the operator's working list and reuse its existing membership record and status model when the pending application belongs there; add only the fields needed for the application and decision.
