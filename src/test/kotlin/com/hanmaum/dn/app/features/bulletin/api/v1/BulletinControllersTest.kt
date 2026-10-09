@@ -1,6 +1,8 @@
 package com.hanmaum.dn.app.features.bulletin.api.v1
 
 import com.hanmaum.dn.app.common.config.SecurityConfig
+import com.hanmaum.dn.app.features.bulletin.api.v1.dto.BulletinEditionSummary
+import com.hanmaum.dn.app.features.bulletin.domain.BulletinStatus
 import com.hanmaum.dn.app.features.bulletin.service.BulletinEditionService
 import com.hanmaum.dn.app.features.bulletin.service.BulletinSettingsService
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
@@ -11,6 +13,9 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.context.annotation.Import
+import org.springframework.data.domain.PageImpl
+import org.springframework.data.domain.PageRequest
+import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.oauth2.jwt.JwtDecoder
@@ -22,7 +27,10 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delet
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import org.springframework.web.server.ResponseStatusException
+import java.time.LocalDate
 import java.util.UUID
 import kotlin.test.Test
 
@@ -94,6 +102,31 @@ class BulletinControllersTest {
     fun `a member sees 404 while nothing is published`() {
         `when`(editions.currentView()).thenReturn(null)
         mockMvc.perform(get("/api/v1/bulletins/current").with(withRole(null))).andExpect(status().isNotFound)
+    }
+
+    @Test
+    fun `a member receives 404 when the service hides a future Sunday`() {
+        val future = LocalDate.of(2026, 10, 18)
+        `when`(editions.publishedView(future)).thenThrow(ResponseStatusException(HttpStatus.NOT_FOUND, "Bulletin edition not found"))
+        mockMvc
+            .perform(get("/api/v1/bulletins").param("date", future.toString()).with(withRole(null)))
+            .andExpect(status().isNotFound)
+        verify(editions).publishedView(future)
+    }
+
+    @Test
+    fun `history forwards pagination and serializes the filtered page metadata`() {
+        val row = BulletinEditionSummary(editionId, LocalDate.of(2026, 10, 4), 41, BulletinStatus.PUBLISHED, "Previous", "3부 예배", null)
+        `when`(editions.history(2, 1)).thenReturn(PageImpl(listOf(row), PageRequest.of(2, 1), 3))
+        mockMvc
+            .perform(get("/api/v1/bulletins/history").param("page", "2").param("size", "1").with(withRole(null)))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.content[0].publicId").value(editionId.toString()))
+            .andExpect(jsonPath("$.data.content[0].serviceDate").value("2026-10-04"))
+            .andExpect(jsonPath("$.data.totalElements").value(3))
+            .andExpect(jsonPath("$.data.totalPages").value(3))
+            .andExpect(jsonPath("$.data.last").value(true))
+        verify(editions).history(2, 1)
     }
 
     private fun saveSongs(vararg songs: String) =

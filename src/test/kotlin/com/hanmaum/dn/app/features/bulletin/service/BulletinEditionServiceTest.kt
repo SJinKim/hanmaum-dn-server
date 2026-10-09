@@ -21,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
+import org.mockito.kotlin.verifyNoInteractions
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
@@ -370,28 +371,61 @@ class BulletinEditionServiceTest {
 
     private fun currentLooksUpTo(
         clock: Clock,
-        comingSunday: LocalDate,
+        visibleThrough: LocalDate,
     ) {
         serviceAt(clock).currentEdition()
         verify(editions).findFirstByStatusAndServiceDateLessThanEqualAndDeletedAtIsNullOrderByServiceDateDesc(
             BulletinStatus.PUBLISHED,
-            comingSunday,
+            visibleThrough,
         )
     }
 
     @Test
     fun `on the Saturday after publishing the current edition is tomorrow's`() {
-        currentLooksUpTo(at("2026-10-10T16:00:00Z"), LocalDate.of(2026, 10, 11))
+        currentLooksUpTo(at("2026-10-10T16:00:00Z"), LocalDate.of(2026, 10, 12))
     }
 
     @Test
     fun `on the Sunday itself the current edition is today's`() {
-        currentLooksUpTo(at("2026-10-11T20:00:00Z"), LocalDate.of(2026, 10, 11))
+        currentLooksUpTo(at("2026-10-11T20:00:00Z"), LocalDate.of(2026, 10, 13))
     }
 
     @Test
-    fun `on the Monday after the lookup reaches to the next Sunday and falls back to the latest published`() {
-        currentLooksUpTo(at("2026-10-12T06:00:00Z"), LocalDate.of(2026, 10, 18))
+    fun `on Monday the next Sunday is still hidden`() {
+        currentLooksUpTo(at("2026-10-12T06:00:00Z"), LocalDate.of(2026, 10, 14))
+    }
+
+    @Test
+    fun `the coming Sunday stays hidden until Friday midnight in Berlin`() {
+        currentLooksUpTo(at("2026-10-08T21:59:59Z"), LocalDate.of(2026, 10, 10))
+        currentLooksUpTo(at("2026-10-08T22:00:00Z"), LocalDate.of(2026, 10, 11))
+    }
+
+    @Test
+    fun `Friday visibility uses calendar days across both daylight saving changes`() {
+        currentLooksUpTo(at("2026-03-26T23:00:00Z"), LocalDate.of(2026, 3, 29))
+        currentLooksUpTo(at("2026-10-22T22:00:00Z"), LocalDate.of(2026, 10, 25))
+    }
+
+    @Test
+    fun `direct access to a later Sunday is a 404 without looking up its content`() {
+        val service = serviceAt(at("2026-10-09T08:00:00Z"))
+        val e = assertThrows<ResponseStatusException> { service.publishedView(LocalDate.of(2026, 10, 18)) }
+        assertEquals(HttpStatus.NOT_FOUND, e.statusCode)
+        verifyNoInteractions(editions, sectionTitles)
+    }
+
+    @Test
+    fun `direct access to this Sunday is hidden Thursday but opens Friday`() {
+        val sunday = LocalDate.of(2026, 10, 11)
+        val e = assertThrows<ResponseStatusException> { serviceAt(at("2026-10-08T21:59:59Z")).publishedView(sunday) }
+        assertEquals(HttpStatus.NOT_FOUND, e.statusCode)
+        verifyNoInteractions(editions, sectionTitles)
+
+        `when`(editions.findByServiceDateAndStatusAndDeletedAtIsNull(sunday, BulletinStatus.PUBLISHED))
+            .thenReturn(edition(sunday, BulletinStatus.PUBLISHED))
+        `when`(sectionTitles.findAll()).thenReturn(emptyList())
+        assertEquals(sunday, serviceAt(at("2026-10-08T22:00:00Z")).publishedView(sunday).serviceDate)
     }
 
     @Test

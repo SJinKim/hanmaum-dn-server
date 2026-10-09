@@ -55,6 +55,9 @@ class BulletinEditionService(
 
     private fun comingSunday(): LocalDate = today().with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY))
 
+    /** A Sunday's edition opens to members on Friday at midnight in Berlin. */
+    private fun visibleThrough(): LocalDate = today().plusDays(MEMBER_VISIBILITY_LEAD_DAYS)
+
     /** The first Sunday from today on (today included) that has no edition yet. */
     @Transactional(readOnly = true)
     fun nextFreeSunday(): LocalDate {
@@ -135,14 +138,14 @@ class BulletinEditionService(
     }
 
     /**
-     * The edition members see: the published one with the latest date up to the coming Sunday.
+     * The edition members see: the latest published Sunday within the two-calendar-day window.
      * Null when nothing is published yet; the caller renders the empty state.
      */
     @Transactional(readOnly = true)
     fun currentEdition(): BulletinEdition? =
         editions.findFirstByStatusAndServiceDateLessThanEqualAndDeletedAtIsNullOrderByServiceDateDesc(
             BulletinStatus.PUBLISHED,
-            comingSunday(),
+            visibleThrough(),
         )
 
     // ─── HDN-146: admin ─────────────────────────────────────────────────────
@@ -228,24 +231,30 @@ class BulletinEditionService(
     @Transactional(readOnly = true)
     fun currentView(): BulletinEditionResponse? = currentEdition()?.let { BulletinEditionResponse.from(it, sectionTitleViews()) }
 
-    /** The published edition of [serviceDate]; drafts and withdrawn ones are a 404 for members. */
+    /** Future, draft and withdrawn editions are indistinguishable 404s for members. */
     @Transactional(readOnly = true)
     fun publishedView(serviceDate: LocalDate): BulletinEditionResponse {
+        if (serviceDate > visibleThrough()) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Bulletin edition not found")
+        }
         val edition =
             editions.findByServiceDateAndStatusAndDeletedAtIsNull(serviceDate, BulletinStatus.PUBLISHED)
                 ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Bulletin edition not found")
         return BulletinEditionResponse.from(edition, sectionTitleViews())
     }
 
-    /** Published editions, newest Sunday first. */
+    /** Visible published editions, newest Sunday first; filter before pagination and counting. */
     @Transactional(readOnly = true)
     fun history(
         page: Int,
         size: Int,
     ): Page<BulletinEditionSummary> =
         editions
-            .findAllByStatusAndDeletedAtIsNull(BulletinStatus.PUBLISHED, byDateDesc(page, size))
-            .map { BulletinEditionSummary.from(it) }
+            .findAllByStatusAndServiceDateLessThanEqualAndDeletedAtIsNull(
+                BulletinStatus.PUBLISHED,
+                visibleThrough(),
+                byDateDesc(page, size),
+            ).map { BulletinEditionSummary.from(it) }
 
     /** Field name to message for every required field [edition] lacks; empty when it can go out. */
     private fun missingForPublish(edition: BulletinEdition): Map<String, String> =
@@ -282,6 +291,9 @@ class BulletinEditionService(
 
     companion object {
         val BERLIN: ZoneId = ZoneId.of("Europe/Berlin")
+
+        /** Two calendar days before an edition's Sunday means Friday at 00:00 in Berlin. */
+        const val MEMBER_VISIBILITY_LEAD_DAYS = 2L
 
         /** Arbitrary but fixed; only VOL assignment takes this lock. */
         private const val VOLUME_LOCK_KEY = 290_001L

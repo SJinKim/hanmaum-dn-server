@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased] — 2026-03-30
 
 ### Fixed
+- HDN-296: Hide published future bulletins from every member endpoint until Friday before their Sunday (Europe/Berlin); preserve older editions and accurate history pagination.
 - HDN-172: Generate and sync OpenAPI safely from worktrees using a disposable database, dedicated port, and validated ops checkout.
 - HDN-202: Align newcomer import fingerprint column types with Hibernate's VARCHAR(64) mapping so schema validation can start the app.
 

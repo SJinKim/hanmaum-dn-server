@@ -41,6 +41,12 @@ interface BulletinEditionRepository : JpaRepository<BulletinEdition, Long> {
         pageable: Pageable,
     ): Page<BulletinEdition>
 
+    fun findAllByStatusAndServiceDateLessThanEqualAndDeletedAtIsNull(
+        status: BulletinStatus,
+        serviceDate: LocalDate,
+        pageable: Pageable,
+    ): Page<BulletinEdition>
+
     fun findByServiceDateAndStatusAndDeletedAtIsNull(
         serviceDate: LocalDate,
         status: BulletinStatus,
