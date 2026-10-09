@@ -21,6 +21,7 @@ import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.temporal.TemporalAdjusters
@@ -151,6 +152,25 @@ class BulletinRepositoryIT {
     fun `a second edition on the same Sunday is rejected`() {
         editions.saveAndFlush(newEdition())
         assertThrows<DataIntegrityViolationException> { editions.saveAndFlush(newEdition()) }
+    }
+
+    @Test
+    fun `deleted editions release their date but keep their VOL reserved`() {
+        val original =
+            editions.saveAndFlush(
+                newEdition().apply {
+                    deletedAt = Instant.now()
+                    volume = 9001
+                },
+            )
+        val replacement = editions.saveAndFlush(newEdition())
+        assertEquals(replacement, editions.findByServiceDateAndDeletedAtIsNull(sunday))
+        assertEquals(listOf(sunday), editions.findServiceDatesFrom(sunday))
+        assertEquals(9001, editions.findMaxVolume())
+        assertEquals(original, editions.findById(original.id!!).orElseThrow())
+        assertThrows<DataIntegrityViolationException> {
+            editions.saveAndFlush(newEdition(sunday.plusWeeks(1)).apply { volume = 9001 })
+        }
     }
 
     @Test

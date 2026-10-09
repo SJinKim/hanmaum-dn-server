@@ -121,7 +121,60 @@ class BulletinEditionServiceTest {
     fun `defaults pair the next free Sunday with the default service`() {
         `when`(editions.findServiceDatesFrom(any())).thenReturn(emptyList())
         `when`(services.findByIsBulletinDefaultTrueAndDeletedAtIsNull()).thenReturn(service3)
-        assertEquals(BulletinDefaults(LocalDate.of(2026, 10, 11), service3), serviceAt().defaults())
+        val defaults = serviceAt().defaults()
+        assertEquals(LocalDate.of(2026, 10, 11), defaults.serviceDate)
+        assertEquals(service3, defaults.service)
+        assertEquals(12, defaults.sundays.size)
+        assertEquals(LocalDate.of(2027, 1, 3), defaults.nextFrom)
+        assertNull(defaults.sundays.first().editionPublicId)
+    }
+
+    @Test
+    fun `Sunday options include existing editions and the next cursor without changing the suggestion`() {
+        val date = LocalDate.of(2026, 10, 11)
+        val draft = edition(date)
+        val published = edition(date.plusWeeks(1), BulletinStatus.PUBLISHED, 41)
+        `when`(services.findByIsBulletinDefaultTrueAndDeletedAtIsNull()).thenReturn(service3)
+        `when`(editions.findServiceDatesFrom(date)).thenReturn(listOf(date, date.plusWeeks(1)))
+        `when`(editions.findAllByServiceDateBetweenAndDeletedAtIsNull(date, date.plusWeeks(11))).thenReturn(listOf(draft, published))
+        val defaults = serviceAt().defaults()
+        assertEquals(date.plusWeeks(2), defaults.serviceDate)
+        assertEquals(draft.publicId, defaults.sundays[0].editionPublicId)
+        assertEquals(BulletinStatus.PUBLISHED, defaults.sundays[1].status)
+        assertNull(defaults.sundays[2].editionPublicId)
+
+        val later = serviceAt().defaults(defaults.nextFrom)
+        assertEquals(defaults.nextFrom, later.sundays.first().serviceDate)
+        assertEquals(defaults.serviceDate, later.serviceDate)
+        assertEquals(defaults.nextFrom.plusWeeks(12), later.nextFrom)
+    }
+
+    @Test
+    fun `past or non-Sunday cursors cannot reintroduce past dates into the picker`() {
+        for (date in listOf(LocalDate.of(2026, 10, 4), LocalDate.of(2026, 10, 12))) {
+            val error = assertThrows<ResponseStatusException> { serviceAt().defaults(date) }
+            assertEquals(HttpStatus.BAD_REQUEST, error.statusCode)
+        }
+    }
+
+    @Test
+    fun `an explicit past Sunday is rejected before saving`() {
+        val error = assertThrows<ResponseStatusException> { serviceAt().createDraft(LocalDate.of(2026, 10, 4), null, null, "kc-001") }
+        assertEquals(HttpStatus.BAD_REQUEST, error.statusCode)
+        verify(editions, never()).saveAndFlush(any<BulletinEdition>())
+    }
+
+    @Test
+    fun `a Sunday is allowed until midnight Berlin and rejected after midnight even when UTC is still Sunday`() {
+        val date = LocalDate.of(2026, 10, 11)
+        `when`(services.findByIsBulletinDefaultTrueAndDeletedAtIsNull()).thenReturn(service3)
+        stubSave()
+        assertEquals(date, serviceAt(at("2026-10-11T21:59:00Z")).createDraft(date, null, null, "kc-001").serviceDate)
+        val error =
+            assertThrows<ResponseStatusException> {
+                serviceAt(at("2026-10-11T22:00:00Z")).createDraft(date, null, null, "kc-001")
+            }
+        assertEquals(HttpStatus.BAD_REQUEST, error.statusCode)
     }
 
     // ─── create ─────────────────────────────────────────────────────────────
@@ -150,7 +203,7 @@ class BulletinEditionServiceTest {
 
     @Test
     fun `a second bulletin for the same Sunday is rejected with 409`() {
-        `when`(editions.existsByServiceDate(LocalDate.of(2026, 10, 11))).thenReturn(true)
+        `when`(editions.existsByServiceDateAndDeletedAtIsNull(LocalDate.of(2026, 10, 11))).thenReturn(true)
         val e = assertThrows<ResponseStatusException> { serviceAt().createDraft(LocalDate.of(2026, 10, 11), null, null, "kc-001") }
         assertEquals(HttpStatus.CONFLICT, e.statusCode)
     }

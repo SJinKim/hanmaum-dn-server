@@ -15,14 +15,16 @@ interface BulletinEditionRepository : JpaRepository<BulletinEdition, Long> {
 
     fun findByServiceDateAndDeletedAtIsNull(serviceDate: LocalDate): BulletinEdition?
 
-    /**
-     * Deleted rows included: the unique constraint on service_date covers them too, so a
-     * Sunday with a deleted edition is not free.
-     */
-    fun existsByServiceDate(serviceDate: LocalDate): Boolean
+    /** Only non-deleted editions reserve their Sunday. */
+    fun existsByServiceDateAndDeletedAtIsNull(serviceDate: LocalDate): Boolean
 
-    /** Sundays from [from] on that already carry an edition, deleted ones included. */
-    @Query("select e.serviceDate from BulletinEdition e where e.serviceDate >= :from")
+    fun findAllByServiceDateBetweenAndDeletedAtIsNull(
+        from: LocalDate,
+        through: LocalDate,
+    ): List<BulletinEdition>
+
+    /** Sundays from [from] on that still carry an edition. */
+    @Query("select e.serviceDate from BulletinEdition e where e.serviceDate >= :from and e.deletedAt is null")
     fun findServiceDatesFrom(from: LocalDate): List<LocalDate>
 
     /** Highest VOL ever handed out, deleted rows included, so a number is never reused. */

@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.Valid
 import org.springframework.data.domain.Page
+import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
@@ -29,6 +30,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
+import java.time.LocalDate
 import java.util.UUID
 import io.swagger.v3.oas.annotations.responses.ApiResponse as OpenApiResponse
 
@@ -51,9 +53,17 @@ class BulletinAdminController(
     /** What a new draft would start with: the next free Sunday and the default service. */
     @GetMapping("/defaults")
     @Operation(operationId = "getBulletinDefaults")
-    fun defaults(): ResponseEntity<ApiResponse<BulletinDefaultsResponse>> {
-        val defaults = service.defaults()
-        val data = BulletinDefaultsResponse(defaults.serviceDate, BulletinServiceResponse.from(defaults.service))
+    fun defaults(
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate?,
+    ): ResponseEntity<ApiResponse<BulletinDefaultsResponse>> {
+        val defaults = service.defaults(from)
+        val data =
+            BulletinDefaultsResponse(
+                defaults.serviceDate,
+                BulletinServiceResponse.from(defaults.service),
+                defaults.sundays,
+                defaults.nextFrom,
+            )
         return ResponseEntity.ok(ApiResponse.success(data))
     }
 

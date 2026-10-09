@@ -3,6 +3,7 @@ package com.hanmaum.dn.app.features.bulletin.service
 import com.hanmaum.dn.app.features.bulletin.api.v1.dto.BulletinEditionResponse
 import com.hanmaum.dn.app.features.bulletin.api.v1.dto.BulletinEditionSummary
 import com.hanmaum.dn.app.features.bulletin.api.v1.dto.BulletinSectionTitleResponse
+import com.hanmaum.dn.app.features.bulletin.api.v1.dto.BulletinSundayOption
 import com.hanmaum.dn.app.features.bulletin.api.v1.dto.UpdateBulletinRequest
 import com.hanmaum.dn.app.features.bulletin.api.v1.dto.toEntity
 import com.hanmaum.dn.app.features.bulletin.domain.BulletinEdition
@@ -34,6 +35,8 @@ import java.util.UUID
 data class BulletinDefaults(
     val serviceDate: LocalDate,
     val service: BulletinService,
+    val sundays: List<BulletinSundayOption>,
+    val nextFrom: LocalDate,
 )
 
 /**
@@ -64,7 +67,21 @@ class BulletinEditionService(
     }
 
     @Transactional(readOnly = true)
-    fun defaults(): BulletinDefaults = BulletinDefaults(nextFreeSunday(), defaultService())
+    fun defaults(from: LocalDate? = null): BulletinDefaults {
+        val first = from ?: comingSunday()
+        if (first.dayOfWeek != DayOfWeek.SUNDAY || first.isBefore(comingSunday())) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "from must be a current or future Sunday")
+        }
+        val nextFrom = first.plusWeeks(SUNDAY_OPTION_COUNT.toLong())
+        val existing = editions.findAllByServiceDateBetweenAndDeletedAtIsNull(first, nextFrom.minusWeeks(1)).associateBy { it.serviceDate }
+        val sundays =
+            (0 until SUNDAY_OPTION_COUNT).map { week ->
+                val date = first.plusWeeks(week.toLong())
+                val edition = existing[date]
+                BulletinSundayOption(date, edition?.publicId, edition?.status)
+            }
+        return BulletinDefaults(nextFreeSunday(), defaultService(), sundays, nextFrom)
+    }
 
     /**
      * Creates a draft. Without [serviceDate] it lands on the next free Sunday, without
@@ -82,7 +99,10 @@ class BulletinEditionService(
         if (date.dayOfWeek != DayOfWeek.SUNDAY) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "serviceDate must be a Sunday")
         }
-        if (editions.existsByServiceDate(date)) throw sundayTaken()
+        if (date.isBefore(today())) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "serviceDate must not be in the past")
+        }
+        if (editions.existsByServiceDateAndDeletedAtIsNull(date)) throw sundayTaken()
 
         val service =
             servicePublicId?.let {
@@ -287,5 +307,7 @@ class BulletinEditionService(
         private const val VOLUME_LOCK_KEY = 290_001L
 
         private const val MAX_PAGE_SIZE = 100
+
+        private const val SUNDAY_OPTION_COUNT = 12
     }
 }

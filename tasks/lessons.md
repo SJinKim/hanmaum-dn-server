@@ -193,3 +193,7 @@
 ### Preserve exact dates across related assignment flows
 - **Mistake**: The ministry self-registration branch still rounded application and approval start dates to the first of the month while another branch fixed assignment dates to retain the day.
 - **Rule**: When a date semantics fix lands on main, search every related write path and assert the exact day in focused tests before resolving and merging dependent PRs.
+
+### Keep design authority and issue boards explicit across repositories
+- **Correction**: Figma is always the design source; server issues belong to DN Server, web issues to DN WebApp.
+- **Rule**: Before implementation, inspect previous issues, create and place each issue on its own repository's board (server Project #5, web Project #7), then update the existing Figma design before writing UI code. Local design documentation is a reference, never an override for Figma.

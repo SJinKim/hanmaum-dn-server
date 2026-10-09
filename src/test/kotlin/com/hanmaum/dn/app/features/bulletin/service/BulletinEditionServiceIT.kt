@@ -22,13 +22,16 @@ import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
 import java.time.Clock
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneOffset
 import java.time.temporal.TemporalAdjusters
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -41,7 +44,7 @@ import kotlin.test.assertTrue
 class BulletinEditionServiceIT {
     @TestConfiguration
     class ClockConfig {
-        @Bean fun clock(): Clock = Clock.systemUTC()
+        @Bean fun clock(): Clock = Clock.fixed(Instant.parse("2026-10-09T08:00:00Z"), ZoneOffset.UTC)
     }
 
     @Autowired private lateinit var service: BulletinEditionService
@@ -59,6 +62,44 @@ class BulletinEditionServiceIT {
     @AfterEach
     fun cleanUp() {
         jdbcTemplate.update("DELETE FROM bulletin_edition WHERE service_date >= ?", LocalDate.of(2099, 1, 1))
+    }
+
+    @Test
+    fun `deleted Sunday can be recreated repeatedly while the following Sunday remains taken`() {
+        val date = LocalDate.of(2026, 10, 11)
+        val first = service.createDraft(date, null, null, "kc-001")
+        val following = service.createDraft(date.plusWeeks(1), null, null, "kc-001")
+        service.delete(first.publicId)
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals(date, service.defaults().serviceDate)
+        assertNull(
+            service
+                .defaults()
+                .sundays
+                .first()
+                .editionPublicId,
+        )
+        val second = service.createDraft(null, null, null, "kc-001")
+        assertEquals(date, second.serviceDate)
+        assertNotEquals(first.publicId, second.publicId)
+        assertEquals(date.plusWeeks(2), service.nextFreeSunday())
+        service.delete(second.publicId)
+        entityManager.flush()
+        entityManager.clear()
+        val third = service.createDraft(date, null, null, "kc-001")
+        assertNotEquals(second.publicId, third.publicId)
+        assertEquals(following.publicId, service.defaults().sundays[1].editionPublicId)
+        assertEquals(3, jdbcTemplate.queryForObject("SELECT count(*) FROM bulletin_edition WHERE service_date = ?", Int::class.java, date))
+        assertEquals(
+            1,
+            jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM bulletin_edition WHERE service_date = ? AND deleted_at IS NULL",
+                Int::class.java,
+                date,
+            ),
+        )
     }
 
     @Test

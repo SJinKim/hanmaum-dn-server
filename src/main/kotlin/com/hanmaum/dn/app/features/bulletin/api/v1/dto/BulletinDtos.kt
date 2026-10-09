@@ -144,6 +144,15 @@ data class BulletinSectionTitleResponse(
 data class BulletinDefaultsResponse(
     val serviceDate: LocalDate,
     val service: BulletinServiceResponse,
+    val sundays: List<BulletinSundayOption>,
+    val nextFrom: LocalDate,
+)
+
+/** A selectable Sunday; an existing edition is opened instead of duplicated. */
+data class BulletinSundayOption(
+    val serviceDate: LocalDate,
+    val editionPublicId: UUID?,
+    val status: BulletinStatus?,
 )
 
 /** One row of the admin list. */
