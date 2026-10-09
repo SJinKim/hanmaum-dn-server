@@ -16,10 +16,12 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
+import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.server.ResponseStatusException
 import java.time.Clock
 import java.time.DayOfWeek
 import java.time.Instant
@@ -100,6 +102,44 @@ class BulletinEditionServiceIT {
                 date,
             ),
         )
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    fun `two admins racing for a Sunday create one draft and receive one date conflict`() {
+        val ready = CountDownLatch(2)
+        val start = CountDownLatch(1)
+        val executor = Executors.newFixedThreadPool(2)
+        try {
+            val results =
+                (1..2).map { admin ->
+                    executor.submit<Boolean> {
+                        ready.countDown()
+                        start.await(10, TimeUnit.SECONDS)
+                        try {
+                            service.createDraft(sunday, null, null, "kc-$admin")
+                            true
+                        } catch (error: ResponseStatusException) {
+                            assertEquals(HttpStatus.CONFLICT, error.statusCode)
+                            assertEquals("A bulletin for this Sunday already exists", error.reason)
+                            false
+                        }
+                    }
+                }
+            assertTrue(ready.await(10, TimeUnit.SECONDS))
+            start.countDown()
+            assertEquals(listOf(false, true), results.map { it.get(15, TimeUnit.SECONDS) }.sorted())
+            assertEquals(
+                1,
+                jdbcTemplate.queryForObject(
+                    "SELECT count(*) FROM bulletin_edition WHERE service_date = ? AND deleted_at IS NULL",
+                    Int::class.java,
+                    sunday,
+                ),
+            )
+        } finally {
+            executor.shutdownNow()
+        }
     }
 
     @Test

@@ -165,7 +165,7 @@ class BulletinRepositoryIT {
             )
         val replacement = editions.saveAndFlush(newEdition())
         assertEquals(replacement, editions.findByServiceDateAndDeletedAtIsNull(sunday))
-        assertEquals(listOf(sunday), editions.findServiceDatesFrom(sunday))
+        assertEquals(listOf(sunday), editions.findServiceDatesBetween(sunday, sunday.plusWeeks(11)))
         assertEquals(9001, editions.findMaxVolume())
         assertEquals(original, editions.findById(original.id!!).orElseThrow())
         assertThrows<DataIntegrityViolationException> {

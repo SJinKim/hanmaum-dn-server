@@ -127,6 +127,14 @@ class BulletinControllersTest {
         verifyNoInteractions(editions)
     }
 
+    @Test
+    fun `a malformed cursor is a 400 before reaching the service`() {
+        mockMvc
+            .perform(get("/api/v1/admin/bulletins/defaults").param("from", "not-a-date").with(withRole("ADMIN")))
+            .andExpect(status().isBadRequest)
+        verifyNoInteractions(editions)
+    }
+
     private fun saveSongs(vararg songs: String) =
         mockMvc.perform(
             put("/api/v1/admin/bulletins/$editionId")

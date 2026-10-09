@@ -9,6 +9,7 @@ import com.hanmaum.dn.app.features.bulletin.domain.BulletinService
 import com.hanmaum.dn.app.features.bulletin.domain.BulletinSharingBlock
 import com.hanmaum.dn.app.features.bulletin.domain.BulletinSharingBlockType
 import com.hanmaum.dn.app.features.bulletin.domain.BulletinStatus
+import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
@@ -24,6 +25,7 @@ import java.util.UUID
 
 /** Every field optional: the server fills in the next free Sunday and the default service. */
 data class CreateBulletinRequest(
+    @field:Schema(description = "Sunday on or after today in Europe/Berlin, up to year 9999. Omitted: global earliest free Sunday.")
     val serviceDate: LocalDate? = null,
     val servicePublicId: UUID? = null,
     /** Edition whose content the new draft takes over, usually last week's. */
@@ -142,9 +144,15 @@ data class BulletinSectionTitleResponse(
 
 /** What a new draft starts with: the next free Sunday and the default service. */
 data class BulletinDefaultsResponse(
+    @field:Schema(
+        description =
+            "Global earliest free Sunday from today in Europe/Berlin, even when outside the selection window. " +
+                "Paging does not change this suggestion.",
+    )
     val serviceDate: LocalDate,
     val service: BulletinServiceResponse,
     val sundays: List<BulletinSundayOption>,
+    @field:Schema(description = "Start of the next twelve-week selection window. A stale Sunday cursor advances to the coming Sunday.")
     val nextFrom: LocalDate,
 )
 

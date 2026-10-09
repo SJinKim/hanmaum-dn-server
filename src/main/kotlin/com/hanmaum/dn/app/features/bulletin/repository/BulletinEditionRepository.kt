@@ -23,9 +23,12 @@ interface BulletinEditionRepository : JpaRepository<BulletinEdition, Long> {
         through: LocalDate,
     ): List<BulletinEdition>
 
-    /** Sundays from [from] on that still carry an edition. */
-    @Query("select e.serviceDate from BulletinEdition e where e.serviceDate >= :from and e.deletedAt is null")
-    fun findServiceDatesFrom(from: LocalDate): List<LocalDate>
+    /** Only the bounded window needed for the next-free-Sunday search. */
+    @Query("select e.serviceDate from BulletinEdition e where e.serviceDate between :from and :through and e.deletedAt is null")
+    fun findServiceDatesBetween(
+        from: LocalDate,
+        through: LocalDate,
+    ): List<LocalDate>
 
     /** Highest VOL ever handed out, deleted rows included, so a number is never reused. */
     @Query("select max(e.volume) from BulletinEdition e")

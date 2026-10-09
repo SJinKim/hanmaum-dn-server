@@ -197,3 +197,7 @@
 ### Keep design authority and issue boards explicit across repositories
 - **Correction**: Figma is always the design source; server issues belong to DN Server, web issues to DN WebApp.
 - **Rule**: Before implementation, inspect previous issues, create and place each issue on its own repository's board (server Project #5, web Project #7), then update the existing Figma design before writing UI code. Local design documentation is a reference, never an override for Figma.
+
+### Classify persistence conflicts and bound public date cursors
+- **Correction**: A generic integrity failure was mislabeled as a taken Sunday, and cursor arithmetic accepted dates that could overflow.
+- **Rule**: Translate only the named constraint that identifies the domain conflict; rethrow unrelated integrity errors. Bound cursor arithmetic before adding periods, tolerate stale read cursors, and document whether pagination changes a global suggestion.

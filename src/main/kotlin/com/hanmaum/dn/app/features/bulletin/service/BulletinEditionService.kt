@@ -13,6 +13,7 @@ import com.hanmaum.dn.app.features.bulletin.domain.BulletinStatus
 import com.hanmaum.dn.app.features.bulletin.repository.BulletinEditionRepository
 import com.hanmaum.dn.app.features.bulletin.repository.BulletinSectionTitleRepository
 import com.hanmaum.dn.app.features.bulletin.repository.BulletinServiceRepository
+import org.hibernate.exception.ConstraintViolationException
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.data.domain.Page
@@ -60,18 +61,16 @@ class BulletinEditionService(
 
     /** The first Sunday from today on (today included) that has no edition yet. */
     @Transactional(readOnly = true)
-    fun nextFreeSunday(): LocalDate {
-        val from = comingSunday()
-        val taken = editions.findServiceDatesFrom(from).toSet()
-        return generateSequence(from) { it.plusWeeks(1) }.first { it !in taken }
-    }
+    fun nextFreeSunday(): LocalDate = firstFreeSunday(comingSunday())
 
     @Transactional(readOnly = true)
     fun defaults(from: LocalDate? = null): BulletinDefaults {
-        val first = from ?: comingSunday()
-        if (first.dayOfWeek != DayOfWeek.SUNDAY || first.isBefore(comingSunday())) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "from must be a current or future Sunday")
+        val coming = comingSunday()
+        if (from != null && (from.dayOfWeek != DayOfWeek.SUNDAY || from > MAX_CURSOR_DATE)) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "from must be a Sunday within the supported date range")
         }
+        // A cursor can age while a tab stays open. Never offer past Sundays when browsing.
+        val first = maxOf(from ?: coming, coming)
         val nextFrom = first.plusWeeks(SUNDAY_OPTION_COUNT.toLong())
         val existing = editions.findAllByServiceDateBetweenAndDeletedAtIsNull(first, nextFrom.minusWeeks(1)).associateBy { it.serviceDate }
         val sundays =
@@ -80,7 +79,28 @@ class BulletinEditionService(
                 val edition = existing[date]
                 BulletinSundayOption(date, edition?.publicId, edition?.status)
             }
-        return BulletinDefaults(nextFreeSunday(), defaultService(), sundays, nextFrom)
+        // The suggestion is global: paging must not change the intended edition date.
+        val suggested = firstFreeSunday(coming, existing.keys.takeIf { first == coming })
+        return BulletinDefaults(suggested, defaultService(), sundays, nextFrom)
+    }
+
+    /** Reuse the first selection window; only query further windows when every Sunday is taken. */
+    private fun firstFreeSunday(
+        from: LocalDate,
+        firstWindowTaken: Set<LocalDate>? = null,
+    ): LocalDate {
+        var window = from
+        while (window <= MAX_CURSOR_DATE) {
+            val taken =
+                firstWindowTaken?.takeIf { window == from }
+                    ?: editions.findServiceDatesBetween(window, window.plusWeeks((SUNDAY_OPTION_COUNT - 1).toLong())).toSet()
+            for (week in 0 until SUNDAY_OPTION_COUNT) {
+                val date = window.plusWeeks(week.toLong())
+                if (date !in taken) return date
+            }
+            window = window.plusWeeks(SUNDAY_OPTION_COUNT.toLong())
+        }
+        throw ResponseStatusException(HttpStatus.CONFLICT, "No free Sunday within the supported date range")
     }
 
     /**
@@ -99,8 +119,9 @@ class BulletinEditionService(
         if (date.dayOfWeek != DayOfWeek.SUNDAY) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "serviceDate must be a Sunday")
         }
-        if (date.isBefore(today())) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "serviceDate must not be in the past")
+        // Like defaults(), today is valid when Berlin's current day is Sunday.
+        if (date.isBefore(today()) || date > MAX_SERVICE_DATE) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "serviceDate must be today or later within the supported date range")
         }
         if (editions.existsByServiceDateAndDeletedAtIsNull(date)) throw sundayTaken()
 
@@ -115,9 +136,10 @@ class BulletinEditionService(
         source?.let { edition.copyContentFrom(it) }
         return try {
             editions.saveAndFlush(edition)
-        } catch (_: DataIntegrityViolationException) {
-            // Another admin took the same Sunday between the check and the insert.
-            throw sundayTaken()
+        } catch (error: DataIntegrityViolationException) {
+            val constraint = generateSequence<Throwable>(error) { it.cause }.filterIsInstance<ConstraintViolationException>().firstOrNull()
+            if (constraint?.constraintName == SUNDAY_CONSTRAINT) throw sundayTaken()
+            throw error
         }
     }
 
@@ -309,5 +331,11 @@ class BulletinEditionService(
         private const val MAX_PAGE_SIZE = 100
 
         private const val SUNDAY_OPTION_COUNT = 12
+
+        private const val SUNDAY_CONSTRAINT = "uq_bulletin_edition_service_date"
+
+        // Keep dates and the forward cursor in the API's four-digit ISO year format.
+        private val MAX_SERVICE_DATE = LocalDate.of(9999, 12, 31)
+        private val MAX_CURSOR_DATE = MAX_SERVICE_DATE.minusWeeks(SUNDAY_OPTION_COUNT.toLong())
     }
 }

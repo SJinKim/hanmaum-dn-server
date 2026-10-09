@@ -11,6 +11,7 @@ import com.hanmaum.dn.app.features.bulletin.api.v1.dto.UpdateBulletinRequest
 import com.hanmaum.dn.app.features.bulletin.domain.BulletinStatus
 import com.hanmaum.dn.app.features.bulletin.service.BulletinEditionService
 import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.Valid
@@ -52,9 +53,24 @@ class BulletinAdminController(
 
     /** What a new draft would start with: the next free Sunday and the default service. */
     @GetMapping("/defaults")
-    @Operation(operationId = "getBulletinDefaults")
+    @Operation(
+        operationId = "getBulletinDefaults",
+        description = "serviceDate is the global earliest free Sunday, independent of the selection cursor.",
+    )
+    @OpenApiResponse(responseCode = "200", description = "Global suggestion and a window of selectable Sundays")
+    @OpenApiResponse(
+        responseCode = "400",
+        description = "from is not a Sunday or cannot fit a twelve-week window and cursor in a four-digit ISO year.",
+        content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+    )
     fun defaults(
-        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate?,
+        @Parameter(
+            description =
+                "Sunday to start the selection window (use nextFrom). " +
+                    "Stale Sunday cursors advance to the coming Sunday in Europe/Berlin; excessively large dates are rejected.",
+        )
+        @RequestParam(required = false)
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate?,
     ): ResponseEntity<ApiResponse<BulletinDefaultsResponse>> {
         val defaults = service.defaults(from)
         val data =
@@ -76,6 +92,13 @@ class BulletinAdminController(
     @PostMapping
     @Operation(operationId = "createBulletinEdition")
     @OpenApiResponse(responseCode = "201", description = "Draft created")
+    @OpenApiResponse(
+        responseCode = "400",
+        description =
+            "serviceDate is not a Sunday, is in the past in Europe/Berlin, or exceeds year 9999. " +
+                "Today is allowed when it is Sunday.",
+        content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+    )
     @OpenApiResponse(
         responseCode = "409",
         description = "An edition for that Sunday already exists.",
