@@ -18,13 +18,18 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.web.server.ResponseStatusException
 import java.time.Clock
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** Real member queries and counts; every fixture rolls back with the test transaction. */
+/**
+ * Real member queries and counts; every fixture rolls back with the test transaction.
+ * Baseline counts assume the repository's default serial test execution. Parallel database
+ * writers require an isolated database for this suite, not the shared local test database.
+ */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
@@ -39,8 +44,12 @@ class BulletinVisibilityIT {
 
     @Autowired private lateinit var jdbcTemplate: JdbcTemplate
 
-    private val sunday = LocalDate.of(2099, 1, 4)
-    private val friday = sunday.minusDays(2).atStartOfDay(BulletinEditionService.BERLIN).toInstant()
+    private val sunday = LocalDate.of(2099, 1, 4).also { require(it.dayOfWeek == DayOfWeek.SUNDAY) }
+    private val friday =
+        sunday
+            .minusDays(BulletinEditionService.MEMBER_VISIBILITY_LEAD_DAYS)
+            .atStartOfDay(BulletinEditionService.BERLIN)
+            .toInstant()
 
     private fun serviceAt(instant: Instant) =
         BulletinEditionService(editions, services, sectionTitles, jdbcTemplate, Clock.fixed(instant, ZoneOffset.UTC), 0)

@@ -56,7 +56,7 @@ class BulletinEditionService(
     private fun comingSunday(): LocalDate = today().with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY))
 
     /** A Sunday's edition opens to members on Friday at midnight in Berlin. */
-    private fun visibleThrough(): LocalDate = today().plusDays(2)
+    private fun visibleThrough(): LocalDate = today().plusDays(MEMBER_VISIBILITY_LEAD_DAYS)
 
     /** The first Sunday from today on (today included) that has no edition yet. */
     @Transactional(readOnly = true)
@@ -291,6 +291,9 @@ class BulletinEditionService(
 
     companion object {
         val BERLIN: ZoneId = ZoneId.of("Europe/Berlin")
+
+        /** Two calendar days before an edition's Sunday means Friday at 00:00 in Berlin. */
+        const val MEMBER_VISIBILITY_LEAD_DAYS = 2L
 
         /** Arbitrary but fixed; only VOL assignment takes this lock. */
         private const val VOLUME_LOCK_KEY = 290_001L
