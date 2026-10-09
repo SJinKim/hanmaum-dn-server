@@ -18,14 +18,14 @@ import java.time.LocalDate
 import java.time.LocalTime
 
 /**
- * One weekly 주보, at most one per Sunday. Content fields are nullable because a draft may
+ * One weekly 주보, at most one non-deleted edition per Sunday. Content fields are nullable because a draft may
  * be incomplete; publishing checks the required ones (HDN-146).
  */
 @Entity
 @Table(name = "bulletin_edition")
 class BulletinEdition(
     /** Always a Sunday; the database rejects any other day. */
-    @Column(name = "service_date", nullable = false, unique = true)
+    @Column(name = "service_date", nullable = false)
     var serviceDate: LocalDate,
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "service_id", nullable = false)

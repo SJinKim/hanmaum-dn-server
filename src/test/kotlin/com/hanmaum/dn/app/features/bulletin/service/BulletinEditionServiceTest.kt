@@ -12,6 +12,7 @@ import com.hanmaum.dn.app.features.bulletin.domain.BulletinStatus
 import com.hanmaum.dn.app.features.bulletin.repository.BulletinEditionRepository
 import com.hanmaum.dn.app.features.bulletin.repository.BulletinSectionTitleRepository
 import com.hanmaum.dn.app.features.bulletin.repository.BulletinServiceRepository
+import org.hibernate.exception.ConstraintViolationException
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
@@ -27,14 +28,18 @@ import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.orm.ObjectOptimisticLockingFailureException
 import org.springframework.web.server.ResponseStatusException
+import java.sql.SQLException
 import java.time.Clock
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneOffset
+import java.time.temporal.TemporalAdjusters
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 
 @ExtendWith(MockitoExtension::class)
 class BulletinEditionServiceTest {
@@ -84,21 +89,21 @@ class BulletinEditionServiceTest {
 
     @Test
     fun `next free Sunday on a weekday is the coming Sunday`() {
-        `when`(editions.findServiceDatesFrom(LocalDate.of(2026, 10, 11))).thenReturn(emptyList())
+        `when`(editions.findServiceDatesBetween(LocalDate.of(2026, 10, 11), LocalDate.of(2026, 12, 27))).thenReturn(emptyList())
         assertEquals(LocalDate.of(2026, 10, 11), serviceAt().nextFreeSunday())
     }
 
     @Test
     fun `next free Sunday is today when today is a free Sunday`() {
         val sunday = LocalDate.of(2026, 10, 11)
-        `when`(editions.findServiceDatesFrom(sunday)).thenReturn(emptyList())
+        `when`(editions.findServiceDatesBetween(sunday, sunday.plusWeeks(11))).thenReturn(emptyList())
         assertEquals(sunday, serviceAt(at("2026-10-11T07:00:00Z")).nextFreeSunday())
     }
 
     @Test
     fun `next free Sunday skips taken Sundays`() {
         val from = LocalDate.of(2026, 10, 11)
-        `when`(editions.findServiceDatesFrom(from)).thenReturn(listOf(from, from.plusWeeks(1)))
+        `when`(editions.findServiceDatesBetween(from, from.plusWeeks(11))).thenReturn(listOf(from, from.plusWeeks(1)))
         assertEquals(LocalDate.of(2026, 10, 25), serviceAt().nextFreeSunday())
     }
 
@@ -106,7 +111,7 @@ class BulletinEditionServiceTest {
     fun `just after midnight on the day summer time starts it is already Sunday in Berlin`() {
         // 2026-03-28T23:30Z is Saturday in UTC, Sunday 00:30 CET in Berlin.
         val sunday = LocalDate.of(2026, 3, 29)
-        `when`(editions.findServiceDatesFrom(sunday)).thenReturn(emptyList())
+        `when`(editions.findServiceDatesBetween(sunday, sunday.plusWeeks(11))).thenReturn(emptyList())
         assertEquals(sunday, serviceAt(at("2026-03-28T23:30:00Z")).nextFreeSunday())
     }
 
@@ -114,22 +119,94 @@ class BulletinEditionServiceTest {
     fun `just after midnight on the day winter time starts it is already Sunday in Berlin`() {
         // 2026-10-24T22:30Z is Saturday in UTC, Sunday 00:30 CEST in Berlin.
         val sunday = LocalDate.of(2026, 10, 25)
-        `when`(editions.findServiceDatesFrom(sunday)).thenReturn(emptyList())
+        `when`(editions.findServiceDatesBetween(sunday, sunday.plusWeeks(11))).thenReturn(emptyList())
         assertEquals(sunday, serviceAt(at("2026-10-24T22:30:00Z")).nextFreeSunday())
     }
 
     @Test
-    fun `defaults pair the next free Sunday with the default service`() {
-        `when`(editions.findServiceDatesFrom(any())).thenReturn(emptyList())
+    fun `defaults reuse the selection window to suggest the next free Sunday`() {
         `when`(services.findByIsBulletinDefaultTrueAndDeletedAtIsNull()).thenReturn(service3)
-        assertEquals(BulletinDefaults(LocalDate.of(2026, 10, 11), service3), serviceAt().defaults())
+        val defaults = serviceAt().defaults()
+        assertEquals(LocalDate.of(2026, 10, 11), defaults.serviceDate)
+        assertEquals(service3, defaults.service)
+        assertEquals(12, defaults.sundays.size)
+        assertEquals(LocalDate.of(2027, 1, 3), defaults.nextFrom)
+        assertNull(defaults.sundays.first().editionPublicId)
+        verify(editions, never()).findServiceDatesBetween(any(), any())
+    }
+
+    @Test
+    fun `pagination keeps the global creation suggestion so browsing cannot change the target edition date`() {
+        val date = LocalDate.of(2026, 10, 11)
+        val draft = edition(date)
+        val published = edition(date.plusWeeks(1), BulletinStatus.PUBLISHED, 41)
+        `when`(services.findByIsBulletinDefaultTrueAndDeletedAtIsNull()).thenReturn(service3)
+        `when`(editions.findServiceDatesBetween(date, date.plusWeeks(11))).thenReturn(listOf(date, date.plusWeeks(1)))
+        `when`(editions.findAllByServiceDateBetweenAndDeletedAtIsNull(date, date.plusWeeks(11))).thenReturn(listOf(draft, published))
+        val defaults = serviceAt().defaults()
+        assertEquals(date.plusWeeks(2), defaults.serviceDate)
+        assertEquals(draft.publicId, defaults.sundays[0].editionPublicId)
+        assertEquals(BulletinStatus.PUBLISHED, defaults.sundays[1].status)
+        assertNull(defaults.sundays[2].editionPublicId)
+
+        val later = serviceAt().defaults(defaults.nextFrom)
+        assertEquals(defaults.nextFrom, later.sundays.first().serviceDate)
+        assertEquals(defaults.serviceDate, later.serviceDate)
+        assertEquals(defaults.nextFrom.plusWeeks(12), later.nextFrom)
+    }
+
+    @Test
+    fun `non-Sunday and overflowing Sunday cursors are rejected before querying`() {
+        val excessive = LocalDate.MAX.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
+        for (date in listOf(LocalDate.of(2026, 10, 12), excessive, LocalDate.of(9999, 12, 26))) {
+            val error = assertThrows<ResponseStatusException> { serviceAt().defaults(date) }
+            assertEquals(HttpStatus.BAD_REQUEST, error.statusCode)
+        }
+        verify(editions, never()).findAllByServiceDateBetweenAndDeletedAtIsNull(any(), any())
+    }
+
+    @Test
+    fun `stale Sunday cursors advance across Berlin midnight and never return past Sundays`() {
+        `when`(services.findByIsBulletinDefaultTrueAndDeletedAtIsNull()).thenReturn(service3)
+        val defaults = serviceAt(at("2026-10-11T22:00:00Z")).defaults(LocalDate.of(2026, 10, 11))
+        assertEquals(LocalDate.of(2026, 10, 18), defaults.sundays.first().serviceDate)
+        assertEquals(defaults.sundays.first().serviceDate, defaults.serviceDate)
+        verify(editions, never()).findServiceDatesBetween(any(), any())
+    }
+
+    @Test
+    fun `a fully occupied window continues with another bounded window`() {
+        val first = LocalDate.of(2026, 10, 11)
+        `when`(editions.findServiceDatesBetween(first, first.plusWeeks(11))).thenReturn((0L..11L).map { first.plusWeeks(it) })
+        `when`(editions.findServiceDatesBetween(first.plusWeeks(12), first.plusWeeks(23))).thenReturn(listOf(first.plusWeeks(12)))
+        assertEquals(first.plusWeeks(13), serviceAt().nextFreeSunday())
+    }
+
+    @Test
+    fun `an explicit past Sunday is rejected before saving`() {
+        val error = assertThrows<ResponseStatusException> { serviceAt().createDraft(LocalDate.of(2026, 10, 4), null, null, "kc-001") }
+        assertEquals(HttpStatus.BAD_REQUEST, error.statusCode)
+        verify(editions, never()).saveAndFlush(any<BulletinEdition>())
+    }
+
+    @Test
+    fun `a Sunday is allowed until midnight Berlin and rejected after midnight even when UTC is still Sunday`() {
+        val date = LocalDate.of(2026, 10, 11)
+        `when`(services.findByIsBulletinDefaultTrueAndDeletedAtIsNull()).thenReturn(service3)
+        stubSave()
+        assertEquals(date, serviceAt(at("2026-10-11T21:59:00Z")).createDraft(date, null, null, "kc-001").serviceDate)
+        val error =
+            assertThrows<ResponseStatusException> {
+                serviceAt(at("2026-10-11T22:00:00Z")).createDraft(date, null, null, "kc-001")
+            }
+        assertEquals(HttpStatus.BAD_REQUEST, error.statusCode)
     }
 
     // ─── create ─────────────────────────────────────────────────────────────
 
     @Test
     fun `a draft without a date lands on the next free Sunday with the default service snapshotted`() {
-        `when`(editions.findServiceDatesFrom(any())).thenReturn(emptyList())
+        `when`(editions.findServiceDatesBetween(any(), any())).thenReturn(emptyList())
         `when`(services.findByIsBulletinDefaultTrueAndDeletedAtIsNull()).thenReturn(service3)
         stubSave()
 
@@ -151,7 +228,7 @@ class BulletinEditionServiceTest {
 
     @Test
     fun `a second bulletin for the same Sunday is rejected with 409`() {
-        `when`(editions.existsByServiceDate(LocalDate.of(2026, 10, 11))).thenReturn(true)
+        `when`(editions.existsByServiceDateAndDeletedAtIsNull(LocalDate.of(2026, 10, 11))).thenReturn(true)
         val e = assertThrows<ResponseStatusException> { serviceAt().createDraft(LocalDate.of(2026, 10, 11), null, null, "kc-001") }
         assertEquals(HttpStatus.CONFLICT, e.statusCode)
     }
@@ -159,9 +236,37 @@ class BulletinEditionServiceTest {
     @Test
     fun `losing the race for a Sunday at insert time is a 409 too`() {
         `when`(services.findByIsBulletinDefaultTrueAndDeletedAtIsNull()).thenReturn(service3)
-        `when`(editions.saveAndFlush(any<BulletinEdition>())).thenThrow(DataIntegrityViolationException("uq_bulletin_edition_service_date"))
+        `when`(
+            editions.saveAndFlush(any<BulletinEdition>()),
+        ).thenThrow(
+            DataIntegrityViolationException(
+                "insert failed",
+                ConstraintViolationException("duplicate Sunday", SQLException("duplicate", "23505"), "uq_bulletin_edition_service_date"),
+            ),
+        )
         val e = assertThrows<ResponseStatusException> { serviceAt().createDraft(LocalDate.of(2026, 10, 11), null, null, "kc-001") }
         assertEquals(HttpStatus.CONFLICT, e.statusCode)
+    }
+
+    @Test
+    fun `unrelated and unidentified integrity failures retain their actual cause`() {
+        `when`(services.findByIsBulletinDefaultTrueAndDeletedAtIsNull()).thenReturn(service3)
+        val errors =
+            listOf(
+                DataIntegrityViolationException(
+                    "insert failed",
+                    ConstraintViolationException("duplicate id", SQLException("duplicate", "23505"), "bulletin_edition_public_id_key"),
+                ),
+                DataIntegrityViolationException("unidentified constraint"),
+            )
+        for (original in errors) {
+            `when`(editions.saveAndFlush(any<BulletinEdition>())).thenThrow(original)
+            val thrown =
+                assertThrows<DataIntegrityViolationException> {
+                    serviceAt().createDraft(LocalDate.of(2026, 10, 11), null, null, "kc-001")
+                }
+            assertSame(original, thrown)
+        }
     }
 
     @Test
@@ -177,7 +282,7 @@ class BulletinEditionServiceTest {
                 sharingBlocks.add(BulletinSharingBlock(BulletinSharingBlockType.SCRIPTURE, "말씀", "요 3:16"))
             }
         `when`(editions.findByPublicIdAndDeletedAtIsNull(source.publicId)).thenReturn(source)
-        `when`(editions.findServiceDatesFrom(any())).thenReturn(emptyList())
+        `when`(editions.findServiceDatesBetween(any(), any())).thenReturn(emptyList())
         `when`(services.findByIsBulletinDefaultTrueAndDeletedAtIsNull()).thenReturn(service3)
         stubSave()
 

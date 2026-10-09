@@ -2,7 +2,10 @@ package com.hanmaum.dn.app.features.bulletin.api.v1
 
 import com.hanmaum.dn.app.common.config.SecurityConfig
 import com.hanmaum.dn.app.features.bulletin.api.v1.dto.BulletinEditionSummary
+import com.hanmaum.dn.app.features.bulletin.api.v1.dto.BulletinSundayOption
+import com.hanmaum.dn.app.features.bulletin.domain.BulletinService
 import com.hanmaum.dn.app.features.bulletin.domain.BulletinStatus
+import com.hanmaum.dn.app.features.bulletin.service.BulletinDefaults
 import com.hanmaum.dn.app.features.bulletin.service.BulletinEditionService
 import com.hanmaum.dn.app.features.bulletin.service.BulletinSettingsService
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
@@ -31,6 +34,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPat
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.web.server.ResponseStatusException
 import java.time.LocalDate
+import java.time.LocalTime
 import java.util.UUID
 import kotlin.test.Test
 
@@ -102,6 +106,38 @@ class BulletinControllersTest {
     fun `a member sees 404 while nothing is published`() {
         `when`(editions.currentView()).thenReturn(null)
         mockMvc.perform(get("/api/v1/bulletins/current").with(withRole(null))).andExpect(status().isNotFound)
+    }
+
+    @Test
+    fun `defaults expose existing edition status and the forward cursor`() {
+        val date = LocalDate.of(2026, 10, 11)
+        val from = date.plusWeeks(12)
+        val churchService = BulletinService(name = "3부", startTime = LocalTime.of(14, 0), sortOrder = 3)
+        `when`(editions.defaults(from)).thenReturn(
+            BulletinDefaults(date, churchService, listOf(BulletinSundayOption(from, editionId, BulletinStatus.DRAFT)), from.plusWeeks(12)),
+        )
+        mockMvc
+            .perform(get("/api/v1/admin/bulletins/defaults").param("from", from.toString()).with(withRole("ADMIN")))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.serviceDate").value(date.toString()))
+            .andExpect(jsonPath("$.data.sundays[0].editionPublicId").value(editionId.toString()))
+            .andExpect(jsonPath("$.data.sundays[0].status").value("DRAFT"))
+            .andExpect(jsonPath("$.data.nextFrom").value(from.plusWeeks(12).toString()))
+        verify(editions).defaults(from)
+    }
+
+    @Test
+    fun `a member cannot read creation defaults`() {
+        mockMvc.perform(get("/api/v1/admin/bulletins/defaults").with(withRole(null))).andExpect(status().isForbidden)
+        verifyNoInteractions(editions)
+    }
+
+    @Test
+    fun `a malformed cursor is a 400 before reaching the service`() {
+        mockMvc
+            .perform(get("/api/v1/admin/bulletins/defaults").param("from", "not-a-date").with(withRole("ADMIN")))
+            .andExpect(status().isBadRequest)
+        verifyNoInteractions(editions)
     }
 
     @Test
