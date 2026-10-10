@@ -9,7 +9,6 @@ import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryRegistrationDecis
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryRegistrationDto
 import com.hanmaum.dn.app.features.ministry.domain.Ministry
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
-import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentRole
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentStatus
 import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
 import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
@@ -33,6 +32,7 @@ class MinistryRegistrationService(
     private val currentMemberResolver: CurrentMemberResolver,
     private val leaderEmailSender: MinistryLeaderEmailSender,
     private val notificationRepository: AppNotificationRepository,
+    private val ministryOwnership: MinistryOwnership,
     private val clock: Clock,
 ) {
     /** Register the authenticated active member as pending and email their introduction to the leader. */
@@ -57,7 +57,7 @@ class MinistryRegistrationService(
             throw ResponseStatusException(HttpStatus.CONFLICT, "The member already has a current team entry")
         }
         val leader =
-            currentLeader(ministry)
+            ministryOwnership.currentLeader(ministry)
                 ?: throw ResponseStatusException(HttpStatus.CONFLICT, "This ministry has no assigned leader")
         val leaderEmail =
             leader.member.email?.takeIf { it.isNotBlank() }
@@ -164,20 +164,14 @@ class MinistryRegistrationService(
             .findByPublicIdAndDeletedAtIsNull(publicId)
             .orElseThrow { EntityNotFoundException("Ministry not found: $publicId") }
 
-    private fun currentLeader(ministry: Ministry): MinistryAssignment? =
-        assignmentRepository
-            .findCurrentByMinistryIds(listOf(ministry.id!!))
-            .firstOrNull { it.role == MinistryAssignmentRole.LEADER }
-
     private fun requireReviewer(
         ministry: Ministry,
         reviewerSubject: String,
         isAdmin: Boolean,
-    ) {
-        if (isAdmin) return
-        val reviewer = currentMemberResolver.require(reviewerSubject)
-        if (currentLeader(ministry)?.member?.id != reviewer.id) {
-            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Only this ministry's leader can review applications")
-        }
-    }
+    ) = ministryOwnership.requireLeader(
+        ministry,
+        reviewerSubject,
+        isAdmin,
+        deniedMessage = "Only this ministry's leader can review applications",
+    )
 }

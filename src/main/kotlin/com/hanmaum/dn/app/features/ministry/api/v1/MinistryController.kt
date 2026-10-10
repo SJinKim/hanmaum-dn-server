@@ -14,6 +14,7 @@ import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
@@ -89,7 +90,7 @@ class MinistryController(
 
     /**
      * POST /api/v1/ministries/{publicId}/members
-     * Role: ADMIN or MINISTRY_LEADER — bind an existing member to this ministry.
+     * Role: ADMIN, or MINISTRY_LEADER of this ministry (403 otherwise) — bind an existing member.
      * The "맴버 추가" action on the ministry detail page. Returns the new active-member row.
      */
     @PostMapping("/{publicId}/members")
@@ -97,8 +98,9 @@ class MinistryController(
     fun addMember(
         @PathVariable publicId: UUID,
         @Valid @RequestBody request: AddMinistryMemberRequest,
+        authentication: JwtAuthenticationToken,
     ): ResponseEntity<ApiResponse<ActiveMinistryMemberDto>> {
-        val added = ministryService.addMember(publicId, request)
+        val added = ministryService.addMember(publicId, request, authentication.token.subject, authentication.isAdmin())
         return ResponseEntity
             .status(HttpStatus.CREATED)
             .body(ApiResponse.success(data = added, message = "맴버가 부서에 추가되었습니다."))
