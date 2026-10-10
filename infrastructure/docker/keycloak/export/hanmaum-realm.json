@@ -120,6 +120,24 @@
         "attributes": {}
       },
       {
+        "id": "98ced190-3761-5562-9d2c-043c3b3327fe",
+        "name": "GENERAL_OPERATIONS_VIEWER",
+        "description": "Darf die Daten des 사역 general operations lesen",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "313538da-5813-430e-ab02-16db69fc5746",
+        "attributes": {}
+      },
+      {
+        "id": "20090b8b-9687-5596-8ac1-56adbbd1cfd1",
+        "name": "GENERAL_OPERATIONS_EDITOR",
+        "description": "Darf die Daten des 사역 general operations bearbeiten",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "313538da-5813-430e-ab02-16db69fc5746",
+        "attributes": {}
+      },
+      {
         "id": "3d884f2b-5366-479e-81a3-57d947b32927",
         "name": "default-roles-hanmaum",
         "description": "${role_default-roles}",
@@ -519,6 +537,39 @@
               "subGroups": []
             }
           ]
+        },
+        {
+          "id": "aeb1f113-8bb5-5c4a-9036-f8aa05006d53",
+          "name": "general_operations",
+          "path": "/ministries/general_operations",
+          "attributes": {},
+          "realmRoles": [],
+          "clientRoles": {},
+          "subGroups": [
+            {
+              "id": "c2f0fd7a-cbad-57f0-a6ea-e34524473bc2",
+              "name": "viewers",
+              "path": "/ministries/general_operations/viewers",
+              "attributes": {},
+              "realmRoles": [
+                "GENERAL_OPERATIONS_VIEWER"
+              ],
+              "clientRoles": {},
+              "subGroups": []
+            },
+            {
+              "id": "49007ef7-f560-50ee-be9a-6d70b1776dce",
+              "name": "editors",
+              "path": "/ministries/general_operations/editors",
+              "attributes": {},
+              "realmRoles": [
+                "GENERAL_OPERATIONS_VIEWER",
+                "GENERAL_OPERATIONS_EDITOR"
+              ],
+              "clientRoles": {},
+              "subGroups": []
+            }
+          ]
         }
       ]
     },
@@ -580,6 +631,17 @@
           "attributes": {},
           "realmRoles": [
             "group_leader"
+          ],
+          "clientRoles": {},
+          "subGroups": []
+        },
+        {
+          "id": "4bd22d38-b70c-55e9-810a-a117cbc62368",
+          "name": "ministries",
+          "path": "/leaders/ministries",
+          "attributes": {},
+          "realmRoles": [
+            "ministry_leader"
           ],
           "clientRoles": {},
           "subGroups": []
