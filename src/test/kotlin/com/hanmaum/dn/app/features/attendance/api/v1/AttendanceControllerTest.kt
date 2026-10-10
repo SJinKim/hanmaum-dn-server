@@ -275,10 +275,10 @@ class AttendanceControllerTest {
     }
 
     @Test
-    fun `GET group-counts admits group leaders, general operations and pastors`() {
+    fun `GET group-counts admits group leaders, note takers, general operations and pastors`() {
         // The Home block 이번 주 순별 체크인 (server#299). Each role is checked on its own token,
-        // since a 순장 or a general operations member carries no ROLE_ADMIN.
-        listOf("GROUP_LEADER", "GENERAL_OPERATIONS_VIEWER", "GENERAL_OPERATIONS_EDITOR", "PASTOR").forEach { role ->
+        // since a 순장, a note taker or a general operations member carries no ROLE_ADMIN.
+        listOf("GROUP_LEADER", "NOTE_TAKER", "GENERAL_OPERATIONS_VIEWER", "GENERAL_OPERATIONS_EDITOR", "PASTOR").forEach { role ->
             val definitionId = UUID.randomUUID()
             `when`(attendanceService.getGroupCounts(eq(definitionId), any())).thenReturn(emptyGroupCounts(definitionId))
 
@@ -293,8 +293,8 @@ class AttendanceControllerTest {
     }
 
     @Test
-    fun `GET group-counts stays closed to note takers, ministry leaders and members`() {
-        listOf("NOTE_TAKER", "MINISTRY_LEADER", "MEMBER").forEach { role ->
+    fun `GET group-counts stays closed to ministry leaders and members`() {
+        listOf("MINISTRY_LEADER", "MEMBER").forEach { role ->
             mockMvc
                 .perform(
                     get("/api/v1/attendance/group-counts")

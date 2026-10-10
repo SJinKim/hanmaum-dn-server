@@ -122,12 +122,12 @@ class AttendanceController(
      *
      * Active groups with no check-ins are included with a count of zero.
      *
-     * Besides admins, 순장 and general operations read it for the Home block 이번 주 순별 체크인
-     * (server#299). It holds counts only, never a member, so every 순 is visible to them.
+     * Besides admins, 순장, note takers and general operations read it for the Home block
+     * 이번 주 순별 체크인 (server#299, note takers per its 2026-10-10 addendum). It holds counts only, never a member, so every 순 is visible to them.
      */
     @GetMapping("/group-counts")
     @PreAuthorize(
-        "hasAnyRole('ADMIN', 'GROUP_LEADER', 'GENERAL_OPERATIONS_VIEWER', 'GENERAL_OPERATIONS_EDITOR')",
+        "hasAnyRole('ADMIN', 'GROUP_LEADER', 'NOTE_TAKER', 'GENERAL_OPERATIONS_VIEWER', 'GENERAL_OPERATIONS_EDITOR')",
     )
     fun getGroupCounts(
         @RequestParam definitionId: UUID,
