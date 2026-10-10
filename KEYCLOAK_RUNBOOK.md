@@ -86,19 +86,48 @@ also passes for a pastor. `note_taker` reads 청년 (members), 순 (church group
 | `/staff/pastors` | `pastor` | Everything (hierarchy, same as `admin`) |
 | `/staff/note-takers` | `note_taker` | Read members and church groups; read and write announcements |
 | `/leaders/groups` | `group_leader` | 순장 endpoints |
-| `/ministries/<slug>/members` | `<SLUG>_VIEWER` | Read the ministry's data |
-| `/ministries/<slug>/leaders` | `<SLUG>_VIEWER`, `<SLUG>_EDITOR`, `ministry_leader` | Read and write the ministry's data |
+| `/leaders/ministries` | `ministry_leader` | 사역 leader endpoints, limited to the 사역 the user leads |
+| `/ministries/<slug>/viewers` | `<SLUG>_VIEWER` | Read the ministry's data in the web app |
+| `/ministries/<slug>/editors` | `<SLUG>_VIEWER`, `<SLUG>_EDITOR` | Read and write the ministry's data in the web app |
 
-Both checked-in realm exports contain the roles and the `/staff` and `/leaders`
-groups. `/ministries/newcomer` uses the older `viewers`/`editors` leaves described
-below; new ministries follow the `members`/`leaders` pattern. On an existing realm:
+Keycloak grants web access only. Who belongs to a 사역 and who leads it lives in
+the database (`MinistryAssignment` with role `LEADER`, see #300): `ministry_leader`
+lets a user call the leader endpoints, and the server then allows changes only on
+the 사역 that user leads. Every 사역 follows the `viewers`/`editors` pattern of
+`/ministries/newcomer`. The first team beyond newcomer is
+`/ministries/general_operations` with `GENERAL_OPERATIONS_VIEWER` and
+`GENERAL_OPERATIONS_EDITOR`.
 
-1. Create realm roles `pastor` and `note_taker` (and `group_leader`,
-   `ministry_leader` if absent).
+Both checked-in realm exports contain these roles and groups. On an existing realm:
+
+1. Create realm roles `pastor`, `note_taker`, `GENERAL_OPERATIONS_VIEWER` and
+   `GENERAL_OPERATIONS_EDITOR` (and `group_leader`, `ministry_leader` if absent).
 2. Create the groups above and assign exactly the listed roles on each leaf
    group's **Role mapping** tab.
 3. Add users to a leaf group, not roles directly to users.
 4. Refresh the token and confirm the role names under `realm_access.roles`.
+
+### Migrating `ministry_leader` to `/leaders/ministries`
+
+ST and production share one Keycloak instance. Run the whole section in the ST
+realm, sign it off, then repeat it in the production realm and sign that off
+separately.
+
+1. Create group `/leaders/ministries` and map realm role `ministry_leader` to it.
+2. Open **Users in role** on `ministry_leader` and note every user it lists.
+3. For each of those users, one at a time:
+   1. Add the user to `/leaders/ministries`.
+   2. On the user's **Role mapping** tab, untick **Hide inherited roles** and
+      confirm `ministry_leader` appears as inherited from `/leaders/ministries`.
+   3. Only then remove the direct `ministry_leader` mapping.
+   4. Have the user sign in again (or refresh the token) and confirm
+      `ministry_leader` is still under `realm_access.roles`.
+4. Create `/ministries/general_operations/viewers` and `/editors` with the roles
+   from the table, then add the team members.
+
+**Rollback:** if a user's fresh token lacks `ministry_leader`, assign the role
+directly to that user again, confirm it is back in the token, and stop before
+the next user until the group mapping is fixed.
 
 ## Newcomer roles and groups
 
