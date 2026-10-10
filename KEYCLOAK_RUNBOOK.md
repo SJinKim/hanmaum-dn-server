@@ -109,17 +109,25 @@ Both checked-in realm exports contain these roles and groups. On an existing rea
 
 ### Migrating `ministry_leader` to `/leaders/ministries`
 
-ST and production share one Keycloak instance. Run these steps in the ST realm
-first, verify, then repeat in the production realm:
+ST and production share one Keycloak instance. Run the whole section in the ST
+realm, sign it off, then repeat it in the production realm and sign that off
+separately.
 
 1. Create group `/leaders/ministries` and map realm role `ministry_leader` to it.
-2. **Users in role** on `ministry_leader` lists who holds it; add each of those
-   users to `/leaders/ministries`.
-3. Remove the direct `ministry_leader` mapping from each of those users.
-4. Sign in as one of them and confirm `ministry_leader` is still under
-   `realm_access.roles`.
-5. Create `/ministries/general_operations/viewers` and `/editors` with the roles
+2. Open **Users in role** on `ministry_leader` and note every user it lists.
+3. For each of those users, one at a time:
+   1. Add the user to `/leaders/ministries`.
+   2. On the user's **Role mapping** tab, untick **Hide inherited roles** and
+      confirm `ministry_leader` appears as inherited from `/leaders/ministries`.
+   3. Only then remove the direct `ministry_leader` mapping.
+   4. Have the user sign in again (or refresh the token) and confirm
+      `ministry_leader` is still under `realm_access.roles`.
+4. Create `/ministries/general_operations/viewers` and `/editors` with the roles
    from the table, then add the team members.
+
+**Rollback:** if a user's fresh token lacks `ministry_leader`, assign the role
+directly to that user again, confirm it is back in the token, and stop before
+the next user until the group mapping is fixed.
 
 ## Newcomer roles and groups
 
