@@ -273,4 +273,47 @@ class AttendanceControllerTest {
             .andExpect(jsonPath("$.data.groups[0].outsideCount").value(2))
             .andExpect(jsonPath("$.data.groups[0].unconfirmedCount").value(1))
     }
+
+    @Test
+    fun `GET group-counts admits group leaders, note takers, general operations and pastors`() {
+        // The Home block 이번 주 순별 체크인 (server#299). Each role is checked on its own token,
+        // since a 순장, a note taker or a general operations member carries no ROLE_ADMIN.
+        listOf("GROUP_LEADER", "NOTE_TAKER", "GENERAL_OPERATIONS_VIEWER", "GENERAL_OPERATIONS_EDITOR", "PASTOR").forEach { role ->
+            val definitionId = UUID.randomUUID()
+            `when`(attendanceService.getGroupCounts(eq(definitionId), any())).thenReturn(emptyGroupCounts(definitionId))
+
+            mockMvc
+                .perform(
+                    get("/api/v1/attendance/group-counts")
+                        .param("definitionId", definitionId.toString())
+                        .param("date", "2026-10-11")
+                        .with(jwt().authorities(SimpleGrantedAuthority("ROLE_$role"))),
+                ).andExpect(status().isOk)
+        }
+    }
+
+    @Test
+    fun `GET group-counts stays closed to ministry leaders and members`() {
+        listOf("MINISTRY_LEADER", "MEMBER").forEach { role ->
+            mockMvc
+                .perform(
+                    get("/api/v1/attendance/group-counts")
+                        .param("definitionId", UUID.randomUUID().toString())
+                        .param("date", "2026-10-11")
+                        .with(jwt().authorities(SimpleGrantedAuthority("ROLE_$role"))),
+                ).andExpect(status().isForbidden)
+        }
+    }
+
+    private fun emptyGroupCounts(definitionId: UUID) =
+        AttendanceGroupCountsResponse(
+            definitionPublicId = definitionId.toString(),
+            definitionTitle = "주일예배",
+            attendanceDate = LocalDate.of(2026, 10, 11),
+            totalCount = 0,
+            totalInPlaceCount = 0,
+            totalOutsideCount = 0,
+            totalUnconfirmedCount = 0,
+            groups = emptyList(),
+        )
 }

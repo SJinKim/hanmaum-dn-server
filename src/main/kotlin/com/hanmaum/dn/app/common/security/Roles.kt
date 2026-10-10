@@ -16,6 +16,10 @@ object Roles {
     const val NEWCOMER_VIEWER = "NEWCOMER_VIEWER"
     const val NEWCOMER_EDITOR = "NEWCOMER_EDITOR"
 
+    /** Members of the 사역 general operations (`/ministries/general_operations/viewers|editors`). */
+    const val GENERAL_OPERATIONS_VIEWER = "GENERAL_OPERATIONS_VIEWER"
+    const val GENERAL_OPERATIONS_EDITOR = "GENERAL_OPERATIONS_EDITOR"
+
     /** A pastor may do everything an admin may. */
     const val HIERARCHY = "ROLE_$PASTOR > ROLE_$ADMIN"
 
