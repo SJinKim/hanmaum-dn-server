@@ -63,6 +63,7 @@ jobs:
             --tests "com.hanmaum.dn.app.features.events.repository.EventRsvpLogRepositoryIT" \
             --tests "com.hanmaum.dn.app.features.groups.repository.GroupLeaderRepositoryIT" \
             --tests "com.hanmaum.dn.app.features.bulletin.service.BulletinVisibilityIT" \
+            --tests "com.hanmaum.dn.app.features.ministry.service.MinistryOwnershipIT" \
             --no-daemon
         env:
           SPRING_PROFILES_ACTIVE: test

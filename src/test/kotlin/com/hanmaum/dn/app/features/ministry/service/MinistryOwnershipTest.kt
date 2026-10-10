@@ -3,6 +3,7 @@ package com.hanmaum.dn.app.features.ministry.service
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.service.CurrentMemberResolver
+import com.hanmaum.dn.app.features.members.service.MemberProfileNotFoundException
 import com.hanmaum.dn.app.features.ministry.domain.Ministry
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentRole
@@ -101,6 +102,17 @@ class MinistryOwnershipTest {
 
         assertEquals(403, ex.statusCode.value())
         assertEquals("custom", ex.reason)
+    }
+
+    @Test
+    fun `a caller without a member profile gets 403, not the profile 404`() {
+        `when`(resolver.require("no-profile-sub")).thenThrow(MemberProfileNotFoundException())
+
+        val ex = assertThrows<ResponseStatusException> { ownership().requireLeader(worship, "no-profile-sub", isAdmin = false) }
+
+        assertEquals(403, ex.statusCode.value())
+        assertEquals("Only this ministry's leader can change it", ex.reason)
+        verifyNoInteractions(assignments)
     }
 
     @Test

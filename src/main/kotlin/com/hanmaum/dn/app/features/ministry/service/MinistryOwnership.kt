@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.ministry.service
 
 import com.hanmaum.dn.app.features.members.service.CurrentMemberResolver
+import com.hanmaum.dn.app.features.members.service.MemberProfileNotFoundException
 import com.hanmaum.dn.app.features.ministry.domain.Ministry
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentRole
@@ -31,7 +32,8 @@ class MinistryOwnership(
 
     /**
      * Passes for an admin or for the current leader of [ministry]; anyone else gets 403 with
-     * [deniedMessage].
+     * [deniedMessage]. That includes a caller without a (non-deleted) member profile: they lead
+     * nothing, so the answer is 403 here, not the 404 `/members/me` gives for the same case.
      */
     fun requireLeader(
         ministry: Ministry,
@@ -40,7 +42,12 @@ class MinistryOwnership(
         deniedMessage: String = "Only this ministry's leader can change it",
     ) {
         if (isAdmin) return
-        val caller = currentMemberResolver.require(keycloakSubject)
+        val caller =
+            try {
+                currentMemberResolver.require(keycloakSubject)
+            } catch (_: MemberProfileNotFoundException) {
+                throw ResponseStatusException(HttpStatus.FORBIDDEN, deniedMessage)
+            }
         if (currentLeader(ministry)?.member?.id != caller.id) {
             throw ResponseStatusException(HttpStatus.FORBIDDEN, deniedMessage)
         }
