@@ -51,7 +51,16 @@ class MinistryRegistrationServiceTest {
             .also { it.id = 3L }
     private val leaderAssignment = MinistryAssignment(ministry, leader, LocalDate.of(2026, 1, 1), role = MinistryAssignmentRole.LEADER)
 
-    private fun service() = MinistryRegistrationService(ministries, assignments, resolver, email, notifications, clock)
+    private fun service() =
+        MinistryRegistrationService(
+            ministries,
+            assignments,
+            resolver,
+            email,
+            notifications,
+            MinistryOwnership(assignments, resolver),
+            clock,
+        )
 
     @Test
     fun `my applications are resolved from the subject and keep ministry date and status`() {

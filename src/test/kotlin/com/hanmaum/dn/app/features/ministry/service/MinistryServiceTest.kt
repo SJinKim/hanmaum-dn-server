@@ -26,12 +26,15 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
+import org.mockito.Mockito.doThrow
 import org.mockito.Mockito.verify
+import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.never
+import org.springframework.http.HttpStatus
 import org.springframework.web.server.ResponseStatusException
 import java.lang.reflect.Field
 import java.time.Clock
@@ -51,14 +54,20 @@ class MinistryServiceTest {
 
     @Mock private lateinit var memberRepository: MemberRepository
 
+    @Mock private lateinit var ministryOwnership: MinistryOwnership
+
     private lateinit var service: MinistryService
+
+    private companion object {
+        const val CALLER = "leader-subject"
+    }
 
     // Fixed clock: 2026-06-22 (Berlin) → default assignment start dates use today.
     private val clock = Clock.fixed(Instant.parse("2026-06-22T08:00:00Z"), ZoneId.of("Europe/Berlin"))
 
     @BeforeEach
     fun setUp() {
-        service = MinistryService(ministryRepository, ministryAssignmentRepository, memberRepository, clock)
+        service = MinistryService(ministryRepository, ministryAssignmentRepository, memberRepository, ministryOwnership, clock)
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -513,7 +522,7 @@ class MinistryServiceTest {
         `when`(ministryAssignmentRepository.save(any()))
             .thenAnswer { it.getArgument<MinistryAssignment>(0) }
 
-        val result = service.addMember(ministry.publicId, AddMinistryMemberRequest(memberId = member.publicId, note = "신입"))
+        val result = service.addMember(ministry.publicId, AddMinistryMemberRequest(memberId = member.publicId, note = "신입"), CALLER, false)
 
         assertEquals(member.publicId.toString(), result.publicId)
         assertEquals("김철수", result.fullName)
@@ -521,7 +530,27 @@ class MinistryServiceTest {
         assertEquals("신입", result.note)
         assertEquals(MinistryAssignmentRole.MEMBER, result.role)
         assertEquals(MinistryAssignmentStatus.ACTIVE, result.status)
+        verify(ministryOwnership).requireLeader(ministry, CALLER, false)
         verify(ministryAssignmentRepository).save(any())
+    }
+
+    @Test
+    fun `addMember - 403 for a leader of another ministry, before anything is written`() {
+        val ministry = makeMinistry()
+        `when`(ministryRepository.findForUpdateByPublicIdAndDeletedAtIsNull(ministry.publicId))
+            .thenReturn(Optional.of(ministry))
+        doThrow(ResponseStatusException(HttpStatus.FORBIDDEN, "Only this ministry's leader can change it"))
+            .`when`(ministryOwnership)
+            .requireLeader(ministry, CALLER, false)
+
+        val ex =
+            assertThrows<ResponseStatusException> {
+                service.addMember(ministry.publicId, AddMinistryMemberRequest(memberId = UUID.randomUUID()), CALLER, false)
+            }
+
+        assertEquals(403, ex.statusCode.value())
+        verifyNoInteractions(memberRepository)
+        verify(ministryAssignmentRepository, never()).save(any())
     }
 
     @Test
@@ -541,6 +570,8 @@ class MinistryServiceTest {
             service.addMember(
                 ministry.publicId,
                 AddMinistryMemberRequest(memberId = member.publicId, startDate = LocalDate.of(2025, 3, 17)),
+                CALLER,
+                false,
             )
 
         assertEquals("2025-03-17", result.startDate)
@@ -559,7 +590,7 @@ class MinistryServiceTest {
 
         val ex =
             assertThrows<ResponseStatusException> {
-                service.addMember(ministry.publicId, AddMinistryMemberRequest(memberId = member.publicId))
+                service.addMember(ministry.publicId, AddMinistryMemberRequest(memberId = member.publicId), CALLER, false)
             }
 
         assertEquals(409, ex.statusCode.value())
@@ -573,7 +604,7 @@ class MinistryServiceTest {
             .thenReturn(Optional.empty())
 
         assertThrows<EntityNotFoundException> {
-            service.addMember(ministryId, AddMinistryMemberRequest(memberId = UUID.randomUUID()))
+            service.addMember(ministryId, AddMinistryMemberRequest(memberId = UUID.randomUUID()), CALLER, false)
         }
         verify(ministryAssignmentRepository, never()).save(any())
     }
@@ -588,7 +619,7 @@ class MinistryServiceTest {
             .thenReturn(Optional.empty())
 
         assertThrows<EntityNotFoundException> {
-            service.addMember(ministry.publicId, AddMinistryMemberRequest(memberId = unknownMemberId))
+            service.addMember(ministry.publicId, AddMinistryMemberRequest(memberId = unknownMemberId), CALLER, false)
         }
         verify(ministryAssignmentRepository, never()).save(any())
     }

@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.context.annotation.Import
+import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.oauth2.jwt.JwtDecoder
@@ -29,6 +30,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import org.springframework.web.server.ResponseStatusException
 import java.time.LocalDate
 import java.util.UUID
 import kotlin.test.Test
@@ -65,7 +67,7 @@ class MinistryMemberControllerTest {
 
     @Test
     fun `POST add member returns 201 for admin`() {
-        `when`(ministryService.addMember(eq(ministryId), any())).thenReturn(sampleDto())
+        `when`(ministryService.addMember(eq(ministryId), any(), any(), eq(true))).thenReturn(sampleDto())
 
         mockMvc
             .perform(
@@ -78,16 +80,43 @@ class MinistryMemberControllerTest {
     }
 
     @Test
-    fun `POST add member returns 201 for ministry leader`() {
-        `when`(ministryService.addMember(eq(ministryId), any())).thenReturn(sampleDto())
+    fun `POST add member treats a pastor like an admin`() {
+        `when`(ministryService.addMember(eq(ministryId), any(), any(), eq(true))).thenReturn(sampleDto())
 
         mockMvc
             .perform(
                 post("/api/v1/ministries/$ministryId/members")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(body)
-                    .with(jwt().authorities(SimpleGrantedAuthority("ROLE_MINISTRY_LEADER"))),
+                    .with(jwt().authorities(SimpleGrantedAuthority("ROLE_PASTOR"))),
             ).andExpect(status().isCreated)
+    }
+
+    @Test
+    fun `POST add member returns 201 for ministry leader`() {
+        `when`(ministryService.addMember(eq(ministryId), any(), eq("leader-sub"), eq(false))).thenReturn(sampleDto())
+
+        mockMvc
+            .perform(
+                post("/api/v1/ministries/$ministryId/members")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body)
+                    .with(jwt().jwt { it.subject("leader-sub") }.authorities(SimpleGrantedAuthority("ROLE_MINISTRY_LEADER"))),
+            ).andExpect(status().isCreated)
+    }
+
+    @Test
+    fun `POST add member returns 403 for the leader of another ministry`() {
+        `when`(ministryService.addMember(eq(ministryId), any(), eq("other-sub"), eq(false)))
+            .thenThrow(ResponseStatusException(HttpStatus.FORBIDDEN, "Only this ministry's leader can change it"))
+
+        mockMvc
+            .perform(
+                post("/api/v1/ministries/$ministryId/members")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body)
+                    .with(jwt().jwt { it.subject("other-sub") }.authorities(SimpleGrantedAuthority("ROLE_MINISTRY_LEADER"))),
+            ).andExpect(status().isForbidden)
     }
 
     @Test

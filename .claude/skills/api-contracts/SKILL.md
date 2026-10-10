@@ -56,6 +56,13 @@ steps 4–6 with a CI workflow that opens cross-repo sync PRs automatically.
 - `@Operation` and `@ApiResponse` annotations only when KDoc is insufficient
   (e.g., multiple distinct 4xx responses).
 
+## Ministry ownership
+- `MINISTRY_LEADER` is one realm role for every 사역; it does not say *which* one.
+- Every write endpoint under `/ministries/{publicId}/…` that admits `MINISTRY_LEADER` must call
+  `MinistryOwnership.requireLeader(ministry, subject, isAdmin)`. ADMIN and PASTOR pass; anyone else
+  must hold the current `LEADER` assignment of that ministry, or gets 403. `SUB_LEADER` does not count.
+- State the 403 in the KDoc so it reaches the spec (server#300).
+
 ## Don't do
 - Don't edit `openapi.yaml` by hand. It's generated.
 - Don't return raw `Map` or `Any`. Define a DTO.
