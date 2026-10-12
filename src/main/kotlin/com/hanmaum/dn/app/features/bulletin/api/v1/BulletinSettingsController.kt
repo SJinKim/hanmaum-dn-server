@@ -30,7 +30,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse as OpenApiResponse
 /** 주보 설정: services and section titles (HDN-146). */
 @RestController
 @RequestMapping("/admin/bulletin")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER')")
 class BulletinSettingsController(
     private val settings: BulletinSettingsService,
 ) {

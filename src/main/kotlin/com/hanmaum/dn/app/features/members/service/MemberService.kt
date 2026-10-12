@@ -16,6 +16,7 @@ import com.hanmaum.dn.app.features.members.api.toResponse
 import com.hanmaum.dn.app.features.members.api.toSummaryDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.GroupLeaderTenureDto
+import com.hanmaum.dn.app.features.members.api.v1.dto.MemberCountDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberNameDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
@@ -400,6 +401,18 @@ class MemberService(
             .findAllByDeletedAtIsNull()
             .map { it.toNameDto() }
             .sortedBy { it.fullName }
+
+    /** Non-deleted members, all of them or only those with [status]. */
+    @Transactional(readOnly = true)
+    fun countMembers(status: MemberStatus?): MemberCountDto =
+        MemberCountDto(
+            count =
+                if (status == null) {
+                    memberRepository.countByDeletedAtIsNull()
+                } else {
+                    memberRepository.countByMemberStatusAndDeletedAtIsNull(status)
+                },
+        )
 
     @Transactional(readOnly = true)
     fun getMemberByPublicId(publicId: UUID): MemberDto {

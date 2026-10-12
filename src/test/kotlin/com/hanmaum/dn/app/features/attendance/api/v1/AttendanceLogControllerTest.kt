@@ -89,6 +89,16 @@ class AttendanceLogControllerTest {
     }
 
     @Test
+    fun `GET logs returns the roster for a note_taker`() {
+        `when`(rosterService.getRoster(date, null)).thenReturn(listOf(sampleRow()))
+
+        mockMvc
+            .perform(get("/api/v1/attendance/logs").param("date", "2026-06-14").with(token("NOTE_TAKER")))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data[0].fullName").value("홍길동"))
+    }
+
+    @Test
     fun `GET logs without definitionId covers every definition of the day`() {
         `when`(rosterService.getRoster(date, null)).thenReturn(emptyList())
 

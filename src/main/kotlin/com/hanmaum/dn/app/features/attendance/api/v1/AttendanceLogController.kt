@@ -19,10 +19,10 @@ import java.time.LocalDate
 import java.util.UUID
 import io.swagger.v3.oas.annotations.responses.ApiResponse as OpenApiResponse
 
-/** The admin 체크인 명단, person by person (#224). ADMIN only. */
+/** The admin 체크인 명단, person by person (#224). ADMIN and NOTE_TAKER. */
 @RestController
 @RequestMapping("/attendance/logs")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER')")
 class AttendanceLogController(
     private val rosterService: AttendanceRosterService,
 ) {
