@@ -1517,6 +1517,23 @@ class MemberServiceTest {
         assertEquals(LocalDate.of(1992, 12, 7), preserved.birthDate)
     }
 
+    @Test
+    fun `countMembers without status counts every non-deleted member`() {
+        `when`(memberRepository.countByDeletedAtIsNull()).thenReturn(42L)
+
+        assertEquals(42L, memberService.countMembers(null).count)
+        verify(memberRepository, never()).countByMemberStatusAndDeletedAtIsNull(any())
+    }
+
+    @Test
+    fun `countMembers with a status counts only that status`() {
+        `when`(memberRepository.countByMemberStatusAndDeletedAtIsNull(MemberStatus.PENDING)).thenReturn(3L)
+
+        assertEquals(3L, memberService.countMembers(MemberStatus.PENDING).count)
+        verify(memberRepository).countByMemberStatusAndDeletedAtIsNull(MemberStatus.PENDING)
+        verify(memberRepository, never()).countByDeletedAtIsNull()
+    }
+
     private companion object {
         const val CLIENT_IP = "203.0.113.10"
     }
