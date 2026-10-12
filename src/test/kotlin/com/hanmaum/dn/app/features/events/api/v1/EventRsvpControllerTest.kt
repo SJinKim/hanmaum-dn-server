@@ -304,6 +304,45 @@ class EventRsvpControllerTest {
             .andExpect(jsonPath("$.data.title").value("여름 수련회"))
     }
 
+    @Test
+    fun `POST events-rsvps returns 201 for note_taker`() {
+        `when`(eventRsvpService.createRsvp(any())).thenReturn(sampleRsvpDto())
+
+        mockMvc
+            .perform(
+                post("/api/v1/events/rsvps")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"title":"여름 수련회","windowStart":"${now.minusHours(1)}","windowEnd":"${now.plusHours(2)}"}""")
+                    .with(jwt().authorities(SimpleGrantedAuthority("ROLE_NOTE_TAKER"))),
+            ).andExpect(status().isCreated)
+    }
+
+    @Test
+    fun `GET events-rsvps lists every RSVP for note_taker`() {
+        `when`(eventRsvpService.listAllRsvps()).thenReturn(listOf(sampleRsvpDto()))
+
+        mockMvc
+            .perform(get("/api/v1/events/rsvps").with(jwt().authorities(SimpleGrantedAuthority("ROLE_NOTE_TAKER"))))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data[0].title").value("여름 수련회"))
+    }
+
+    @Test
+    fun `GET events-rsvps stays closed to a group leader`() {
+        mockMvc
+            .perform(get("/api/v1/events/rsvps").with(jwt().authorities(SimpleGrantedAuthority("ROLE_GROUP_LEADER"))))
+            .andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `DELETE deactivates and returns 204 for note_taker`() {
+        mockMvc
+            .perform(
+                delete("/api/v1/events/rsvps/$rsvpId")
+                    .with(jwt().authorities(SimpleGrantedAuthority("ROLE_NOTE_TAKER"))),
+            ).andExpect(status().isNoContent)
+    }
+
     // ─── Helper: Mockito any() for non-nullable Kotlin params ─────────────────
     private fun <T> any(): T = org.mockito.kotlin.any()
 

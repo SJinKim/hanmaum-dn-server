@@ -8,6 +8,7 @@ import com.hanmaum.dn.app.features.members.service.MemberPurgeService
 import com.hanmaum.dn.app.features.members.service.MemberService
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerLifecycle
 import org.mockito.Mockito.verify
+import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration
@@ -193,26 +194,19 @@ class MemberListControllerTest {
     }
 
     @Test
-    fun `GET members is readable for a note_taker`() {
-        mockMvc
-            .perform(
-                get("/api/v1/members").param("sort", "lastName,asc").with(jwt().authorities(SimpleGrantedAuthority("ROLE_NOTE_TAKER"))),
-            ).andExpect(status().isOk)
+    fun `GET members and a single member are closed to a note_taker since HDN-299`() {
+        val noteTaker = jwt().authorities(SimpleGrantedAuthority("ROLE_NOTE_TAKER"))
 
-        verify(memberService).getMembers(
-            search = null,
-            status = null,
-            baptism = null,
-            groupPublicId = null,
-            unassigned = null,
-            trainingCode = null,
-            ministryPublicId = null,
-            updatedFrom = null,
-            updatedTo = null,
-            sort = listOf("lastName,asc"),
-            page = 0,
-            size = 20,
-        )
+        mockMvc.perform(get("/api/v1/members").with(noteTaker)).andExpect(status().isForbidden)
+        mockMvc.perform(get("/api/v1/members/${UUID.randomUUID()}").with(noteTaker)).andExpect(status().isForbidden)
+        verifyNoInteractions(memberService)
+    }
+
+    @Test
+    fun `GET members stays open to a pastor through the role hierarchy`() {
+        mockMvc
+            .perform(get("/api/v1/members").with(jwt().authorities(SimpleGrantedAuthority("ROLE_PASTOR"))))
+            .andExpect(status().isOk)
     }
 
     @Test

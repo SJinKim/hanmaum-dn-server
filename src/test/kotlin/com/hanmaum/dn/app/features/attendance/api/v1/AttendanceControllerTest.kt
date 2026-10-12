@@ -15,6 +15,7 @@ import org.mockito.Mockito.`when`
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.eq
+import org.mockito.kotlin.verify
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
@@ -26,6 +27,7 @@ import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequ
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
@@ -303,6 +305,28 @@ class AttendanceControllerTest {
                         .with(jwt().authorities(SimpleGrantedAuthority("ROLE_$role"))),
                 ).andExpect(status().isForbidden)
         }
+    }
+
+    @Test
+    fun `DELETE definitions deactivates for a note_taker`() {
+        val definitionId = UUID.randomUUID()
+
+        mockMvc
+            .perform(
+                delete("/api/v1/attendance/definitions/$definitionId")
+                    .with(jwt().authorities(SimpleGrantedAuthority("ROLE_NOTE_TAKER"))),
+            ).andExpect(status().isNoContent)
+
+        verify(attendanceService).deactivateDefinition(definitionId)
+    }
+
+    @Test
+    fun `DELETE definitions stays closed to a 순장`() {
+        mockMvc
+            .perform(
+                delete("/api/v1/attendance/definitions/${UUID.randomUUID()}")
+                    .with(jwt().authorities(SimpleGrantedAuthority("ROLE_GROUP_LEADER"))),
+            ).andExpect(status().isForbidden)
     }
 
     private fun emptyGroupCounts(definitionId: UUID) =

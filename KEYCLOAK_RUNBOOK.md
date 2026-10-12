@@ -77,14 +77,16 @@ verify all of the following:
 
 `pastor` has the same rights as `admin`: the server declares the role hierarchy
 `ROLE_PASTOR > ROLE_ADMIN` (`Roles.HIERARCHY`), so every `hasRole('ADMIN')` check
-also passes for a pastor. `note_taker` reads 청년 (members), 순 (church groups) and
-공지사항 (announcements) and writes 공지사항 only.
+also passes for a pastor. `note_taker` reads and writes 공지사항 (announcements),
+출석 (attendance), 이벤트 (event RSVPs) and 주보 (bulletins). It does not see
+청년 (members) or 순 (church groups); those stay with `admin` and `pastor`. For
+the home counters it reads only `GET /members/count`.
 
 | Group | Realm-role mappings | Effective access |
 |---|---|---|
 | `/staff/admins` | `admin` | Everything |
 | `/staff/pastors` | `pastor` | Everything (hierarchy, same as `admin`) |
-| `/staff/note-takers` | `note_taker` | Read members and church groups; read and write announcements |
+| `/staff/note-takers` | `note_taker` | Read and write announcements, attendance, events and bulletins; member counts only |
 | `/leaders/groups` | `group_leader` | 순장 endpoints |
 | `/leaders/ministries` | `ministry_leader` | 사역 leader endpoints, limited to the 사역 the user leads |
 | `/ministries/<slug>/viewers` | `<SLUG>_VIEWER` | Read the ministry's data in the web app |

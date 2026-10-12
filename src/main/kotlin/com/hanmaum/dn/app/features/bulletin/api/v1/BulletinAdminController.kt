@@ -38,7 +38,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse as OpenApiResponse
 /** 주보 editing for the admin dashboard (HDN-146). */
 @RestController
 @RequestMapping("/admin/bulletins")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER')")
 class BulletinAdminController(
     private val service: BulletinEditionService,
 ) {

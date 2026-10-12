@@ -4,6 +4,7 @@ import com.hanmaum.dn.app.common.domainvalue.Baptism
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.common.dto.ApiResponse
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.MemberCountDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberNameDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
@@ -52,12 +53,12 @@ class MemberController(
 ) {
     /**
      * GET /api/v1/members
-     * Role: ADMIN, NOTE_TAKER — paginated member list with optional search, group, training, ministry, UTC activity-date,
+     * Role: ADMIN — paginated member list with optional search, group, training, ministry, UTC activity-date,
      * origin, newcomer-status and app-link filters.
      * Default: page=0 size=20 sorted by lastName ASC.
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Parameter(
         name = "sort",
         `in` = ParameterIn.QUERY,
@@ -105,6 +106,18 @@ class MemberController(
             )
         return ResponseEntity.ok(ApiResponse.success(data = result))
     }
+
+    /**
+     * GET /api/v1/members/count
+     * Role: ADMIN, NOTE_TAKER — number of non-deleted members, optionally only those with [status].
+     * A count without the roster, so the Home cards work for roles that may not list 청년.
+     */
+    @GetMapping("/count")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER')")
+    fun countMembers(
+        @RequestParam(required = false) status: MemberStatus?,
+    ): ResponseEntity<ApiResponse<MemberCountDto>> =
+        ResponseEntity.ok(ApiResponse.success(data = memberService.countMembers(status)))
 
     /**
      * GET /api/v1/members/names
@@ -162,10 +175,10 @@ class MemberController(
 
     /**
      * GET /api/v1/members/{publicId}
-     * Role: ADMIN, NOTE_TAKER
+     * Role: ADMIN
      */
     @GetMapping("/{publicId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER')")
+    @PreAuthorize("hasRole('ADMIN')")
     fun getMember(
         @PathVariable publicId: UUID,
     ): ResponseEntity<ApiResponse<MemberDto>> {

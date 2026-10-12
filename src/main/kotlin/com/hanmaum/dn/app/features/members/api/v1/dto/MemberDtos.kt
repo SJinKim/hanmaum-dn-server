@@ -120,6 +120,11 @@ data class MemberNameDto(
     val discriminator: String? = null,
 )
 
+/** Number of non-deleted members, optionally narrowed to one status (Home 승인 대기, 현황). */
+data class MemberCountDto(
+    val count: Long,
+)
+
 /** A member's training as shown on the grid chip: stable catalog code, name, and status. */
 data class SummaryTrainingDto(
     val code: String,

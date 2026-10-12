@@ -88,6 +88,24 @@ class BulletinControllersTest {
     }
 
     @Test
+    fun `a note_taker edits and publishes like an admin`() {
+        mockMvc.perform(post("/api/v1/admin/bulletins/$editionId/publish").with(withRole("NOTE_TAKER"))).andExpect(status().isOk)
+        verify(editions).publish(editionId, "kc-002")
+
+        mockMvc.perform(delete("/api/v1/admin/bulletins/$editionId").with(withRole("NOTE_TAKER"))).andExpect(status().isNoContent)
+        verify(editions).delete(editionId)
+    }
+
+    @Test
+    fun `a note_taker reaches the bulletin settings`() {
+        val serviceId = UUID.randomUUID()
+        `when`(settings.deleteService(serviceId, "kc-002")).thenReturn(null)
+        mockMvc
+            .perform(delete("/api/v1/admin/bulletin/services/$serviceId").with(withRole("NOTE_TAKER")))
+            .andExpect(status().isNoContent)
+    }
+
+    @Test
     fun `deleting a draft is 204`() {
         mockMvc.perform(delete("/api/v1/admin/bulletins/$editionId").with(withRole("ADMIN"))).andExpect(status().isNoContent)
         verify(editions).delete(editionId)
