@@ -56,16 +56,16 @@ class MinistryRegistrationController(
 
     @GetMapping("/ministries/{publicId}/applications")
     @Operation(operationId = "getPendingMinistryApplications")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MINISTRY_LEADER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MINISTRY_LEADER', 'GENERAL_OPERATIONS_VIEWER', 'GENERAL_OPERATIONS_EDITOR')")
     fun pending(
         @PathVariable publicId: UUID,
         authentication: JwtAuthenticationToken,
     ): ApiResponse<List<ActiveMinistryMemberDto>> =
-        ApiResponse.success(service.pendingMembers(publicId, authentication.token.subject, authentication.isAdmin()))
+        ApiResponse.success(service.pendingMembers(publicId, authentication.token.subject, authentication.canReadMinistryApplications()))
 
     @PatchMapping("/ministries/{publicId}/applications/{memberPublicId}")
     @Operation(operationId = "reviewMinistryApplication")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MINISTRY_LEADER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MINISTRY_LEADER', 'GENERAL_OPERATIONS_EDITOR')")
     fun review(
         @PathVariable publicId: UUID,
         @PathVariable memberPublicId: UUID,
@@ -79,7 +79,7 @@ class MinistryRegistrationController(
                 request.decision,
                 request.message,
                 authentication.token.subject,
-                authentication.isAdmin(),
+                authentication.canManageMinistries(),
             ),
         )
 }

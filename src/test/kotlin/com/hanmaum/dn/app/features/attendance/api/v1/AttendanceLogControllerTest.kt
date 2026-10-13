@@ -6,6 +6,9 @@ import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceLogResponse
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.CreateAttendanceLogRequest
 import com.hanmaum.dn.app.features.attendance.service.AttendanceRosterService
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import org.mockito.kotlin.any
@@ -183,6 +186,40 @@ class AttendanceLogControllerTest {
                     .with(token("MEMBER")),
             ).andExpect(status().isForbidden)
 
+        verifyNoInteractions(rosterService)
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["GENERAL_OPERATIONS_VIEWER", "GENERAL_OPERATIONS_EDITOR"])
+    fun `general operations reads the attendance roster`(role: String) {
+        `when`(rosterService.getRoster(date, null)).thenReturn(listOf(sampleRow()))
+        mockMvc
+            .perform(get("/api/v1/attendance/logs").param("date", date.toString()).with(token(role)))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data[0].memberPublicId").value(memberId.toString()))
+        verify(rosterService).getRoster(date, null)
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["GENERAL_OPERATIONS_EDITOR", "ADMIN", "PASTOR", "NOTE_TAKER"])
+    fun `attendance editors can add a roster entry`(role: String) {
+        `when`(rosterService.addLog(any())).thenReturn(sampleRow())
+        mockMvc
+            .perform(post("/api/v1/attendance/logs").with(token(role)).contentType(MediaType.APPLICATION_JSON).content(body))
+            .andExpect(status().isCreated)
+            .andExpect(jsonPath("$.data.memberPublicId").value(memberId.toString()))
+        verify(rosterService).addLog(CreateAttendanceLogRequest(memberId, definitionId, date))
+    }
+
+    @Test
+    fun `general operations viewer cannot add a roster entry`() {
+        mockMvc
+            .perform(
+                post("/api/v1/attendance/logs")
+                    .with(token("GENERAL_OPERATIONS_VIEWER"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body),
+            ).andExpect(status().isForbidden)
         verifyNoInteractions(rosterService)
     }
 }

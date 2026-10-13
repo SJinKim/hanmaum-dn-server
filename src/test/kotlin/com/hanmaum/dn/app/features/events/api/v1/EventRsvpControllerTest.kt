@@ -11,6 +11,10 @@ import com.hanmaum.dn.app.features.events.api.v1.dto.PendingEventRsvpSummaryDto
 import com.hanmaum.dn.app.features.events.domain.RsvpStatus
 import com.hanmaum.dn.app.features.events.service.EventRsvpService
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+import org.mockito.Mockito.verify
+import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration
@@ -347,4 +351,76 @@ class EventRsvpControllerTest {
     private fun <T> any(): T = org.mockito.kotlin.any()
 
     private fun <T> eq(value: T): T = org.mockito.kotlin.eq(value)
+
+    @ParameterizedTest
+    @ValueSource(strings = ["GENERAL_OPERATIONS_VIEWER", "GENERAL_OPERATIONS_EDITOR"])
+    fun `general operations reads event administration`(role: String) {
+        `when`(eventRsvpService.listAllRsvps()).thenReturn(listOf(sampleRsvpDto()))
+        `when`(eventRsvpService.getPendingSummary()).thenReturn(PendingEventRsvpSummaryDto(2, emptyList()))
+        `when`(
+            eventRsvpService.getAttendees(rsvpId),
+        ).thenReturn(EventAttendeesResponse(rsvpId.toString(), "여름 수련회", 3, 1, 1, 1, emptyList()))
+        val token = jwt().authorities(SimpleGrantedAuthority("ROLE_$role"))
+        mockMvc
+            .perform(get("/api/v1/events/rsvps").with(token))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data[0].publicId").value(rsvpId.toString()))
+        mockMvc
+            .perform(get("/api/v1/events/rsvps/active/pending-summary").with(token))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.totalPending").value(2))
+        mockMvc
+            .perform(get("/api/v1/events/rsvps/$rsvpId/attendees").with(token))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.totalCount").value(3))
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["GENERAL_OPERATIONS_EDITOR", "ADMIN", "PASTOR", "NOTE_TAKER", "GROUP_LEADER"])
+    fun `event editors can create update and deactivate RSVPs`(role: String) {
+        `when`(eventRsvpService.createRsvp(any())).thenReturn(sampleRsvpDto())
+        `when`(eventRsvpService.updateRsvp(eq(rsvpId), any())).thenReturn(sampleRsvpDto())
+        val token = jwt().authorities(SimpleGrantedAuthority("ROLE_$role"))
+        mockMvc
+            .perform(
+                post("/api/v1/events/rsvps")
+                    .with(token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"title":"여름 수련회","windowStart":"${now.minusHours(1)}","windowEnd":"${now.plusHours(2)}"}"""),
+            ).andExpect(status().isCreated)
+            .andExpect(jsonPath("$.data.publicId").value(rsvpId.toString()))
+        mockMvc
+            .perform(
+                patch("/api/v1/events/rsvps/$rsvpId")
+                    .with(token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"title":"수정"}"""),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.publicId").value(rsvpId.toString()))
+        mockMvc.perform(delete("/api/v1/events/rsvps/$rsvpId").with(token)).andExpect(status().isNoContent)
+        verify(eventRsvpService).createRsvp(any())
+        verify(eventRsvpService).updateRsvp(eq(rsvpId), any())
+        verify(eventRsvpService).deactivateRsvp(rsvpId)
+    }
+
+    @Test
+    fun `general operations viewer cannot change event administration`() {
+        val token = jwt().authorities(SimpleGrantedAuthority("ROLE_GENERAL_OPERATIONS_VIEWER"))
+        mockMvc
+            .perform(
+                post("/api/v1/events/rsvps")
+                    .with(token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"title":"여름 수련회","windowStart":"${now.minusHours(1)}","windowEnd":"${now.plusHours(2)}"}"""),
+            ).andExpect(status().isForbidden)
+        mockMvc
+            .perform(
+                patch("/api/v1/events/rsvps/$rsvpId")
+                    .with(token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"title":"수정"}"""),
+            ).andExpect(status().isForbidden)
+        mockMvc.perform(delete("/api/v1/events/rsvps/$rsvpId").with(token)).andExpect(status().isForbidden)
+        verifyNoInteractions(eventRsvpService)
+    }
 }

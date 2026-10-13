@@ -34,10 +34,10 @@ class MinistryController(
 ) {
     /**
      * POST /api/v1/ministries
-     * Role: ADMIN — create a new ministry.
+     * Role: ADMIN or GENERAL_OPERATIONS_EDITOR — create a new ministry.
      */
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GENERAL_OPERATIONS_EDITOR')")
     fun createMinistry(
         @Valid @RequestBody request: CreateMinistryRequest,
     ): ResponseEntity<ApiResponse<MinistryDto>> {
@@ -90,17 +90,17 @@ class MinistryController(
 
     /**
      * POST /api/v1/ministries/{publicId}/members
-     * Role: ADMIN, or MINISTRY_LEADER of this ministry (403 otherwise) — bind an existing member.
+     * Role: ADMIN, GENERAL_OPERATIONS_EDITOR, or MINISTRY_LEADER of this ministry (403 otherwise) — bind an existing member.
      * The "맴버 추가" action on the ministry detail page. Returns the new active-member row.
      */
     @PostMapping("/{publicId}/members")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MINISTRY_LEADER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MINISTRY_LEADER', 'GENERAL_OPERATIONS_EDITOR')")
     fun addMember(
         @PathVariable publicId: UUID,
         @Valid @RequestBody request: AddMinistryMemberRequest,
         authentication: JwtAuthenticationToken,
     ): ResponseEntity<ApiResponse<ActiveMinistryMemberDto>> {
-        val added = ministryService.addMember(publicId, request, authentication.token.subject, authentication.isAdmin())
+        val added = ministryService.addMember(publicId, request, authentication.token.subject, authentication.canManageMinistries())
         return ResponseEntity
             .status(HttpStatus.CREATED)
             .body(ApiResponse.success(data = added, message = "맴버가 부서에 추가되었습니다."))
@@ -109,7 +109,7 @@ class MinistryController(
     /** PATCH one current member assignment without changing their other ministries. */
     @PatchMapping("/{publicId}/members/{memberPublicId}")
     @Operation(operationId = "updateMinistryMember")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GENERAL_OPERATIONS_EDITOR')")
     fun updateMember(
         @PathVariable publicId: UUID,
         @PathVariable memberPublicId: UUID,
@@ -121,7 +121,7 @@ class MinistryController(
 
     /** End one current assignment today, retaining it in ministry history. */
     @DeleteMapping("/{publicId}/members/{memberPublicId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GENERAL_OPERATIONS_EDITOR')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun removeMember(
         @PathVariable publicId: UUID,
@@ -132,10 +132,10 @@ class MinistryController(
 
     /**
      * PATCH /api/v1/ministries/{publicId}
-     * Role: ADMIN — partial update.
+     * Role: ADMIN or GENERAL_OPERATIONS_EDITOR — partial update.
      */
     @PatchMapping("/{publicId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GENERAL_OPERATIONS_EDITOR')")
     fun updateMinistry(
         @PathVariable publicId: UUID,
         @Valid @RequestBody request: UpdateMinistryRequest,
@@ -146,10 +146,10 @@ class MinistryController(
 
     /**
      * DELETE /api/v1/ministries/{publicId}
-     * Role: ADMIN — deactivate ministry (isActive=false, not hard delete).
+     * Role: ADMIN or GENERAL_OPERATIONS_EDITOR — deactivate ministry (isActive=false, not hard delete).
      */
     @DeleteMapping("/{publicId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GENERAL_OPERATIONS_EDITOR')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun deactivateMinistry(
         @PathVariable publicId: UUID,

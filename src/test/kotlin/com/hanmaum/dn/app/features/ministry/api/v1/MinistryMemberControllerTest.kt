@@ -9,7 +9,10 @@ import com.hanmaum.dn.app.features.ministry.api.v1.dto.UpdateMinistryMemberReque
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentRole
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentStatus
 import com.hanmaum.dn.app.features.ministry.service.MinistryService
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.Mockito.verify
+import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import org.mockito.kotlin.argumentCaptor
 import org.springframework.beans.factory.annotation.Autowired
@@ -250,4 +253,101 @@ class MinistryMemberControllerTest {
     private fun <T> any(): T = org.mockito.kotlin.any()
 
     private fun <T> eq(value: T): T = org.mockito.kotlin.eq(value)
+
+    private fun ministryDto() = MinistryDto(ministryId.toString(), "찬양팀", "찬양", "소개", emptyList(), emptyList(), emptyList(), null, true)
+
+    @ParameterizedTest
+    @ValueSource(strings = ["GENERAL_OPERATIONS_VIEWER", "GENERAL_OPERATIONS_EDITOR"])
+    fun `general operations reads ministries and members`(role: String) {
+        `when`(ministryService.getMinistries(null)).thenReturn(emptyList())
+        `when`(ministryService.getMinistry(ministryId)).thenReturn(ministryDto())
+        `when`(ministryService.getActiveMembers(ministryId, false)).thenReturn(listOf(sampleDto()))
+        val token = jwt().authorities(SimpleGrantedAuthority("ROLE_$role"))
+        mockMvc.perform(get("/api/v1/ministries").with(token)).andExpect(status().isOk).andExpect(jsonPath("$.data").isEmpty)
+        mockMvc
+            .perform(get("/api/v1/ministries/$ministryId").with(token))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.publicId").value(ministryId.toString()))
+        mockMvc
+            .perform(get("/api/v1/ministries/$ministryId/members").with(token))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data[0].publicId").value(memberId.toString()))
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["GENERAL_OPERATIONS_EDITOR", "ADMIN", "PASTOR"])
+    fun `ministry editors manage ministries and assignments without ownership`(role: String) {
+        `when`(ministryService.createMinistry(any())).thenReturn(ministryDto())
+        `when`(ministryService.updateMinistry(eq(ministryId), any())).thenReturn(ministryDto())
+        `when`(ministryService.addMember(eq(ministryId), any(), eq("editor-sub"), eq(true))).thenReturn(sampleDto())
+        `when`(ministryService.updateMember(eq(ministryId), eq(memberId), any())).thenReturn(sampleDto())
+        val token = jwt().jwt { it.subject("editor-sub") }.authorities(SimpleGrantedAuthority("ROLE_$role"))
+        mockMvc
+            .perform(
+                post("/api/v1/ministries")
+                    .with(token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"title":"찬양팀","subtitle":"찬양","about":"소개"}"""),
+            ).andExpect(status().isCreated)
+            .andExpect(jsonPath("$.data.publicId").value(ministryId.toString()))
+        mockMvc
+            .perform(
+                patch("/api/v1/ministries/$ministryId")
+                    .with(token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"title":"찬양팀"}"""),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.publicId").value(ministryId.toString()))
+        mockMvc
+            .perform(post("/api/v1/ministries/$ministryId/members").with(token).contentType(MediaType.APPLICATION_JSON).content(body))
+            .andExpect(status().isCreated)
+            .andExpect(jsonPath("$.data.publicId").value(memberId.toString()))
+        mockMvc
+            .perform(
+                patch("/api/v1/ministries/$ministryId/members/$memberId")
+                    .with(token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"note":"메모"}"""),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.publicId").value(memberId.toString()))
+        mockMvc.perform(delete("/api/v1/ministries/$ministryId/members/$memberId").with(token)).andExpect(status().isNoContent)
+        mockMvc.perform(delete("/api/v1/ministries/$ministryId").with(token)).andExpect(status().isNoContent)
+        verify(ministryService).addMember(eq(ministryId), any(), eq("editor-sub"), eq(true))
+        verify(ministryService).updateMember(eq(ministryId), eq(memberId), any())
+        verify(ministryService).removeMember(ministryId, memberId)
+        verify(ministryService).deactivateMinistry(ministryId)
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["GENERAL_OPERATIONS_VIEWER", "NOTE_TAKER", "GROUP_LEADER", "MEMBER"])
+    fun `roles without ministry write access cannot change ministries or assignments`(role: String) {
+        val token = jwt().authorities(SimpleGrantedAuthority("ROLE_$role"))
+        mockMvc
+            .perform(
+                post("/api/v1/ministries")
+                    .with(token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"title":"찬양팀","subtitle":"찬양","about":"소개"}"""),
+            ).andExpect(status().isForbidden)
+        mockMvc
+            .perform(
+                patch("/api/v1/ministries/$ministryId")
+                    .with(token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"title":"찬양팀"}"""),
+            ).andExpect(status().isForbidden)
+        mockMvc
+            .perform(post("/api/v1/ministries/$ministryId/members").with(token).contentType(MediaType.APPLICATION_JSON).content(body))
+            .andExpect(status().isForbidden)
+        mockMvc
+            .perform(
+                patch("/api/v1/ministries/$ministryId/members/$memberId")
+                    .with(token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"note":"메모"}"""),
+            ).andExpect(status().isForbidden)
+        mockMvc.perform(delete("/api/v1/ministries/$ministryId/members/$memberId").with(token)).andExpect(status().isForbidden)
+        mockMvc.perform(delete("/api/v1/ministries/$ministryId").with(token)).andExpect(status().isForbidden)
+        verifyNoInteractions(ministryService)
+    }
 }

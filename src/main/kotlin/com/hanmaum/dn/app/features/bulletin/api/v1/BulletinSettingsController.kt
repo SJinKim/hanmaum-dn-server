@@ -30,18 +30,19 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse as OpenApiResponse
 /** 주보 설정: services and section titles (HDN-146). */
 @RestController
 @RequestMapping("/admin/bulletin")
-@PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER')")
 class BulletinSettingsController(
     private val settings: BulletinSettingsService,
 ) {
     // ─── Services ─────────────────────────────────────────────────────────────
 
     @GetMapping("/services")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_VIEWER', 'GENERAL_OPERATIONS_EDITOR')")
     @Operation(operationId = "listBulletinServices")
     fun listServices(): ResponseEntity<ApiResponse<List<BulletinServiceResponse>>> =
         ResponseEntity.ok(ApiResponse.success(settings.listServices()))
 
     @PostMapping("/services")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_EDITOR')")
     @Operation(operationId = "createBulletinService")
     @OpenApiResponse(responseCode = "201", description = "Service created")
     fun createService(
@@ -53,6 +54,7 @@ class BulletinSettingsController(
             .body(ApiResponse.success(data = settings.createService(request, authentication.token.subject), message = "예배가 추가되었습니다."))
 
     @PutMapping("/services/{publicId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_EDITOR')")
     @Operation(operationId = "updateBulletinService")
     @OpenApiResponse(responseCode = "200", description = "Service updated")
     @OpenApiResponse(
@@ -72,6 +74,7 @@ class BulletinSettingsController(
      * 204 when it was deleted.
      */
     @DeleteMapping("/services/{publicId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_EDITOR')")
     @Operation(operationId = "deleteBulletinService")
     @OpenApiResponse(responseCode = "200", description = "In use by an edition, so only deactivated")
     @OpenApiResponse(responseCode = "204", description = "Deleted")
@@ -95,12 +98,14 @@ class BulletinSettingsController(
     // ─── Section titles ───────────────────────────────────────────────────────
 
     @GetMapping("/section-titles")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_VIEWER', 'GENERAL_OPERATIONS_EDITOR')")
     @Operation(operationId = "listBulletinSectionTitles")
     fun listSectionTitles(): ResponseEntity<ApiResponse<List<BulletinSectionTitleResponse>>> =
         ResponseEntity.ok(ApiResponse.success(settings.listSectionTitles()))
 
     /** A blank title goes back to the default one. */
     @PutMapping("/section-titles/{key}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_EDITOR')")
     @Operation(operationId = "updateBulletinSectionTitle")
     fun updateSectionTitle(
         @PathVariable key: BulletinSectionKey,

@@ -89,16 +89,26 @@ the home counters it reads only `GET /members/count`.
 | `/staff/note-takers` | `note_taker` | Read and write announcements, attendance, events and bulletins; member counts only |
 | `/leaders/groups` | `group_leader` | 순장 endpoints |
 | `/leaders/ministries` | `ministry_leader` | 사역 leader endpoints, limited to the 사역 the user leads |
+| `/ministries/general_operations/viewers` | `GENERAL_OPERATIONS_VIEWER` | Read attendance (including the roster), events, ministries (including applications), bulletins and announcements |
+| `/ministries/general_operations/editors` | `GENERAL_OPERATIONS_VIEWER`, `GENERAL_OPERATIONS_EDITOR` | Read and write those five areas; manage every ministry and accept/reject applications |
 | `/ministries/<slug>/viewers` | `<SLUG>_VIEWER` | Read the ministry's data in the web app |
 | `/ministries/<slug>/editors` | `<SLUG>_VIEWER`, `<SLUG>_EDITOR` | Read and write the ministry's data in the web app |
 
-Keycloak grants web access only. Who belongs to a 사역 and who leads it lives in
+Keycloak roles grant API access as well as web access. Who belongs to a 사역 and who leads it lives in
 the database (`MinistryAssignment` with role `LEADER`, see #300): `ministry_leader`
 lets a user call the leader endpoints, and the server then allows changes only on
 the 사역 that user leads. Every 사역 follows the `viewers`/`editors` pattern of
 `/ministries/newcomer`. The first team beyond newcomer is
 `/ministries/general_operations` with `GENERAL_OPERATIONS_VIEWER` and
 `GENERAL_OPERATIONS_EDITOR`.
+
+General operations viewers cannot use the administrative write endpoints in these
+five areas; editors can create, update, delete, publish and withdraw. Editors
+bypass the ministry ownership check for member management and application
+reviews; viewers bypass it only when listing applications. Neither role grants
+access to member administration or church-group administration. Member self-service
+endpoints (attendance check-in, own RSVP response and ministry application) keep
+their existing authenticated access.
 
 Both checked-in realm exports contain these roles and groups. On an existing realm:
 

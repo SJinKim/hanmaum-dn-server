@@ -35,7 +35,7 @@ class EventRsvpController(
     private val eventRsvpService: EventRsvpService,
 ) {
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'GROUP_LEADER', 'NOTE_TAKER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GROUP_LEADER', 'NOTE_TAKER', 'GENERAL_OPERATIONS_EDITOR')")
     fun createRsvp(
         @Valid @RequestBody request: CreateEventRsvpRequest,
     ): ResponseEntity<ApiResponse<EventRsvpDto>> {
@@ -46,7 +46,7 @@ class EventRsvpController(
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_VIEWER', 'GENERAL_OPERATIONS_EDITOR')")
     fun listRsvps(): ResponseEntity<ApiResponse<List<EventRsvpDto>>> =
         ResponseEntity.ok(ApiResponse.success(data = eventRsvpService.listAllRsvps()))
 
@@ -65,12 +65,12 @@ class EventRsvpController(
                 "Group leaders currently see church-wide counts.",
     )
     @GetMapping("/active/pending-summary")
-    @PreAuthorize("hasAnyRole('ADMIN', 'GROUP_LEADER', 'NOTE_TAKER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GROUP_LEADER', 'NOTE_TAKER', 'GENERAL_OPERATIONS_VIEWER', 'GENERAL_OPERATIONS_EDITOR')")
     fun getPendingSummary(): ResponseEntity<ApiResponse<PendingEventRsvpSummaryDto>> =
         ResponseEntity.ok(ApiResponse.success(data = eventRsvpService.getPendingSummary()))
 
     @PatchMapping("/{publicId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'GROUP_LEADER', 'NOTE_TAKER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GROUP_LEADER', 'NOTE_TAKER', 'GENERAL_OPERATIONS_EDITOR')")
     fun updateRsvp(
         @PathVariable publicId: UUID,
         @Valid @RequestBody request: UpdateEventRsvpRequest,
@@ -80,7 +80,7 @@ class EventRsvpController(
     }
 
     @DeleteMapping("/{publicId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'GROUP_LEADER', 'NOTE_TAKER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GROUP_LEADER', 'NOTE_TAKER', 'GENERAL_OPERATIONS_EDITOR')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun deactivateRsvp(
         @PathVariable publicId: UUID,
@@ -116,7 +116,7 @@ class EventRsvpController(
         )
 
     @GetMapping("/{publicId}/attendees")
-    @PreAuthorize("hasAnyRole('ADMIN', 'GROUP_LEADER', 'NOTE_TAKER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GROUP_LEADER', 'NOTE_TAKER', 'GENERAL_OPERATIONS_VIEWER', 'GENERAL_OPERATIONS_EDITOR')")
     fun getAttendees(
         @PathVariable publicId: UUID,
     ): ResponseEntity<ApiResponse<EventAttendeesResponse>> =

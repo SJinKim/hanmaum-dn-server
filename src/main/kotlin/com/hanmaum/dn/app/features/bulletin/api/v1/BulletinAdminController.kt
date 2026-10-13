@@ -38,12 +38,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse as OpenApiResponse
 /** 주보 editing for the admin dashboard (HDN-146). */
 @RestController
 @RequestMapping("/admin/bulletins")
-@PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER')")
 class BulletinAdminController(
     private val service: BulletinEditionService,
 ) {
     /** Newest Sunday first; [status] narrows to one state. */
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_VIEWER', 'GENERAL_OPERATIONS_EDITOR')")
     @Operation(operationId = "listBulletinEditions")
     fun list(
         @RequestParam(required = false) status: BulletinStatus?,
@@ -53,6 +53,7 @@ class BulletinAdminController(
 
     /** What a new draft would start with: the next free Sunday and the default service. */
     @GetMapping("/defaults")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_VIEWER', 'GENERAL_OPERATIONS_EDITOR')")
     @Operation(
         operationId = "getBulletinDefaults",
         description = "serviceDate is the global earliest free Sunday, independent of the selection cursor.",
@@ -84,12 +85,14 @@ class BulletinAdminController(
     }
 
     @GetMapping("/{publicId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_VIEWER', 'GENERAL_OPERATIONS_EDITOR')")
     @Operation(operationId = "getBulletinEdition")
     fun get(
         @PathVariable publicId: UUID,
     ): ResponseEntity<ApiResponse<BulletinEditionResponse>> = ResponseEntity.ok(ApiResponse.success(service.view(publicId)))
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_EDITOR')")
     @Operation(operationId = "createBulletinEdition")
     @OpenApiResponse(responseCode = "201", description = "Draft created")
     @OpenApiResponse(
@@ -116,6 +119,7 @@ class BulletinAdminController(
 
     /** Replaces the draft's content. */
     @PutMapping("/{publicId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_EDITOR')")
     @Operation(operationId = "updateBulletinEdition")
     @OpenApiResponse(responseCode = "200", description = "Draft saved")
     @OpenApiResponse(
@@ -131,6 +135,7 @@ class BulletinAdminController(
         ResponseEntity.ok(ApiResponse.success(service.update(publicId, request, authentication.token.subject)))
 
     @PostMapping("/{publicId}/publish")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_EDITOR')")
     @Operation(operationId = "publishBulletinEdition")
     @OpenApiResponse(responseCode = "200", description = "Published; the first publish assigns the VOL")
     @OpenApiResponse(
@@ -152,6 +157,7 @@ class BulletinAdminController(
     }
 
     @PostMapping("/{publicId}/withdraw")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_EDITOR')")
     @Operation(operationId = "withdrawBulletinEdition")
     @OpenApiResponse(responseCode = "200", description = "Withdrawn; the VOL stays")
     @OpenApiResponse(
@@ -169,6 +175,7 @@ class BulletinAdminController(
 
     /** Only a draft that never had a VOL; anything else is withdrawn instead. */
     @DeleteMapping("/{publicId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_EDITOR')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(operationId = "deleteBulletinEdition")
     @OpenApiResponse(responseCode = "204", description = "Draft deleted")

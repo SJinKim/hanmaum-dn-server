@@ -2,11 +2,15 @@ package com.hanmaum.dn.app.features.ministry.api.v1
 
 import com.hanmaum.dn.app.common.config.SecurityConfig
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryRegistrationDecision
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryRegistrationDto
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentStatus
 import com.hanmaum.dn.app.features.ministry.service.MinistryRegistrationService
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.Mockito.verify
+import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration
@@ -137,5 +141,70 @@ class MinistryRegistrationControllerTest {
                     .content("""{"decision":"REJECT","message":"다음에 다시 신청해 주세요"}"""),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.data.rejectionMessage").value("다음에 다시 신청해 주세요"))
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["GENERAL_OPERATIONS_VIEWER", "GENERAL_OPERATIONS_EDITOR", "ADMIN", "PASTOR"])
+    fun `general operations reads applications without ministry ownership`(role: String) {
+        `when`(service.pendingMembers(ministryId, "reviewer-sub", true)).thenReturn(emptyList())
+        mvc
+            .perform(
+                get("/api/v1/ministries/$ministryId/applications")
+                    .with(jwt().jwt { it.subject("reviewer-sub") }.authorities(SimpleGrantedAuthority("ROLE_$role"))),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data").isEmpty)
+        verify(service).pendingMembers(ministryId, "reviewer-sub", true)
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["GENERAL_OPERATIONS_EDITOR", "ADMIN", "PASTOR"])
+    fun `ministry editors accept and reject applications without ownership`(role: String) {
+        for (decision in MinistryRegistrationDecision.entries) {
+            val expectedStatus =
+                if (decision ==
+                    MinistryRegistrationDecision.APPROVE
+                ) {
+                    MinistryAssignmentStatus.ACTIVE
+                } else {
+                    MinistryAssignmentStatus.REJECTED
+                }
+            `when`(service.review(ministryId, memberId, decision, "답변", "reviewer-sub", true))
+                .thenReturn(pending.copy(status = expectedStatus))
+            mvc
+                .perform(
+                    patch("/api/v1/ministries/$ministryId/applications/$memberId")
+                        .with(jwt().jwt { it.subject("reviewer-sub") }.authorities(SimpleGrantedAuthority("ROLE_$role")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"decision":"$decision","message":"답변"}"""),
+                ).andExpect(status().isOk)
+                .andExpect(jsonPath("$.data.status").value(expectedStatus.name))
+            verify(service).review(ministryId, memberId, decision, "답변", "reviewer-sub", true)
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["GENERAL_OPERATIONS_VIEWER", "NOTE_TAKER", "GROUP_LEADER", "MEMBER"])
+    fun `roles without ministry write access cannot review applications`(role: String) {
+        for (decision in MinistryRegistrationDecision.entries) {
+            mvc
+                .perform(
+                    patch("/api/v1/ministries/$ministryId/applications/$memberId")
+                        .with(jwt().authorities(SimpleGrantedAuthority("ROLE_$role")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"decision":"$decision","message":"답변"}"""),
+                ).andExpect(status().isForbidden)
+        }
+        verifyNoInteractions(service)
+    }
+
+    @Test
+    fun `ministry leader still needs ownership to read applications`() {
+        `when`(service.pendingMembers(ministryId, "leader-sub", false)).thenReturn(emptyList())
+        mvc
+            .perform(
+                get("/api/v1/ministries/$ministryId/applications")
+                    .with(jwt().jwt { it.subject("leader-sub") }.authorities(SimpleGrantedAuthority("ROLE_MINISTRY_LEADER"))),
+            ).andExpect(status().isOk)
+        verify(service).pendingMembers(ministryId, "leader-sub", false)
     }
 }

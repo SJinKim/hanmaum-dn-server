@@ -8,9 +8,13 @@ import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceCheckInRespon
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceGroupCountsResponse
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.ChurchGroupAttendanceCountResponse
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.ConflictingDefinitionDto
+import com.hanmaum.dn.app.features.attendance.api.v1.dto.DefinitionDto
 import com.hanmaum.dn.app.features.attendance.service.AttendanceService
 import com.hanmaum.dn.app.features.attendance.service.AttendanceWindowOverlapException
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
@@ -29,6 +33,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -340,4 +345,67 @@ class AttendanceControllerTest {
             totalUnconfirmedCount = 0,
             groups = emptyList(),
         )
+
+    @ParameterizedTest
+    @ValueSource(strings = ["GENERAL_OPERATIONS_VIEWER", "GENERAL_OPERATIONS_EDITOR"])
+    fun `general operations reads attendance definitions`(role: String) {
+        `when`(attendanceService.getDefinitions(false)).thenReturn(emptyList())
+        mockMvc
+            .perform(get("/api/v1/attendance/definitions").with(jwt().authorities(SimpleGrantedAuthority("ROLE_$role"))))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data").isEmpty)
+        verify(attendanceService).getDefinitions(false)
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["GENERAL_OPERATIONS_EDITOR", "ADMIN", "PASTOR", "NOTE_TAKER"])
+    fun `attendance editors can create update and deactivate definitions`(role: String) {
+        val id = UUID.randomUUID()
+        val dto = DefinitionDto(id.toString(), "예배", DayOfWeek.SUNDAY, LocalTime.of(10, 0), LocalTime.of(12, 0), true, null)
+        `when`(attendanceService.createDefinition(any())).thenReturn(dto)
+        `when`(attendanceService.updateDefinition(eq(id), any())).thenReturn(dto)
+        val token = jwt().authorities(SimpleGrantedAuthority("ROLE_$role"))
+        mockMvc
+            .perform(
+                post("/api/v1/attendance/definitions")
+                    .with(token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"title":"예배","dayOfWeek":"SUNDAY","windowStart":"10:00","windowEnd":"12:00"}"""),
+            ).andExpect(status().isCreated)
+            .andExpect(jsonPath("$.data.publicId").value(id.toString()))
+        mockMvc
+            .perform(
+                patch("/api/v1/attendance/definitions/$id")
+                    .with(token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"title":"예배"}"""),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.publicId").value(id.toString()))
+        mockMvc.perform(delete("/api/v1/attendance/definitions/$id").with(token)).andExpect(status().isNoContent)
+        verify(attendanceService).createDefinition(any())
+        verify(attendanceService).updateDefinition(eq(id), any())
+        verify(attendanceService).deactivateDefinition(id)
+    }
+
+    @Test
+    fun `general operations viewer cannot change attendance definitions`() {
+        val id = UUID.randomUUID()
+        val token = jwt().authorities(SimpleGrantedAuthority("ROLE_GENERAL_OPERATIONS_VIEWER"))
+        mockMvc
+            .perform(
+                post("/api/v1/attendance/definitions")
+                    .with(token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"title":"예배","dayOfWeek":"SUNDAY","windowStart":"10:00","windowEnd":"12:00"}"""),
+            ).andExpect(status().isForbidden)
+        mockMvc
+            .perform(
+                patch("/api/v1/attendance/definitions/$id")
+                    .with(token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"title":"예배"}"""),
+            ).andExpect(status().isForbidden)
+        mockMvc.perform(delete("/api/v1/attendance/definitions/$id").with(token)).andExpect(status().isForbidden)
+        verifyNoInteractions(attendanceService)
+    }
 }

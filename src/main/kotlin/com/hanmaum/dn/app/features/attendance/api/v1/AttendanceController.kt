@@ -39,7 +39,7 @@ class AttendanceController(
     // ─── Definitions ───────────────────────────────────────────────────────────
 
     @PostMapping("/definitions")
-    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_EDITOR')")
     @OpenApiResponse(responseCode = "201", description = "Attendance definition created")
     @OpenApiResponse(
         responseCode = "409",
@@ -67,7 +67,7 @@ class AttendanceController(
     }
 
     @PatchMapping("/definitions/{publicId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_EDITOR')")
     @OpenApiResponse(responseCode = "200", description = "Attendance definition updated")
     @OpenApiResponse(
         responseCode = "409",
@@ -85,7 +85,7 @@ class AttendanceController(
     }
 
     @DeleteMapping("/definitions/{publicId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_EDITOR')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun deactivateDefinition(
         @PathVariable publicId: UUID,
