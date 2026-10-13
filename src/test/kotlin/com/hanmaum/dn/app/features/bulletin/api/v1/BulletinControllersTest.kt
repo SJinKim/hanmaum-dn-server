@@ -1,17 +1,26 @@
 package com.hanmaum.dn.app.features.bulletin.api.v1
 
 import com.hanmaum.dn.app.common.config.SecurityConfig
+import com.hanmaum.dn.app.features.bulletin.api.v1.dto.BulletinEditionResponse
 import com.hanmaum.dn.app.features.bulletin.api.v1.dto.BulletinEditionSummary
+import com.hanmaum.dn.app.features.bulletin.api.v1.dto.BulletinSectionTitleResponse
+import com.hanmaum.dn.app.features.bulletin.api.v1.dto.BulletinServiceResponse
 import com.hanmaum.dn.app.features.bulletin.api.v1.dto.BulletinSundayOption
+import com.hanmaum.dn.app.features.bulletin.domain.BulletinEdition
+import com.hanmaum.dn.app.features.bulletin.domain.BulletinSectionKey
 import com.hanmaum.dn.app.features.bulletin.domain.BulletinService
 import com.hanmaum.dn.app.features.bulletin.domain.BulletinStatus
 import com.hanmaum.dn.app.features.bulletin.service.BulletinDefaults
 import com.hanmaum.dn.app.features.bulletin.service.BulletinEditionService
 import com.hanmaum.dn.app.features.bulletin.service.BulletinSettingsService
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
+import org.mockito.kotlin.any
+import org.mockito.kotlin.eq
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
@@ -38,7 +47,7 @@ import java.time.LocalTime
 import java.util.UUID
 import kotlin.test.Test
 
-/** HDN-146: editing and settings are admin-only, reading the published 주보 needs any login. */
+/** Bulletin role enforcement; reading the published 주보 needs any login. */
 @WebMvcTest(
     controllers = [BulletinAdminController::class, BulletinSettingsController::class, BulletinController::class],
     excludeAutoConfiguration = [OAuth2ResourceServerAutoConfiguration::class],
@@ -201,5 +210,96 @@ class BulletinControllersTest {
     @Test
     fun `a song of 200 characters passes`() {
         saveSongs("가".repeat(200)).andExpect(status().isOk)
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["GENERAL_OPERATIONS_VIEWER", "GENERAL_OPERATIONS_EDITOR", "ADMIN", "PASTOR", "NOTE_TAKER"])
+    fun `bulletin readers can list defaults detail and settings`(role: String) {
+        val date = LocalDate.of(2026, 10, 18)
+        val churchService = BulletinService(name = "3부", startTime = LocalTime.of(14, 0), sortOrder = 3)
+        val edition = BulletinEdition(date, churchService, "kc-002")
+        val response = BulletinEditionResponse.from(edition, emptyList())
+        val key = BulletinSectionKey.entries.first()
+        `when`(editions.list(null, 0, 20)).thenReturn(PageImpl(listOf(BulletinEditionSummary.from(edition))))
+        `when`(editions.defaults(null)).thenReturn(BulletinDefaults(date, churchService, emptyList(), date.plusWeeks(12)))
+        `when`(editions.view(editionId)).thenReturn(response)
+        `when`(settings.listServices()).thenReturn(listOf(BulletinServiceResponse.from(churchService)))
+        `when`(settings.listSectionTitles()).thenReturn(listOf(BulletinSectionTitleResponse(key, "제목", "기본")))
+        mockMvc
+            .perform(get("/api/v1/admin/bulletins").with(withRole(role)))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.content[0].serviceDate").value(date.toString()))
+        mockMvc
+            .perform(get("/api/v1/admin/bulletins/defaults").with(withRole(role)))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.serviceDate").value(date.toString()))
+        mockMvc
+            .perform(get("/api/v1/admin/bulletins/$editionId").with(withRole(role)))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.publicId").value(edition.publicId.toString()))
+        mockMvc
+            .perform(get("/api/v1/admin/bulletin/services").with(withRole(role)))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data[0].name").value("3부"))
+        mockMvc
+            .perform(get("/api/v1/admin/bulletin/section-titles").with(withRole(role)))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data[0].title").value("제목"))
+    }
+
+    private fun bulletinWriteRequests() =
+        listOf(
+            post("/api/v1/admin/bulletins").content("{}"),
+            put("/api/v1/admin/bulletins/$editionId").content("""{"version":0}"""),
+            post("/api/v1/admin/bulletins/$editionId/publish"),
+            post("/api/v1/admin/bulletins/$editionId/withdraw"),
+            delete("/api/v1/admin/bulletins/$editionId"),
+            post("/api/v1/admin/bulletin/services").content("""{"name":"3부","startTime":"14:00"}"""),
+            put("/api/v1/admin/bulletin/services/$editionId").content("""{"name":"3부","startTime":"14:00"}"""),
+            delete("/api/v1/admin/bulletin/services/$editionId"),
+            put("/api/v1/admin/bulletin/section-titles/${BulletinSectionKey.entries.first()}").content("""{"title":"제목"}"""),
+        )
+
+    @ParameterizedTest
+    @ValueSource(strings = ["GENERAL_OPERATIONS_VIEWER", "MEMBER", "GROUP_LEADER", "MINISTRY_LEADER"])
+    fun `roles without bulletin write access cannot change editions or settings`(role: String) {
+        for (request in bulletinWriteRequests()) {
+            mockMvc.perform(request.with(withRole(role)).contentType(MediaType.APPLICATION_JSON)).andExpect(status().isForbidden)
+        }
+        verifyNoInteractions(editions, settings)
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["GENERAL_OPERATIONS_EDITOR", "ADMIN", "PASTOR", "NOTE_TAKER"])
+    fun `bulletin editors can create update publish withdraw delete and configure`(role: String) {
+        val churchService = BulletinService(name = "3부", startTime = LocalTime.of(14, 0), sortOrder = 3)
+        val edition = BulletinEdition(LocalDate.of(2026, 10, 18), churchService, "kc-002")
+        val response = BulletinEditionResponse.from(edition, emptyList())
+        val key = BulletinSectionKey.entries.first()
+        `when`(editions.createDraft(null, null, null, "kc-002")).thenReturn(edition)
+        `when`(editions.view(edition.publicId)).thenReturn(response)
+        `when`(editions.view(editionId)).thenReturn(response)
+        `when`(editions.update(eq(editionId), any(), eq("kc-002"))).thenReturn(response)
+        `when`(settings.createService(any(), eq("kc-002"))).thenReturn(BulletinServiceResponse.from(churchService))
+        `when`(settings.updateService(eq(editionId), any(), eq("kc-002"))).thenReturn(BulletinServiceResponse.from(churchService))
+        `when`(settings.deleteService(editionId, "kc-002")).thenReturn(null)
+        `when`(settings.updateSectionTitle(key, "제목", "kc-002")).thenReturn(BulletinSectionTitleResponse(key, "제목", "기본"))
+        val expectedStatuses = listOf(201, 200, 200, 200, 204, 201, 200, 204, 200)
+        bulletinWriteRequests().zip(expectedStatuses).forEach { (request, expected) ->
+            val result =
+                mockMvc
+                    .perform(request.with(withRole(role)).contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().`is`(expected))
+            if (expected != 204) result.andExpect(jsonPath("$.success").value(true))
+        }
+        verify(editions).createDraft(null, null, null, "kc-002")
+        verify(editions).update(eq(editionId), any(), eq("kc-002"))
+        verify(editions).publish(editionId, "kc-002")
+        verify(editions).withdraw(editionId, "kc-002")
+        verify(editions).delete(editionId)
+        verify(settings).createService(any(), eq("kc-002"))
+        verify(settings).updateService(eq(editionId), any(), eq("kc-002"))
+        verify(settings).deleteService(editionId, "kc-002")
+        verify(settings).updateSectionTitle(key, "제목", "kc-002")
     }
 }

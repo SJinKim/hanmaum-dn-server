@@ -77,6 +77,16 @@ class SecurityConfigTest {
     fun `a note_taker token keeps only its own role`() {
         assertEquals(setOf("ROLE_NOTE_TAKER"), authoritiesOf("note_taker"))
     }
+
+    @Test
+    fun `an operations editor token also carries viewer authority`() {
+        assertEquals(setOf("ROLE_GENERAL_OPERATIONS_EDITOR", "ROLE_GENERAL_OPERATIONS_VIEWER"), authoritiesOf("GENERAL_OPERATIONS_EDITOR"))
+    }
+
+    @Test
+    fun `an operations viewer token does not gain editor authority`() {
+        assertEquals(setOf("ROLE_GENERAL_OPERATIONS_VIEWER"), authoritiesOf("GENERAL_OPERATIONS_VIEWER"))
+    }
 }
 
 @RestController

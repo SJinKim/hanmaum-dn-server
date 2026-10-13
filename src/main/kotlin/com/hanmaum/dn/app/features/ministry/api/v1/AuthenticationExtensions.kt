@@ -10,3 +10,11 @@ private val ADMIN_AUTHORITIES = setOf(Roles.authority(Roles.ADMIN), Roles.author
  * [Roles.HIERARCHY] lets it pass `hasRole('ADMIN')`, but the token itself only carries `ROLE_PASTOR`.
  */
 internal fun JwtAuthenticationToken.isAdmin(): Boolean = authorities.any { it.authority in ADMIN_AUTHORITIES }
+
+/** General operations editors manage all ministries, just like admins and pastors. */
+internal fun JwtAuthenticationToken.canManageMinistries(): Boolean =
+    isAdmin() || authorities.any { it.authority == Roles.authority(Roles.GENERAL_OPERATIONS_EDITOR) }
+
+/** Viewers may inspect every ministry's applications, but cannot review them. */
+internal fun JwtAuthenticationToken.canReadMinistryApplications(): Boolean =
+    canManageMinistries() || authorities.any { it.authority == Roles.authority(Roles.GENERAL_OPERATIONS_VIEWER) }

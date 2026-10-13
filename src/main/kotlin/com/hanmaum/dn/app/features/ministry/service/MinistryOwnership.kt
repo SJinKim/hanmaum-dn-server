@@ -31,17 +31,18 @@ class MinistryOwnership(
             .firstOrNull { it.role == MinistryAssignmentRole.LEADER }
 
     /**
-     * Passes for an admin or for the current leader of [ministry]; anyone else gets 403 with
+     * Passes when [bypassOwnership] grants access across ministries, or for the current leader
+     * of [ministry]; anyone else gets 403 with
      * [deniedMessage]. That includes a caller without a (non-deleted) member profile: they lead
      * nothing, so the answer is 403 here, not the 404 `/members/me` gives for the same case.
      */
     fun requireLeader(
         ministry: Ministry,
         keycloakSubject: String,
-        isAdmin: Boolean,
+        bypassOwnership: Boolean,
         deniedMessage: String = "Only this ministry's leader can change it",
     ) {
-        if (isAdmin) return
+        if (bypassOwnership) return
         val caller =
             try {
                 currentMemberResolver.require(keycloakSubject)

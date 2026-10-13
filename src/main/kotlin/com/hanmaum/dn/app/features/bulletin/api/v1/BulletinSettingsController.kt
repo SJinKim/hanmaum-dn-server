@@ -2,6 +2,7 @@ package com.hanmaum.dn.app.features.bulletin.api.v1
 
 import com.hanmaum.dn.app.common.api.ErrorResponse
 import com.hanmaum.dn.app.common.dto.ApiResponse
+import com.hanmaum.dn.app.common.security.Authz
 import com.hanmaum.dn.app.features.bulletin.api.v1.dto.BulletinSectionTitleResponse
 import com.hanmaum.dn.app.features.bulletin.api.v1.dto.BulletinServiceRequest
 import com.hanmaum.dn.app.features.bulletin.api.v1.dto.BulletinServiceResponse
@@ -29,14 +30,15 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse as OpenApiResponse
 
 /** 주보 설정: services and section titles (HDN-146). */
 @RestController
+@PreAuthorize(Authz.OPERATIONS_WRITE)
 @RequestMapping("/admin/bulletin")
-@PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER')")
 class BulletinSettingsController(
     private val settings: BulletinSettingsService,
 ) {
     // ─── Services ─────────────────────────────────────────────────────────────
 
     @GetMapping("/services")
+    @PreAuthorize(Authz.OPERATIONS_READ)
     @Operation(operationId = "listBulletinServices")
     fun listServices(): ResponseEntity<ApiResponse<List<BulletinServiceResponse>>> =
         ResponseEntity.ok(ApiResponse.success(settings.listServices()))
@@ -95,6 +97,7 @@ class BulletinSettingsController(
     // ─── Section titles ───────────────────────────────────────────────────────
 
     @GetMapping("/section-titles")
+    @PreAuthorize(Authz.OPERATIONS_READ)
     @Operation(operationId = "listBulletinSectionTitles")
     fun listSectionTitles(): ResponseEntity<ApiResponse<List<BulletinSectionTitleResponse>>> =
         ResponseEntity.ok(ApiResponse.success(settings.listSectionTitles()))

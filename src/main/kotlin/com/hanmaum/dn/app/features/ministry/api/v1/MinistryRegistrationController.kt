@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.ministry.api.v1
 
 import com.hanmaum.dn.app.common.dto.ApiResponse
+import com.hanmaum.dn.app.common.security.Authz
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.ActiveMinistryMemberDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryRegistrationDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.ReviewMinistryRegistrationRequest
@@ -56,16 +57,16 @@ class MinistryRegistrationController(
 
     @GetMapping("/ministries/{publicId}/applications")
     @Operation(operationId = "getPendingMinistryApplications")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MINISTRY_LEADER')")
+    @PreAuthorize(Authz.MINISTRY_READ)
     fun pending(
         @PathVariable publicId: UUID,
         authentication: JwtAuthenticationToken,
     ): ApiResponse<List<ActiveMinistryMemberDto>> =
-        ApiResponse.success(service.pendingMembers(publicId, authentication.token.subject, authentication.isAdmin()))
+        ApiResponse.success(service.pendingMembers(publicId, authentication.token.subject, authentication.canReadMinistryApplications()))
 
     @PatchMapping("/ministries/{publicId}/applications/{memberPublicId}")
     @Operation(operationId = "reviewMinistryApplication")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MINISTRY_LEADER')")
+    @PreAuthorize(Authz.MINISTRY_WRITE)
     fun review(
         @PathVariable publicId: UUID,
         @PathVariable memberPublicId: UUID,
@@ -79,7 +80,7 @@ class MinistryRegistrationController(
                 request.decision,
                 request.message,
                 authentication.token.subject,
-                authentication.isAdmin(),
+                authentication.canManageMinistries(),
             ),
         )
 }

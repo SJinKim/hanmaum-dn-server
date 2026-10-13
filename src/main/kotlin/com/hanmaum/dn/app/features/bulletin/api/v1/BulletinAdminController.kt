@@ -2,6 +2,7 @@ package com.hanmaum.dn.app.features.bulletin.api.v1
 
 import com.hanmaum.dn.app.common.api.ErrorResponse
 import com.hanmaum.dn.app.common.dto.ApiResponse
+import com.hanmaum.dn.app.common.security.Authz
 import com.hanmaum.dn.app.features.bulletin.api.v1.dto.BulletinDefaultsResponse
 import com.hanmaum.dn.app.features.bulletin.api.v1.dto.BulletinEditionResponse
 import com.hanmaum.dn.app.features.bulletin.api.v1.dto.BulletinEditionSummary
@@ -37,13 +38,14 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse as OpenApiResponse
 
 /** 주보 editing for the admin dashboard (HDN-146). */
 @RestController
+@PreAuthorize(Authz.OPERATIONS_WRITE)
 @RequestMapping("/admin/bulletins")
-@PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER')")
 class BulletinAdminController(
     private val service: BulletinEditionService,
 ) {
     /** Newest Sunday first; [status] narrows to one state. */
     @GetMapping
+    @PreAuthorize(Authz.OPERATIONS_READ)
     @Operation(operationId = "listBulletinEditions")
     fun list(
         @RequestParam(required = false) status: BulletinStatus?,
@@ -53,6 +55,7 @@ class BulletinAdminController(
 
     /** What a new draft would start with: the next free Sunday and the default service. */
     @GetMapping("/defaults")
+    @PreAuthorize(Authz.OPERATIONS_READ)
     @Operation(
         operationId = "getBulletinDefaults",
         description = "serviceDate is the global earliest free Sunday, independent of the selection cursor.",
@@ -84,6 +87,7 @@ class BulletinAdminController(
     }
 
     @GetMapping("/{publicId}")
+    @PreAuthorize(Authz.OPERATIONS_READ)
     @Operation(operationId = "getBulletinEdition")
     fun get(
         @PathVariable publicId: UUID,

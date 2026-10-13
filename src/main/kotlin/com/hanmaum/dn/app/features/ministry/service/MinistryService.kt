@@ -144,12 +144,12 @@ class MinistryService(
 
     /**
      * Binds an existing member to a ministry (the "맴버 추가" action on the ministry detail page).
-     * ADMIN and MINISTRY_LEADER pass the controller; a MINISTRY_LEADER must also be the current
+     * Admins, general operations editors and MINISTRY_LEADER pass the controller; a MINISTRY_LEADER must also be the current
      * leader of this ministry ([MinistryOwnership]). Creates a [MinistryAssignment] starting on
      * the requested date, or today when no date is supplied.
      *
      * @throws EntityNotFoundException if the ministry or member is missing/soft-deleted
-     * @throws ResponseStatusException 403 if a non-admin caller does not lead this ministry
+     * @throws ResponseStatusException 403 if a caller without ownership bypass does not lead this ministry
      * @throws ResponseStatusException 409 if the member is already active in this ministry
      */
     @Transactional
@@ -157,13 +157,13 @@ class MinistryService(
         ministryPublicId: UUID,
         req: AddMinistryMemberRequest,
         callerSubject: String,
-        callerIsAdmin: Boolean,
+        bypassOwnership: Boolean,
     ): ActiveMinistryMemberDto {
         val ministry =
             ministryRepository
                 .findForUpdateByPublicIdAndDeletedAtIsNull(ministryPublicId)
                 .orElseThrow { EntityNotFoundException("Ministry not found: $ministryPublicId") }
-        ministryOwnership.requireLeader(ministry, callerSubject, callerIsAdmin)
+        ministryOwnership.requireLeader(ministry, callerSubject, bypassOwnership)
         val member =
             memberRepository
                 .findByPublicIdAndDeletedAtIsNull(req.memberId)

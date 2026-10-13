@@ -48,7 +48,7 @@ class MinistryOwnershipTest {
 
     @Test
     fun `admin passes without resolving a member profile`() {
-        assertDoesNotThrow { ownership().requireLeader(worship, "admin-sub", isAdmin = true) }
+        assertDoesNotThrow { ownership().requireLeader(worship, "admin-sub", bypassOwnership = true) }
 
         verifyNoInteractions(resolver, assignments)
     }
@@ -59,7 +59,7 @@ class MinistryOwnershipTest {
         `when`(assignments.findCurrentByMinistryIds(listOf(1L)))
             .thenReturn(listOf(assignment(worship, worshipLeader, MinistryAssignmentRole.LEADER)))
 
-        assertDoesNotThrow { ownership().requireLeader(worship, "worship-sub", isAdmin = false) }
+        assertDoesNotThrow { ownership().requireLeader(worship, "worship-sub", bypassOwnership = false) }
     }
 
     @Test
@@ -68,7 +68,7 @@ class MinistryOwnershipTest {
         `when`(assignments.findCurrentByMinistryIds(listOf(1L)))
             .thenReturn(listOf(assignment(worship, worshipLeader, MinistryAssignmentRole.LEADER)))
 
-        val ex = assertThrows<ResponseStatusException> { ownership().requireLeader(worship, "media-sub", isAdmin = false) }
+        val ex = assertThrows<ResponseStatusException> { ownership().requireLeader(worship, "media-sub", bypassOwnership = false) }
 
         assertEquals(403, ex.statusCode.value())
         assertEquals("Only this ministry's leader can change it", ex.reason)
@@ -85,7 +85,7 @@ class MinistryOwnershipTest {
                 ),
             )
 
-        val ex = assertThrows<ResponseStatusException> { ownership().requireLeader(worship, "media-sub", isAdmin = false) }
+        val ex = assertThrows<ResponseStatusException> { ownership().requireLeader(worship, "media-sub", bypassOwnership = false) }
 
         assertEquals(403, ex.statusCode.value())
     }
@@ -97,7 +97,7 @@ class MinistryOwnershipTest {
 
         val ex =
             assertThrows<ResponseStatusException> {
-                ownership().requireLeader(media, "media-sub", isAdmin = false, deniedMessage = "custom")
+                ownership().requireLeader(media, "media-sub", bypassOwnership = false, deniedMessage = "custom")
             }
 
         assertEquals(403, ex.statusCode.value())
@@ -108,7 +108,7 @@ class MinistryOwnershipTest {
     fun `a caller without a member profile gets 403, not the profile 404`() {
         `when`(resolver.require("no-profile-sub")).thenThrow(MemberProfileNotFoundException())
 
-        val ex = assertThrows<ResponseStatusException> { ownership().requireLeader(worship, "no-profile-sub", isAdmin = false) }
+        val ex = assertThrows<ResponseStatusException> { ownership().requireLeader(worship, "no-profile-sub", bypassOwnership = false) }
 
         assertEquals(403, ex.statusCode.value())
         assertEquals("Only this ministry's leader can change it", ex.reason)

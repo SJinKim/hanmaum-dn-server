@@ -7,8 +7,11 @@ import com.hanmaum.dn.app.features.announcements.api.v1.dto.UpdateAnnouncementRe
 import com.hanmaum.dn.app.features.announcements.domain.Announcement
 import com.hanmaum.dn.app.features.announcements.service.AnnouncementService
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
+import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
@@ -194,5 +197,50 @@ class AnnouncementControllerTest {
             .andExpect(status().isForbidden)
 
         verify(announcementService, never()).softDeleteAnnouncement(any())
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["GENERAL_OPERATIONS_VIEWER", "GENERAL_OPERATIONS_EDITOR"])
+    fun `general operations reads admin announcements`(role: String) {
+        `when`(announcementService.getAllForAdmin()).thenReturn(listOf(announcement))
+        mockMvc
+            .perform(get("/api/v1/announcements/admin").with(jwt().authorities(SimpleGrantedAuthority("ROLE_$role"))))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data[0].id").value(publicId.toString()))
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["GENERAL_OPERATIONS_EDITOR", "ADMIN", "PASTOR", "NOTE_TAKER"])
+    fun `announcement editors can create update and delete`(role: String) {
+        `when`(announcementService.createAnnouncement(any())).thenReturn(announcement)
+        `when`(announcementService.updateAnnouncement(org.mockito.kotlin.eq(publicId), any())).thenReturn(announcement)
+        val token = jwt().authorities(SimpleGrantedAuthority("ROLE_$role"))
+        val body = """{"title":"여름 수련회","body":"안내","category":"EVENT","startAt":"2026-10-18T10:00:00+02:00"}"""
+        mockMvc
+            .perform(post("/api/v1/announcements").with(token).contentType(MediaType.APPLICATION_JSON).content(body))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.id").value(publicId.toString()))
+        mockMvc
+            .perform(put("/api/v1/announcements/$publicId").with(token).contentType(MediaType.APPLICATION_JSON).content(body))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.id").value(publicId.toString()))
+        mockMvc.perform(delete("/api/v1/announcements/$publicId").with(token)).andExpect(status().isNoContent)
+        verify(announcementService).createAnnouncement(any())
+        verify(announcementService).updateAnnouncement(org.mockito.kotlin.eq(publicId), any())
+        verify(announcementService).softDeleteAnnouncement(publicId)
+    }
+
+    @Test
+    fun `general operations viewer cannot change announcements`() {
+        val token = jwt().authorities(SimpleGrantedAuthority("ROLE_GENERAL_OPERATIONS_VIEWER"))
+        val body = """{"title":"여름 수련회","body":"안내","category":"EVENT","startAt":"2026-10-18T10:00:00+02:00"}"""
+        mockMvc
+            .perform(post("/api/v1/announcements").with(token).contentType(MediaType.APPLICATION_JSON).content(body))
+            .andExpect(status().isForbidden)
+        mockMvc
+            .perform(put("/api/v1/announcements/$publicId").with(token).contentType(MediaType.APPLICATION_JSON).content(body))
+            .andExpect(status().isForbidden)
+        mockMvc.perform(delete("/api/v1/announcements/$publicId").with(token)).andExpect(status().isForbidden)
+        verifyNoInteractions(announcementService)
     }
 }

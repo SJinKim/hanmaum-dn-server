@@ -91,7 +91,7 @@ class MinistryOwnershipIT {
         sub: String,
     ) {
         val before = assignments.count()
-        val ex = assertThrows<ResponseStatusException> { ownership().requireLeader(ministry, sub, isAdmin = false) }
+        val ex = assertThrows<ResponseStatusException> { ownership().requireLeader(ministry, sub, bypassOwnership = false) }
         assertEquals(403, ex.statusCode.value())
         assertEquals(before, assignments.count())
     }
@@ -99,7 +99,7 @@ class MinistryOwnershipIT {
     @Test
     fun `the active leader passes`() {
         val ministry = ministryLedBy("owner-active")
-        assertDoesNotThrow { ownership().requireLeader(ministry, "owner-active", isAdmin = false) }
+        assertDoesNotThrow { ownership().requireLeader(ministry, "owner-active", bypassOwnership = false) }
     }
 
     @Test

@@ -20,8 +20,8 @@ object Roles {
     const val GENERAL_OPERATIONS_VIEWER = "GENERAL_OPERATIONS_VIEWER"
     const val GENERAL_OPERATIONS_EDITOR = "GENERAL_OPERATIONS_EDITOR"
 
-    /** A pastor may do everything an admin may. */
-    const val HIERARCHY = "ROLE_$PASTOR > ROLE_$ADMIN"
+    /** Pastors inherit admin access; general operations editors inherit viewer access. */
+    const val HIERARCHY = "ROLE_$PASTOR > ROLE_$ADMIN\nROLE_$GENERAL_OPERATIONS_EDITOR > ROLE_$GENERAL_OPERATIONS_VIEWER"
 
     fun authority(role: String): String = "ROLE_$role"
 }

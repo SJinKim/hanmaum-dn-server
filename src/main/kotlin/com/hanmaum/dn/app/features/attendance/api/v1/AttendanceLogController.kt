@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.attendance.api.v1
 
 import com.hanmaum.dn.app.common.dto.ApiResponse
+import com.hanmaum.dn.app.common.security.Authz
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceLogResponse
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.CreateAttendanceLogRequest
 import com.hanmaum.dn.app.features.attendance.service.AttendanceRosterService
@@ -19,14 +20,15 @@ import java.time.LocalDate
 import java.util.UUID
 import io.swagger.v3.oas.annotations.responses.ApiResponse as OpenApiResponse
 
-/** The admin 체크인 명단, person by person (#224). ADMIN and NOTE_TAKER. */
+/** The admin 체크인 명단, person by person (#224). ADMIN and NOTE_TAKER; general operations reads as viewer and writes as editor. */
 @RestController
+@PreAuthorize(Authz.OPERATIONS_WRITE)
 @RequestMapping("/attendance/logs")
-@PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER')")
 class AttendanceLogController(
     private val rosterService: AttendanceRosterService,
 ) {
     @GetMapping
+    @PreAuthorize(Authz.OPERATIONS_READ)
     fun getLogs(
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) date: LocalDate,
         @RequestParam(required = false) definitionId: UUID?,
