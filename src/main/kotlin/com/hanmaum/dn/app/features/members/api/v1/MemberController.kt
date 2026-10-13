@@ -3,6 +3,7 @@ package com.hanmaum.dn.app.features.members.api.v1
 import com.hanmaum.dn.app.common.domainvalue.Baptism
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.common.dto.ApiResponse
+import com.hanmaum.dn.app.common.security.Authz
 import com.hanmaum.dn.app.features.members.api.v1.dto.CreateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberCountDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
@@ -121,11 +122,11 @@ class MemberController(
 
     /**
      * GET /api/v1/members/names
-     * Role: ADMIN or MINISTRY_LEADER — minimal name list (publicId, fullName, discriminator)
+     * Role: ADMIN, MINISTRY_LEADER or GENERAL_OPERATIONS_EDITOR — minimal name list (publicId, fullName, discriminator)
      * for the ministry "맴버 추가" picker. No PII beyond the display name.
      */
     @GetMapping("/names")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MINISTRY_LEADER')")
+    @PreAuthorize(Authz.MINISTRY_WRITE)
     fun listMemberNames(): ResponseEntity<ApiResponse<List<MemberNameDto>>> =
         ResponseEntity.ok(ApiResponse.success(data = memberService.getMemberNames()))
 

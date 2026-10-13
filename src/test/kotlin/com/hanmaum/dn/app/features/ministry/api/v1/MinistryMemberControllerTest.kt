@@ -350,4 +350,21 @@ class MinistryMemberControllerTest {
         mockMvc.perform(delete("/api/v1/ministries/$ministryId").with(token)).andExpect(status().isForbidden)
         verifyNoInteractions(ministryService)
     }
+
+    @Test
+    fun `general operations editor can appoint a ministry leader`() {
+        `when`(ministryService.updateMember(eq(ministryId), eq(memberId), any()))
+            .thenReturn(sampleDto().copy(role = MinistryAssignmentRole.LEADER))
+        mockMvc
+            .perform(
+                patch("/api/v1/ministries/$ministryId/members/$memberId")
+                    .with(jwt().authorities(SimpleGrantedAuthority("ROLE_GENERAL_OPERATIONS_EDITOR")))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"role":"LEADER"}"""),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.role").value("LEADER"))
+        val request = argumentCaptor<UpdateMinistryMemberRequest>()
+        verify(ministryService).updateMember(eq(ministryId), eq(memberId), request.capture())
+        kotlin.test.assertEquals(MinistryAssignmentRole.LEADER, request.firstValue.role)
+    }
 }

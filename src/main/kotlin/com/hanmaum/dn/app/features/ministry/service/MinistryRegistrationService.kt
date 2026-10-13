@@ -101,15 +101,15 @@ class MinistryRegistrationService(
             ?.toRegistrationDto()
     }
 
-    /** Pending team rows are visible only to an admin or this ministry's assigned leader. */
+    /** Pending team rows are visible to admins, general operations readers or this ministry's assigned leader. */
     @Transactional(readOnly = true)
     fun pendingMembers(
         ministryPublicId: UUID,
         reviewerSubject: String,
-        isAdmin: Boolean,
+        bypassOwnership: Boolean,
     ): List<ActiveMinistryMemberDto> {
         val ministry = findMinistry(ministryPublicId)
-        requireReviewer(ministry, reviewerSubject, isAdmin)
+        requireApplicationAccess(ministry, reviewerSubject, bypassOwnership, "Only this ministry's leader can read applications")
         return assignmentRepository.findPendingByMinistryPublicId(ministryPublicId).map { it.toDto() }
     }
 
@@ -121,10 +121,10 @@ class MinistryRegistrationService(
         decision: MinistryRegistrationDecision,
         message: String?,
         reviewerSubject: String,
-        isAdmin: Boolean,
+        bypassOwnership: Boolean,
     ): MinistryRegistrationDto {
         val ministry = findMinistry(ministryPublicId)
-        requireReviewer(ministry, reviewerSubject, isAdmin)
+        requireApplicationAccess(ministry, reviewerSubject, bypassOwnership, "Only this ministry's leader can review applications")
         val assignment =
             assignmentRepository
                 .findCurrentForDecision(ministry.id!!, memberPublicId)
@@ -164,14 +164,15 @@ class MinistryRegistrationService(
             .findByPublicIdAndDeletedAtIsNull(publicId)
             .orElseThrow { EntityNotFoundException("Ministry not found: $publicId") }
 
-    private fun requireReviewer(
+    private fun requireApplicationAccess(
         ministry: Ministry,
         reviewerSubject: String,
-        isAdmin: Boolean,
+        bypassOwnership: Boolean,
+        deniedMessage: String,
     ) = ministryOwnership.requireLeader(
         ministry,
         reviewerSubject,
-        isAdmin,
-        deniedMessage = "Only this ministry's leader can review applications",
+        bypassOwnership,
+        deniedMessage = deniedMessage,
     )
 }

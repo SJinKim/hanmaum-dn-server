@@ -2,6 +2,7 @@ package com.hanmaum.dn.app.features.attendance.api.v1
 
 import com.hanmaum.dn.app.common.api.ErrorResponse
 import com.hanmaum.dn.app.common.dto.ApiResponse
+import com.hanmaum.dn.app.common.security.Authz
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceCheckInRequest
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceCheckInResponse
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceGroupCountsResponse
@@ -39,7 +40,7 @@ class AttendanceController(
     // ─── Definitions ───────────────────────────────────────────────────────────
 
     @PostMapping("/definitions")
-    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_EDITOR')")
+    @PreAuthorize(Authz.OPERATIONS_WRITE)
     @OpenApiResponse(responseCode = "201", description = "Attendance definition created")
     @OpenApiResponse(
         responseCode = "409",
@@ -67,7 +68,7 @@ class AttendanceController(
     }
 
     @PatchMapping("/definitions/{publicId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_EDITOR')")
+    @PreAuthorize(Authz.OPERATIONS_WRITE)
     @OpenApiResponse(responseCode = "200", description = "Attendance definition updated")
     @OpenApiResponse(
         responseCode = "409",
@@ -85,7 +86,7 @@ class AttendanceController(
     }
 
     @DeleteMapping("/definitions/{publicId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_EDITOR')")
+    @PreAuthorize(Authz.OPERATIONS_WRITE)
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun deactivateDefinition(
         @PathVariable publicId: UUID,
@@ -127,7 +128,7 @@ class AttendanceController(
      */
     @GetMapping("/group-counts")
     @PreAuthorize(
-        "hasAnyRole('ADMIN', 'GROUP_LEADER', 'NOTE_TAKER', 'GENERAL_OPERATIONS_VIEWER', 'GENERAL_OPERATIONS_EDITOR')",
+        Authz.GROUP_OPERATIONS_READ,
     )
     fun getGroupCounts(
         @RequestParam definitionId: UUID,

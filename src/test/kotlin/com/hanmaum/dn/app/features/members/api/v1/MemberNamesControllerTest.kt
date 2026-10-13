@@ -5,6 +5,10 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.MemberNameDto
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.members.service.MemberPurgeService
 import com.hanmaum.dn.app.features.members.service.MemberService
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+import org.mockito.Mockito.verify
+import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration
@@ -71,5 +75,38 @@ class MemberNamesControllerTest {
         mockMvc
             .perform(get("/api/v1/members/names").with(jwt()))
             .andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `general operations editor can load the ministry member picker`() {
+        val names = sample()
+        `when`(memberService.getMemberNames()).thenReturn(names)
+        mockMvc
+            .perform(get("/api/v1/members/names").with(jwt().authorities(SimpleGrantedAuthority("ROLE_GENERAL_OPERATIONS_EDITOR"))))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data[0].publicId").value(names[0].publicId))
+            .andExpect(jsonPath("$.data[0].fullName").value(names[0].fullName))
+            .andExpect(jsonPath("$.data[0].discriminator").value("A"))
+        verify(memberService).getMemberNames()
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["GENERAL_OPERATIONS_VIEWER", "NOTE_TAKER", "GROUP_LEADER"])
+    fun `roles without member assignment rights cannot load the picker`(role: String) {
+        mockMvc
+            .perform(get("/api/v1/members/names").with(jwt().authorities(SimpleGrantedAuthority("ROLE_$role"))))
+            .andExpect(status().isForbidden)
+        verifyNoInteractions(memberService)
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["GENERAL_OPERATIONS_VIEWER", "GENERAL_OPERATIONS_EDITOR"])
+    fun `general operations still cannot read member administration`(role: String) {
+        for (path in listOf("/api/v1/members", "/api/v1/members/${java.util.UUID.randomUUID()}")) {
+            mockMvc
+                .perform(get(path).with(jwt().authorities(SimpleGrantedAuthority("ROLE_$role"))))
+                .andExpect(status().isForbidden)
+        }
+        verifyNoInteractions(memberService)
     }
 }

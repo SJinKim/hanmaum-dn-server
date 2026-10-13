@@ -8,6 +8,7 @@ import com.hanmaum.dn.app.features.ministry.domain.Ministry
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignment
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentRole
 import com.hanmaum.dn.app.features.ministry.domain.MinistryAssignmentStatus
+import com.hanmaum.dn.app.features.ministry.repository.ActiveMemberView
 import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
 import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
 import com.hanmaum.dn.app.features.notifications.repository.AppNotificationRepository
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.Mockito.verify
+import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
@@ -235,5 +237,41 @@ class MinistryRegistrationServiceTest {
         )
         assertEquals(MinistryAssignmentStatus.PENDING, pending.status)
         verify(notifications, never()).save(any())
+    }
+
+    @Test
+    fun `application read bypass does not require a reviewer member or leader assignment`() {
+        val application =
+            ActiveMemberView(
+                memberPublicId = applicant.publicId,
+                fullName = "지원",
+                startDate = LocalDate.of(2026, 9, 25),
+                note = null,
+                gender = null,
+                status = MinistryAssignmentStatus.PENDING,
+                selfIntroduction = "소개",
+            )
+        `when`(ministries.findByPublicIdAndDeletedAtIsNull(ministry.publicId)).thenReturn(Optional.of(ministry))
+        `when`(assignments.findPendingByMinistryPublicId(ministry.publicId)).thenReturn(listOf(application))
+        val result = service().pendingMembers(ministry.publicId, "viewer-sub", bypassOwnership = true).single()
+        assertEquals(applicant.publicId.toString(), result.publicId)
+        assertEquals(MinistryAssignmentStatus.PENDING, result.status)
+        assertEquals("소개", result.selfIntroduction)
+        verifyNoInteractions(resolver)
+        verify(assignments, never()).findCurrentByMinistryIds(any())
+    }
+
+    @Test
+    fun `application read denial explains the missing read ownership`() {
+        `when`(ministries.findByPublicIdAndDeletedAtIsNull(ministry.publicId)).thenReturn(Optional.of(ministry))
+        `when`(resolver.require("other-sub")).thenReturn(applicant)
+        `when`(assignments.findCurrentByMinistryIds(listOf(1L))).thenReturn(listOf(leaderAssignment))
+        val error =
+            assertThrows<ResponseStatusException> {
+                service().pendingMembers(ministry.publicId, "other-sub", bypassOwnership = false)
+            }
+        assertEquals(403, error.statusCode.value())
+        assertEquals("Only this ministry's leader can read applications", error.reason)
+        verify(assignments, never()).findPendingByMinistryPublicId(any())
     }
 }

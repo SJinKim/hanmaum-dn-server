@@ -104,11 +104,21 @@ the 사역 that user leads. Every 사역 follows the `viewers`/`editors` pattern
 
 General operations viewers cannot use the administrative write endpoints in these
 five areas; editors can create, update, delete, publish and withdraw. Editors
+can appoint and replace ministry leaders, including ending their assignments,
+as part of the full ministry management granted by #306. Those assignments
+determine who receives ministry application emails. Editors
 bypass the ministry ownership check for member management and application
 reviews; viewers bypass it only when listing applications. Neither role grants
-access to member administration or church-group administration. Member self-service
+access to member administration or church-group administration. Editors can
+read the minimal `GET /members/names` list for the ministry add-member picker. Member self-service
 endpoints (attendance check-in, own RSVP response and ministry application) keep
 their existing authenticated access.
+
+The server role hierarchy makes `GENERAL_OPERATIONS_EDITOR` imply
+`GENERAL_OPERATIONS_VIEWER`, even if the token carries only the editor role.
+Attendance-log and bulletin controllers default to the write rule; their GET
+methods explicitly allow readers, so a new unannotated handler does not admit
+ordinary members or viewers.
 
 Both checked-in realm exports contain these roles and groups. On an existing realm:
 

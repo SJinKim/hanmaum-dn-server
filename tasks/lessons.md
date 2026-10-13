@@ -205,3 +205,7 @@
 ### Classify persistence conflicts and bound public date cursors
 - **Correction**: A generic integrity failure was mislabeled as a taken Sunday, and cursor arithmetic accepted dates that could overflow.
 - **Rule**: Translate only the named constraint that identifies the domain conflict; rethrow unrelated integrity errors. Bound cursor arithmetic before adding periods, tolerate stale read cursors, and document whether pagination changes a global suggestion.
+
+### Follow UI dependencies and preserve secure defaults when expanding roles
+- **Mistake**: Expanded general operations member assignment rights without granting the required member-name picker, and removed controller defaults while splitting reads from writes.
+- **Rule**: Trace the complete UI action, including lookup endpoints, when adding a role. Preserve a restrictive class-level authorization baseline and explicitly allow broader reads. Test an unannotated handler's inherited default, document privileged assignment changes, and name ownership bypass flags after their actual permission rather than an assumed admin role.

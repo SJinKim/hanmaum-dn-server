@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.attendance.api.v1
 
 import com.hanmaum.dn.app.common.dto.ApiResponse
+import com.hanmaum.dn.app.common.security.Authz
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceLogResponse
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.CreateAttendanceLogRequest
 import com.hanmaum.dn.app.features.attendance.service.AttendanceRosterService
@@ -21,12 +22,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse as OpenApiResponse
 
 /** The admin 체크인 명단, person by person (#224). ADMIN and NOTE_TAKER; general operations reads as viewer and writes as editor. */
 @RestController
+@PreAuthorize(Authz.OPERATIONS_WRITE)
 @RequestMapping("/attendance/logs")
 class AttendanceLogController(
     private val rosterService: AttendanceRosterService,
 ) {
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_VIEWER', 'GENERAL_OPERATIONS_EDITOR')")
+    @PreAuthorize(Authz.OPERATIONS_READ)
     fun getLogs(
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) date: LocalDate,
         @RequestParam(required = false) definitionId: UUID?,
@@ -34,7 +36,6 @@ class AttendanceLogController(
         ResponseEntity.ok(ApiResponse.success(data = rosterService.getRoster(date, definitionId)))
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_EDITOR')")
     @OpenApiResponse(responseCode = "201", description = "Attendance log added")
     @OpenApiResponse(responseCode = "409", description = "The member already has a log for this definition and date")
     fun addLog(

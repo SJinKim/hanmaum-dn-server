@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.announcements.api.v1
 
 import com.hanmaum.dn.app.common.dto.ApiResponse
+import com.hanmaum.dn.app.common.security.Authz
 import com.hanmaum.dn.app.features.announcements.api.toDto
 import com.hanmaum.dn.app.features.announcements.api.v1.dto.AnnouncementDto
 import com.hanmaum.dn.app.features.announcements.api.v1.dto.CreateAnnouncementRequest
@@ -43,7 +44,7 @@ class AnnouncementController(
 
     /** Returns all non-deleted announcements for the admin dashboard. */
     @GetMapping("/admin")
-    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_VIEWER', 'GENERAL_OPERATIONS_EDITOR')")
+    @PreAuthorize(Authz.OPERATIONS_READ)
     fun getAnnouncementsForAdmin(): ResponseEntity<ApiResponse<List<AnnouncementDto>>> {
         val data = announcementService.getAllForAdmin().map { it.toDto() }
         return ResponseEntity.ok(ApiResponse.success(data = data))
@@ -51,7 +52,7 @@ class AnnouncementController(
 
     /** Creates an announcement as an administrator. */
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_EDITOR')")
+    @PreAuthorize(Authz.OPERATIONS_WRITE)
     fun createAnnouncement(
         @RequestBody createAnnouncementRequest: CreateAnnouncementRequest,
     ): ResponseEntity<ApiResponse<AnnouncementDto>> {
@@ -61,7 +62,7 @@ class AnnouncementController(
 
     /** Fully replaces editable announcement data as an administrator. */
     @PutMapping("/{publicId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_EDITOR')")
+    @PreAuthorize(Authz.OPERATIONS_WRITE)
     fun updateAnnouncement(
         @PathVariable publicId: UUID,
         @RequestBody request: UpdateAnnouncementRequest,
@@ -72,7 +73,7 @@ class AnnouncementController(
 
     /** Moves an announcement to the admin trash for delayed deletion. */
     @DeleteMapping("/{publicId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'NOTE_TAKER', 'GENERAL_OPERATIONS_EDITOR')")
+    @PreAuthorize(Authz.OPERATIONS_WRITE)
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun deleteAnnouncement(
         @PathVariable publicId: UUID,

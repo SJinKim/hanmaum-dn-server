@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.ministry.api.v1
 
 import com.hanmaum.dn.app.common.dto.ApiResponse
+import com.hanmaum.dn.app.common.security.Authz
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.ActiveMinistryMemberDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.AddMinistryMemberRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.CreateMinistryRequest
@@ -37,7 +38,7 @@ class MinistryController(
      * Role: ADMIN or GENERAL_OPERATIONS_EDITOR — create a new ministry.
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'GENERAL_OPERATIONS_EDITOR')")
+    @PreAuthorize(Authz.MINISTRY_MANAGE)
     fun createMinistry(
         @Valid @RequestBody request: CreateMinistryRequest,
     ): ResponseEntity<ApiResponse<MinistryDto>> {
@@ -94,7 +95,7 @@ class MinistryController(
      * The "맴버 추가" action on the ministry detail page. Returns the new active-member row.
      */
     @PostMapping("/{publicId}/members")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MINISTRY_LEADER', 'GENERAL_OPERATIONS_EDITOR')")
+    @PreAuthorize(Authz.MINISTRY_WRITE)
     fun addMember(
         @PathVariable publicId: UUID,
         @Valid @RequestBody request: AddMinistryMemberRequest,
@@ -109,7 +110,7 @@ class MinistryController(
     /** PATCH one current member assignment without changing their other ministries. */
     @PatchMapping("/{publicId}/members/{memberPublicId}")
     @Operation(operationId = "updateMinistryMember")
-    @PreAuthorize("hasAnyRole('ADMIN', 'GENERAL_OPERATIONS_EDITOR')")
+    @PreAuthorize(Authz.MINISTRY_MANAGE)
     fun updateMember(
         @PathVariable publicId: UUID,
         @PathVariable memberPublicId: UUID,
@@ -121,7 +122,7 @@ class MinistryController(
 
     /** End one current assignment today, retaining it in ministry history. */
     @DeleteMapping("/{publicId}/members/{memberPublicId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'GENERAL_OPERATIONS_EDITOR')")
+    @PreAuthorize(Authz.MINISTRY_MANAGE)
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun removeMember(
         @PathVariable publicId: UUID,
@@ -135,7 +136,7 @@ class MinistryController(
      * Role: ADMIN or GENERAL_OPERATIONS_EDITOR — partial update.
      */
     @PatchMapping("/{publicId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'GENERAL_OPERATIONS_EDITOR')")
+    @PreAuthorize(Authz.MINISTRY_MANAGE)
     fun updateMinistry(
         @PathVariable publicId: UUID,
         @Valid @RequestBody request: UpdateMinistryRequest,
@@ -149,7 +150,7 @@ class MinistryController(
      * Role: ADMIN or GENERAL_OPERATIONS_EDITOR — deactivate ministry (isActive=false, not hard delete).
      */
     @DeleteMapping("/{publicId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'GENERAL_OPERATIONS_EDITOR')")
+    @PreAuthorize(Authz.MINISTRY_MANAGE)
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun deactivateMinistry(
         @PathVariable publicId: UUID,

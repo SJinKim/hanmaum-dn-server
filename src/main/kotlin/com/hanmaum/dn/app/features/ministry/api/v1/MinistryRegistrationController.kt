@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.ministry.api.v1
 
 import com.hanmaum.dn.app.common.dto.ApiResponse
+import com.hanmaum.dn.app.common.security.Authz
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.ActiveMinistryMemberDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryRegistrationDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.ReviewMinistryRegistrationRequest
@@ -56,7 +57,7 @@ class MinistryRegistrationController(
 
     @GetMapping("/ministries/{publicId}/applications")
     @Operation(operationId = "getPendingMinistryApplications")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MINISTRY_LEADER', 'GENERAL_OPERATIONS_VIEWER', 'GENERAL_OPERATIONS_EDITOR')")
+    @PreAuthorize(Authz.MINISTRY_READ)
     fun pending(
         @PathVariable publicId: UUID,
         authentication: JwtAuthenticationToken,
@@ -65,7 +66,7 @@ class MinistryRegistrationController(
 
     @PatchMapping("/ministries/{publicId}/applications/{memberPublicId}")
     @Operation(operationId = "reviewMinistryApplication")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MINISTRY_LEADER', 'GENERAL_OPERATIONS_EDITOR')")
+    @PreAuthorize(Authz.MINISTRY_WRITE)
     fun review(
         @PathVariable publicId: UUID,
         @PathVariable memberPublicId: UUID,
