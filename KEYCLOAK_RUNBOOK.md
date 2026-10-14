@@ -138,8 +138,10 @@ Use `/ministries/training/viewers` for readers and `/ministries/training/editors
 for editors. The server hierarchy makes `TRAINING_EDITOR` imply `TRAINING_VIEWER`,
 even when a token carries only the editor role. Viewers may read `/church-groups`;
 editors may also `PUT` and `DELETE /church-groups/{publicId}/leader`. The same
-membership and leader-tenure checks as for admins still apply. The controller
-uses the write rule as its class default and explicitly permits readers on GET.
+membership and leader-tenure checks as for admins still apply. Only ACTIVE
+members can be appointed as leaders, including by admins. Both controllers use
+ADMIN as their class default and explicitly grant matrix/leader reads and writes
+to the appropriate training roles.
 
 The scoped member API is `GET /church-groups/members?page=0&size=20` (maximum
 size 10000). It fixes membership status to ACTIVE, keeps name order and page
@@ -156,9 +158,12 @@ Neither training role grants access to the administrative member list, detail or
 PATCH endpoints.
 
 **Web integration:** the 양육 service from web #214 currently calls the admin
-member list and PATCH. Switch its matrix read to the scoped paginated GET (read
-all pages for the complete matrix) and its flag write to the new PATCH. Do not
-reuse the administrative member detail model or widen `/members` access.
+member list and PATCH. Switch its matrix read to
+`GET /church-groups/members?page=0&size=10000` and its flag write to the new PATCH.
+The secure member query decrypts and sorts matching names before slicing a page;
+use the maximum page size for the full matrix to avoid repeating that work for
+many small pages. Inspect `totalPages` and fetch more pages only if necessary.
+Do not reuse the administrative member detail model or widen `/members` access.
 
 Both realm exports include the roles and groups for fresh imports. For an existing
 realm, imports do not update it: create the two roles and the training subtree,

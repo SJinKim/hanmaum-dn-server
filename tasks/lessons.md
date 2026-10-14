@@ -209,3 +209,7 @@
 ### Follow UI dependencies and preserve secure defaults when expanding roles
 - **Mistake**: Expanded general operations member assignment rights without granting the required member-name picker, and removed controller defaults while splitting reads from writes.
 - **Rule**: Trace the complete UI action, including lookup endpoints, when adding a role. Preserve a restrictive class-level authorization baseline and explicitly allow broader reads. Test an unannotated handler's inherited default, document privileged assignment changes, and name ownership bypass flags after their actual permission rather than an assumed admin role.
+
+### Scoped member writes must coexist with other editors
+- **Mistake**: Locked only the new training-flag writer while existing member edits could flush stale values for every column and silently undo the flag.
+- **Rule**: Trace all writers of a shared entity when adding a scoped update. Use column-level dirty updates or coordinated concurrency control, and prove independent changes survive overlapping real database transactions. In negative persistence tests, clear the persistence context and query the stored row, including soft-deleted rows, rather than asserting only on the fixture object.

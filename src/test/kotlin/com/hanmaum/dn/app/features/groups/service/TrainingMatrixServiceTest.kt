@@ -19,7 +19,6 @@ import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
-import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.never
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
@@ -69,9 +68,23 @@ class TrainingMatrixServiceTest {
         assertTrue(page.content.single().oneOnOneSignupFilled)
         val mapper = JsonMapper.builder().build()
         val json = mapper.readTree(mapper.writeValueAsString(page.content.single()))
-        for (field in listOf("email", "phoneNumber", "churchRole", "activeMinistries", "origin", "newcomerStatus", "appLinked")) {
-            assertFalse(json.has(field), "$field is outside the matrix contract")
-        }
+        assertEquals(
+            setOf(
+                "publicId",
+                "lastName",
+                "firstName",
+                "memberStatus",
+                "baptism",
+                "groupPublicId",
+                "groupName",
+                "trainings",
+                "isNextGroupLeader",
+                "oneOnOneSignupFilled",
+                "isGroupLeader",
+                "groupLeaderSince",
+            ),
+            json.propertyNames().toSet(),
+        )
         verify(members).getMembers(null, MemberStatus.ACTIVE, null, null, null, null, null, null, 1, 2)
         verifyNoInteractions(repository)
     }
@@ -89,17 +102,15 @@ class TrainingMatrixServiceTest {
         val member = Member(lastName = "김", firstName = "테스트", email = "synthetic@example.org", memberStatus = MemberStatus.ACTIVE)
         member.oneOnOneSignupFilled = true
         `when`(repository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
-        `when`(repository.save(any<Member>())).thenAnswer { it.getArgument<Member>(0) }
 
         val result = service().setNextGroupLeader(member.publicId, true)
         assertEquals(member.publicId.toString(), result.publicId)
         assertTrue(result.isNextGroupLeader)
-        val saved = argumentCaptor<Member>()
-        verify(repository).save(saved.capture())
-        assertTrue(saved.firstValue.isNextGroupLeader)
-        assertTrue(saved.firstValue.oneOnOneSignupFilled)
-        assertEquals("synthetic@example.org", saved.firstValue.email)
-        assertEquals("테스트", saved.firstValue.firstName)
+        assertTrue(member.isNextGroupLeader)
+        assertTrue(member.oneOnOneSignupFilled)
+        assertEquals("synthetic@example.org", member.email)
+        assertEquals("테스트", member.firstName)
+        verify(repository, never()).save(any<Member>())
         verifyNoInteractions(members)
     }
 

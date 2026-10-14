@@ -56,7 +56,6 @@ class TrainingMatrixService(
             throw EntityNotFoundException("Active matrix member not found: $publicId")
         }
         member.isNextGroupLeader = value
-        val saved = memberRepository.save(member)
-        return NextGroupLeaderResponse(saved.publicId.toString(), saved.isNextGroupLeader)
+        return NextGroupLeaderResponse(member.publicId.toString(), member.isNextGroupLeader)
     }
 }

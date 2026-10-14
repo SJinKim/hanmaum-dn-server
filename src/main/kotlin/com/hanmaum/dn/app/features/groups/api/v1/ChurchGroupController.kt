@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
 @RestController
-@PreAuthorize(Authz.TRAINING_WRITE)
+@PreAuthorize("hasRole('ADMIN')")
 @RequestMapping("/church-groups")
 class ChurchGroupController(
     private val churchGroupService: ChurchGroupService,
@@ -40,9 +40,10 @@ class ChurchGroupController(
      * Role: ADMIN or TRAINING_EDITOR — makes the given member the group's current leader.
      *
      * The sitting leader's tenure is closed as of the new start date; past tenures are retained.
-     * The member must already belong to the group. Re-sending the current leader is a no-op.
+     * The member must be ACTIVE and already belong to the group. Re-sending the current leader is a no-op.
      */
     @PutMapping("/{publicId}/leader")
+    @PreAuthorize(Authz.TRAINING_WRITE)
     fun assignLeader(
         @PathVariable publicId: UUID,
         @Valid @RequestBody request: AssignGroupLeaderRequest,
@@ -59,6 +60,7 @@ class ChurchGroupController(
      * so retries and double-unchecks cannot 404.
      */
     @DeleteMapping("/{publicId}/leader")
+    @PreAuthorize(Authz.TRAINING_WRITE)
     fun clearLeader(
         @PathVariable publicId: UUID,
     ): ResponseEntity<ApiResponse<ChurchGroupSummaryDto>> {

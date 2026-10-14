@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.groups.service
 
+import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.groups.api.v1.dto.AssignGroupLeaderRequest
 import com.hanmaum.dn.app.features.groups.api.v1.dto.ChurchGroupSummaryDto
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
@@ -52,7 +53,7 @@ class ChurchGroupService(
      * several rows and resetting its start date.
      *
      * @throws EntityNotFoundException if the group or member does not exist
-     * @throws ResponseStatusException 400 if the member does not belong to the group,
+     * @throws ResponseStatusException 400 if the member is not ACTIVE or does not belong to the group,
      *   or if [AssignGroupLeaderRequest.startDate] precedes the sitting leader's start
      */
     @Transactional
@@ -71,6 +72,10 @@ class ChurchGroupService(
             memberRepository
                 .findByPublicIdAndDeletedAtIsNull(memberPublicId)
                 .orElseThrow { EntityNotFoundException("Member not found: $memberPublicId") }
+
+        if (member.memberStatus != MemberStatus.ACTIVE) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "그룹 리더는 활동 중인 맴버여야 합니다.")
+        }
 
         // A group leader is by definition part of the group they lead.
         if (member.group?.id != group.id) {

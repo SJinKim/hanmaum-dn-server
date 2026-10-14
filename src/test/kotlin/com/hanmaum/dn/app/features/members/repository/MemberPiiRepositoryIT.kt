@@ -103,4 +103,23 @@ class MemberPiiRepositoryIT {
             repository.findActiveMembers(null, null, null).map(Member::lastName),
         )
     }
+
+    @Test
+    fun `contact edits keep encrypted email and its lookup hash consistent`() {
+        val member = repository.saveAndFlush(Member(lastName = "김", firstName = "테스트", email = "before@example.org"))
+        entityManager.clear()
+        val edited = repository.findByPublicIdAndDeletedAtIsNull(member.publicId).orElseThrow()
+        edited.email = "after@example.org"
+        edited.city = "Berlin"
+        repository.flush()
+        entityManager.clear()
+
+        assertEquals(null, repository.findByEmailAndDeletedAtIsNull("before@example.org"))
+        val reloaded = repository.findByEmailAndDeletedAtIsNull("after@example.org")
+        assertEquals(member.publicId, reloaded?.publicId)
+        assertEquals("after@example.org", reloaded?.email)
+        assertEquals("Berlin", reloaded?.city)
+        val raw = jdbcTemplate.queryForObject("SELECT email FROM members WHERE id = ?", String::class.java, member.id)
+        assertFalse(requireNotNull(raw).contains("after@example.org"))
+    }
 }

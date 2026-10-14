@@ -26,7 +26,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse as OpenApiResponse
 /** The 양육 screen's scoped alternative to the administrative member endpoints. */
 @RestController
 @RequestMapping("/church-groups/members")
-@PreAuthorize(Authz.TRAINING_WRITE)
+@PreAuthorize("hasRole('ADMIN')")
 class TrainingMatrixController(
     private val service: TrainingMatrixService,
 ) {
@@ -47,6 +47,7 @@ class TrainingMatrixController(
 
     /** Sets 예비순장 for an active member; this does not appoint a sitting church-group leader. */
     @PatchMapping("/{memberPublicId}/next-leader")
+    @PreAuthorize(Authz.TRAINING_WRITE)
     @Operation(operationId = "setNextGroupLeaderFlag")
     @OpenApiResponse(responseCode = "400", description = "An explicit non-null isNextGroupLeader value is required.")
     @OpenApiResponse(responseCode = "404", description = "The member does not exist, is deleted or is not ACTIVE.")
