@@ -20,8 +20,15 @@ object Roles {
     const val GENERAL_OPERATIONS_VIEWER = "GENERAL_OPERATIONS_VIEWER"
     const val GENERAL_OPERATIONS_EDITOR = "GENERAL_OPERATIONS_EDITOR"
 
-    /** Pastors inherit admin access; general operations editors inherit viewer access. */
-    const val HIERARCHY = "ROLE_$PASTOR > ROLE_$ADMIN\nROLE_$GENERAL_OPERATIONS_EDITOR > ROLE_$GENERAL_OPERATIONS_VIEWER"
+    /** Members of the 양육 team (`/ministries/training/viewers|editors`). */
+    const val TRAINING_VIEWER = "TRAINING_VIEWER"
+    const val TRAINING_EDITOR = "TRAINING_EDITOR"
+
+    /** Pastors inherit admin access; team editors inherit their viewer access. */
+    const val HIERARCHY =
+        "ROLE_$PASTOR > ROLE_$ADMIN\n" +
+            "ROLE_$GENERAL_OPERATIONS_EDITOR > ROLE_$GENERAL_OPERATIONS_VIEWER\n" +
+            "ROLE_$TRAINING_EDITOR > ROLE_$TRAINING_VIEWER"
 
     fun authority(role: String): String = "ROLE_$role"
 }

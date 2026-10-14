@@ -91,6 +91,8 @@ the home counters it reads only `GET /members/count`.
 | `/leaders/ministries` | `ministry_leader` | 사역 leader endpoints, limited to the 사역 the user leads |
 | `/ministries/general_operations/viewers` | `GENERAL_OPERATIONS_VIEWER` | Read attendance (including the roster), events, ministries (including applications), bulletins and announcements |
 | `/ministries/general_operations/editors` | `GENERAL_OPERATIONS_VIEWER`, `GENERAL_OPERATIONS_EDITOR` | Read and write those five areas; manage every ministry and accept/reject applications |
+| `/ministries/training/viewers` | `TRAINING_VIEWER` | Read church groups and the scoped 양육 member matrix |
+| `/ministries/training/editors` | `TRAINING_VIEWER`, `TRAINING_EDITOR` | Read the matrix, set 예비순장 and appoint/remove church-group leaders |
 | `/ministries/<slug>/viewers` | `<SLUG>_VIEWER` | Read the ministry's data in the web app |
 | `/ministries/<slug>/editors` | `<SLUG>_VIEWER`, `<SLUG>_EDITOR` | Read and write the ministry's data in the web app |
 
@@ -123,11 +125,53 @@ ordinary members or viewers.
 Both checked-in realm exports contain these roles and groups. On an existing realm:
 
 1. Create realm roles `pastor`, `note_taker`, `GENERAL_OPERATIONS_VIEWER` and
-   `GENERAL_OPERATIONS_EDITOR` (and `group_leader`, `ministry_leader` if absent).
+   `GENERAL_OPERATIONS_EDITOR`, `TRAINING_VIEWER` and `TRAINING_EDITOR`
+   (and `group_leader`, `ministry_leader` if absent).
 2. Create the groups above and assign exactly the listed roles on each leaf
    group's **Role mapping** tab.
 3. Add users to a leaf group, not roles directly to users.
 4. Refresh the token and confirm the role names under `realm_access.roles`.
+
+### Training team (양육팀)
+
+Use `/ministries/training/viewers` for readers and `/ministries/training/editors`
+for editors. The server hierarchy makes `TRAINING_EDITOR` imply `TRAINING_VIEWER`,
+even when a token carries only the editor role. Viewers may read `/church-groups`;
+editors may also `PUT` and `DELETE /church-groups/{publicId}/leader`. The same
+membership and leader-tenure checks as for admins still apply. Only ACTIVE
+members can be appointed as leaders, including by admins. Both controllers use
+ADMIN as their class default and explicitly grant matrix/leader reads and writes
+to the appropriate training roles.
+
+The scoped member API is `GET /church-groups/members?page=0&size=20` (maximum
+size 10000). It fixes membership status to ACTIVE, keeps name order and page
+metadata, and returns only names, baptism, group identifiers, training chips and
+the flags needed by the matrix. Contact details, ministry assignments, newcomer
+and account metadata are not part of this DTO. The training catalog remains
+available via its existing authenticated endpoint.
+
+Editors set 예비순장 with `PATCH /church-groups/members/{memberPublicId}/next-leader`
+and body `{ "isNextGroupLeader": true }` (or false). The response is only the
+public member ID and the saved flag. The target must be active and non-deleted;
+no other member field, group assignment or sitting leader tenure is changed.
+Neither training role grants access to the administrative member list, detail or
+PATCH endpoints.
+
+**Web integration:** the 양육 service from web #214 currently calls the admin
+member list and PATCH. Switch its matrix read to
+`GET /church-groups/members?page=0&size=10000` and its flag write to the new PATCH.
+The secure member query decrypts and sorts matching names before slicing a page;
+use the maximum page size for the full matrix to avoid repeating that work for
+many small pages. Inspect `totalPages` and fetch more pages only if necessary.
+Do not reuse the administrative member detail model or widen `/members` access.
+
+Both realm exports include the roles and groups for fresh imports. For an existing
+realm, imports do not update it: create the two roles and the training subtree,
+map only `TRAINING_VIEWER` on `viewers` and both roles on `editors`, then assign
+users to the leaf groups. Apply and verify in ST first, then repeat in Prod.
+After a token refresh, verify a viewer's GET succeeds and both leader writes are
+403; verify an editor can read and assign/remove a leader without broad admin
+rights. Existing roles retain their current access.
 
 ### Migrating `ministry_leader` to `/leaders/ministries`
 

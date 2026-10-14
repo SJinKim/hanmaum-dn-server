@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.groups.service
 
+import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.groups.api.v1.dto.AssignGroupLeaderRequest
 import com.hanmaum.dn.app.features.groups.api.v1.dto.ChurchGroupSummaryDto
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
@@ -56,7 +57,7 @@ class ChurchGroupServiceTest {
         lastName: String = "김",
         firstName: String = "철수",
     ): Member =
-        Member(lastName = lastName, firstName = firstName).also {
+        Member(lastName = lastName, firstName = firstName, memberStatus = MemberStatus.ACTIVE).also {
             it.id = id
             it.group = group
         }
@@ -232,6 +233,22 @@ class ChurchGroupServiceTest {
 
         assertEquals(HttpStatus.BAD_REQUEST, ex.statusCode)
         verify(groupLeaderRepository, never()).save(any<GroupLeader>())
+    }
+
+    @Test
+    fun `assignLeader rejects non-active group members before changing any tenure`() {
+        val g = group(id = 1L)
+        `when`(churchGroupRepository.findByPublicIdAndDeletedAtIsNull(g.publicId)).thenReturn(Optional.of(g))
+        for (status in MemberStatus.entries.filter { it != MemberStatus.ACTIVE }) {
+            val candidate = member(id = 7L, group = g).also { it.memberStatus = status }
+            `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(candidate.publicId)).thenReturn(Optional.of(candidate))
+            val ex =
+                assertThrows<ResponseStatusException> {
+                    service.assignLeader(g.publicId, AssignGroupLeaderRequest(candidate.publicId.toString()))
+                }
+            assertEquals(HttpStatus.BAD_REQUEST, ex.statusCode)
+        }
+        org.mockito.Mockito.verifyNoInteractions(groupLeaderRepository)
     }
 
     @Test

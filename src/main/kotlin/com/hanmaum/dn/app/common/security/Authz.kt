@@ -13,4 +13,8 @@ object Authz {
     const val MINISTRY_READ = "hasAnyRole('${Roles.ADMIN}', '${Roles.MINISTRY_LEADER}', '${Roles.GENERAL_OPERATIONS_VIEWER}')"
     const val MINISTRY_WRITE = "hasAnyRole('${Roles.ADMIN}', '${Roles.MINISTRY_LEADER}', '${Roles.GENERAL_OPERATIONS_EDITOR}')"
     const val MINISTRY_MANAGE = "hasAnyRole('${Roles.ADMIN}', '${Roles.GENERAL_OPERATIONS_EDITOR}')"
+
+    /** Access to the 양육 team's church-group matrix and leader assignments. */
+    const val TRAINING_READ = "hasAnyRole('${Roles.ADMIN}', '${Roles.TRAINING_VIEWER}')"
+    const val TRAINING_WRITE = "hasAnyRole('${Roles.ADMIN}', '${Roles.TRAINING_EDITOR}')"
 }

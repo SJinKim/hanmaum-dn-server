@@ -7,11 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased] — 2026-03-30
 
 ### Fixed
+- HDN-307: Preserve training flags during concurrent member edits, require ACTIVE church-group leaders and keep new group handlers admin-only by default.
 - HDN-296: Hide published future bulletins from every member endpoint until Friday before their Sunday (Europe/Berlin); preserve older editions and accurate history pagination.
 - HDN-172: Generate and sync OpenAPI safely from worktrees using a disposable database, dedicated port, and validated ops checkout.
 - HDN-202: Align newcomer import fingerprint column types with Hibernate's VARCHAR(64) mapping so schema validation can start the app.
 
 ### Added
+- HDN-307: Add 양육-team roles and groups, a scoped ACTIVE-member matrix and 예비순장 flag API, and church-group leader management.
 - HDN-306: General operations viewers read attendance, events, ministries, bulletins and announcements; editors also manage them across all ministries.
 - HDN-170: Active members can apply to ministries with a private introduction; leaders receive an email, review pending team applications, and send a private rejection message before reapplication.
 - HDN-218: Store an optional weekday per ministry schedule and expose it in create, update, and detail responses.

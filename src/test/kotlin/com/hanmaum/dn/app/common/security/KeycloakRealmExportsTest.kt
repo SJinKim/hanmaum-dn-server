@@ -76,4 +76,15 @@ class KeycloakRealmExportsTest {
             groups["/ministries/general_operations/editors"],
         )
     }
+
+    @Test
+    fun `both exports map the training team to separate viewer and editor groups`() {
+        for (name in listOf("hanmaum-realm.json", "realm-export.json")) {
+            val realm = load(name)
+            assertTrue(realm.roles.containsAll(setOf(Roles.TRAINING_VIEWER, Roles.TRAINING_EDITOR)), name)
+            assertEquals(setOf(Roles.TRAINING_VIEWER), realm.groups["/ministries/training/viewers"], name)
+            assertEquals(setOf(Roles.TRAINING_VIEWER, Roles.TRAINING_EDITOR), realm.groups["/ministries/training/editors"], name)
+            assertEquals(emptySet<String>(), realm.groups["/ministries/training"], name)
+        }
+    }
 }

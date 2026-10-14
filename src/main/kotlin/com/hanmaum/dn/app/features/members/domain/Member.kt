@@ -34,10 +34,13 @@ import jakarta.persistence.ManyToOne
 import jakarta.persistence.PrePersist
 import jakarta.persistence.PreUpdate
 import jakarta.persistence.Table
+import org.hibernate.annotations.DynamicUpdate
 import java.time.Instant
 import java.time.LocalDate
 
 @Entity
+// Independent profile/admin edits must not overwrite concurrently changed training flags.
+@DynamicUpdate
 @Table(name = "members")
 class Member(
     // --- NAMEN ---
