@@ -122,15 +122,37 @@ Attendance-log and bulletin controllers default to the write rule; their GET
 methods explicitly allow readers, so a new unannotated handler does not admit
 ordinary members or viewers.
 
-Both checked-in realm exports contain these roles and groups. On an existing realm:
+Both checked-in realm exports are the source for the managed application roles and
+full group paths. `scripts/keycloak/configure-realm.sh` reads only that projection;
+it does not import realm keys, clients, users, local IDs or default roles.
 
-1. Create realm roles `pastor`, `note_taker`, `GENERAL_OPERATIONS_VIEWER` and
-   `GENERAL_OPERATIONS_EDITOR`, `TRAINING_VIEWER` and `TRAINING_EDITOR`
-   (and `group_leader`, `ministry_leader` if absent).
-2. Create the groups above and assign exactly the listed roles on each leaf
-   group's **Role mapping** tab.
-3. Add users to a leaf group, not roles directly to users.
-4. Refresh the token and confirm the role names under `realm_access.roles`.
+For an existing staging realm, run from the deployed checkout on the Keycloak host:
+
+```bash
+KC_REALM=hanmaum-dn-st KC_ACCESS_ONLY=1 scripts/keycloak/configure-realm.sh
+APPLY=1 KC_REALM=hanmaum-dn-st KC_ACCESS_ONLY=1 scripts/keycloak/configure-realm.sh
+KC_REALM=hanmaum-dn-st KC_ACCESS_ONLY=1 scripts/keycloak/configure-realm.sh
+```
+
+The final dry run must report `0 change(s) pending`; a second apply must also
+report zero changes. The access-only mode needs no `DASHBOARD_URLS` and leaves
+clients, redirect URIs and other realm settings alone. The full mode also
+reconciles application roles/groups before its existing client and realm steps.
+A backend deploy copies the script and exports; it does not execute this command.
+
+The reconciler adds missing roles, groups and direct group-role mappings. It
+preserves existing group IDs, extra mappings, unrelated groups and all user
+memberships. It does not remove stale grants, move users, or implement permission
+composites; inspect unexpected existing grants separately. For new access rights,
+update both exports in the same feature PR; mismatched definitions fail before
+any live writes. New role/group names must be URL-safe; application composite roles
+and group client-role mappings are rejected until supported explicitly.
+
+After application, inspect the realm roles and each leaf group's role mappings.
+Assign people to the intended leaf groups through the normal access-management
+process, refresh tokens and verify the API access matrix. Report realm application
+and live verification separately from the merge/deploy status. Apply to Prod only
+after ST verification and when the Prod environment is ready.
 
 ### Training team (양육팀)
 
@@ -165,10 +187,10 @@ use the maximum page size for the full matrix to avoid repeating that work for
 many small pages. Inspect `totalPages` and fetch more pages only if necessary.
 Do not reuse the administrative member detail model or widen `/members` access.
 
-Both realm exports include the roles and groups for fresh imports. For an existing
-realm, imports do not update it: create the two roles and the training subtree,
-map only `TRAINING_VIEWER` on `viewers` and both roles on `editors`, then assign
-users to the leaf groups. Apply and verify in ST first, then repeat in Prod.
+The reconciliation commands above create the training subtree in an existing
+realm: `viewers` maps `TRAINING_VIEWER`, and `editors` maps both training roles.
+Existing extra mappings are preserved; inspect them before assigning users.
+Apply and verify in ST first, then repeat in Prod when available.
 After a token refresh, verify a viewer's GET succeeds and both leader writes are
 403; verify an editor can read and assign/remove a leader without broad admin
 rights. Existing roles retain their current access.
@@ -179,7 +201,8 @@ ST and production share one Keycloak instance. Run the whole section in the ST
 realm, sign it off, then repeat it in the production realm and sign that off
 separately.
 
-1. Create group `/leaders/ministries` and map realm role `ministry_leader` to it.
+1. Run the reconciliation above to create `/leaders/ministries` and its
+   `ministry_leader` mapping.
 2. Open **Users in role** on `ministry_leader` and note every user it lists.
 3. For each of those users, one at a time:
    1. Add the user to `/leaders/ministries`.
