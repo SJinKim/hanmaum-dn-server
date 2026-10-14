@@ -21,6 +21,7 @@ import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.util.UUID
@@ -107,6 +108,24 @@ class MemberNamesControllerTest {
                 .perform(get(path).with(jwt().authorities(SimpleGrantedAuthority("ROLE_$role"))))
                 .andExpect(status().isForbidden)
         }
+        verifyNoInteractions(memberService)
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["TRAINING_VIEWER", "TRAINING_EDITOR"])
+    fun `training team access stays separate from member administration`(role: String) {
+        val token = jwt().authorities(SimpleGrantedAuthority("ROLE_$role"))
+        val id = UUID.randomUUID()
+        for (path in listOf("/api/v1/members", "/api/v1/members/$id", "/api/v1/members/names")) {
+            mockMvc.perform(get(path).with(token)).andExpect(status().isForbidden)
+        }
+        mockMvc
+            .perform(
+                patch("/api/v1/members/$id")
+                    .with(token)
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .content("""{"isNextGroupLeader":true}"""),
+            ).andExpect(status().isForbidden)
         verifyNoInteractions(memberService)
     }
 }

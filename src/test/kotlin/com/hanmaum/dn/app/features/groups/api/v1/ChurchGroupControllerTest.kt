@@ -5,8 +5,13 @@ import com.hanmaum.dn.app.features.groups.api.v1.dto.AssignGroupLeaderRequest
 import com.hanmaum.dn.app.features.groups.api.v1.dto.ChurchGroupSummaryDto
 import com.hanmaum.dn.app.features.groups.service.ChurchGroupService
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+import org.mockito.Mockito.verify
+import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.eq
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration
@@ -179,5 +184,95 @@ class ChurchGroupControllerTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(AssignGroupLeaderRequest(memberPublicId.toString()))),
             ).andExpect(status().isForbidden)
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["TRAINING_VIEWER", "TRAINING_EDITOR", "ADMIN", "PASTOR"])
+    fun `training readers can read the group matrix`(role: String) {
+        `when`(churchGroupService.getGroups()).thenReturn(listOf(ledGroup()))
+        mockMvc
+            .perform(get("/api/v1/church-groups").with(jwt().authorities(SimpleGrantedAuthority("ROLE_$role"))))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data[0].publicId").value(groupPublicId.toString()))
+            .andExpect(jsonPath("$.data[0].leaderPublicId").value(memberPublicId.toString()))
+        verify(churchGroupService).getGroups()
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["TRAINING_EDITOR", "ADMIN", "PASTOR"])
+    fun `training editors can assign and remove the sitting leader`(role: String) {
+        `when`(churchGroupService.assignLeader(eq(groupPublicId), any())).thenReturn(ledGroup())
+        `when`(churchGroupService.clearLeader(groupPublicId)).thenReturn(ChurchGroupSummaryDto(groupPublicId.toString(), "1구역", "다니엘조"))
+        val token = jwt().authorities(SimpleGrantedAuthority("ROLE_$role"))
+        mockMvc
+            .perform(
+                put("/api/v1/church-groups/$groupPublicId/leader")
+                    .with(token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(AssignGroupLeaderRequest(memberPublicId.toString()))),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.leaderPublicId").value(memberPublicId.toString()))
+        mockMvc
+            .perform(delete("/api/v1/church-groups/$groupPublicId/leader").with(token))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.leaderPublicId").doesNotExist())
+        val request = argumentCaptor<AssignGroupLeaderRequest>()
+        verify(churchGroupService).assignLeader(eq(groupPublicId), request.capture())
+        kotlin.test.assertEquals(memberPublicId.toString(), request.firstValue.memberPublicId)
+        verify(churchGroupService).clearLeader(groupPublicId)
+    }
+
+    @Test
+    fun `a training viewer cannot assign or remove a leader`() {
+        val token = jwt().authorities(SimpleGrantedAuthority("ROLE_TRAINING_VIEWER"))
+        mockMvc
+            .perform(
+                put("/api/v1/church-groups/$groupPublicId/leader")
+                    .with(token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(AssignGroupLeaderRequest(memberPublicId.toString()))),
+            ).andExpect(status().isForbidden)
+        mockMvc.perform(delete("/api/v1/church-groups/$groupPublicId/leader").with(token)).andExpect(status().isForbidden)
+        verifyNoInteractions(churchGroupService)
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+        strings = [
+            "NOTE_TAKER",
+            "GROUP_LEADER",
+            "MINISTRY_LEADER",
+            "GENERAL_OPERATIONS_VIEWER",
+            "GENERAL_OPERATIONS_EDITOR",
+            "NEWCOMER_VIEWER",
+            "NEWCOMER_EDITOR",
+            "MEMBER",
+        ],
+    )
+    fun `other roles do not gain church group access`(role: String) {
+        val token = jwt().authorities(SimpleGrantedAuthority("ROLE_$role"))
+        mockMvc.perform(get("/api/v1/church-groups").with(token)).andExpect(status().isForbidden)
+        mockMvc
+            .perform(
+                put("/api/v1/church-groups/$groupPublicId/leader")
+                    .with(token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(AssignGroupLeaderRequest(memberPublicId.toString()))),
+            ).andExpect(status().isForbidden)
+        mockMvc.perform(delete("/api/v1/church-groups/$groupPublicId/leader").with(token)).andExpect(status().isForbidden)
+        verifyNoInteractions(churchGroupService)
+    }
+
+    @Test
+    fun `church group endpoints require authentication`() {
+        mockMvc.perform(get("/api/v1/church-groups")).andExpect(status().isUnauthorized)
+        mockMvc
+            .perform(
+                put("/api/v1/church-groups/$groupPublicId/leader")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(AssignGroupLeaderRequest(memberPublicId.toString()))),
+            ).andExpect(status().isUnauthorized)
+        mockMvc.perform(delete("/api/v1/church-groups/$groupPublicId/leader")).andExpect(status().isUnauthorized)
+        verifyNoInteractions(churchGroupService)
     }
 }

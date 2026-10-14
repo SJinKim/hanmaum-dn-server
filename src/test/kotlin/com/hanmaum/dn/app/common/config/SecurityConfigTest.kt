@@ -87,6 +87,16 @@ class SecurityConfigTest {
     fun `an operations viewer token does not gain editor authority`() {
         assertEquals(setOf("ROLE_GENERAL_OPERATIONS_VIEWER"), authoritiesOf("GENERAL_OPERATIONS_VIEWER"))
     }
+
+    @Test
+    fun `a training editor inherits only training viewer access`() {
+        assertEquals(setOf("ROLE_TRAINING_EDITOR", "ROLE_TRAINING_VIEWER"), authoritiesOf("training_editor"))
+    }
+
+    @Test
+    fun `a training viewer does not gain editor access`() {
+        assertEquals(setOf("ROLE_TRAINING_VIEWER"), authoritiesOf("training_viewer"))
+    }
 }
 
 @RestController

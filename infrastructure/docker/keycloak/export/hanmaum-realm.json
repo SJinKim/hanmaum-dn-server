@@ -138,6 +138,24 @@
         "attributes": {}
       },
       {
+        "id": "fe281f9a-cf63-524c-b9c5-8c555f7f0d95",
+        "name": "TRAINING_VIEWER",
+        "description": "양육팀: liest die Gruppenmatrix",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "313538da-5813-430e-ab02-16db69fc5746",
+        "attributes": {}
+      },
+      {
+        "id": "e8f46aa7-3c68-5503-a247-f456078aad20",
+        "name": "TRAINING_EDITOR",
+        "description": "양육팀: bearbeitet Gruppenleiter und 예비순장",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "313538da-5813-430e-ab02-16db69fc5746",
+        "attributes": {}
+      },
+      {
         "id": "3d884f2b-5366-479e-81a3-57d947b32927",
         "name": "default-roles-hanmaum",
         "description": "${role_default-roles}",
@@ -565,6 +583,39 @@
               "realmRoles": [
                 "GENERAL_OPERATIONS_VIEWER",
                 "GENERAL_OPERATIONS_EDITOR"
+              ],
+              "clientRoles": {},
+              "subGroups": []
+            }
+          ]
+        },
+        {
+          "id": "dc51b873-94d0-54d7-9e39-4c9f04e31f95",
+          "name": "training",
+          "path": "/ministries/training",
+          "attributes": {},
+          "realmRoles": [],
+          "clientRoles": {},
+          "subGroups": [
+            {
+              "id": "1d77c123-0383-5e11-abfd-127b56e85cba",
+              "name": "viewers",
+              "path": "/ministries/training/viewers",
+              "attributes": {},
+              "realmRoles": [
+                "TRAINING_VIEWER"
+              ],
+              "clientRoles": {},
+              "subGroups": []
+            },
+            {
+              "id": "fac41b55-8ee1-5982-9a89-dfc73b20345e",
+              "name": "editors",
+              "path": "/ministries/training/editors",
+              "attributes": {},
+              "realmRoles": [
+                "TRAINING_VIEWER",
+                "TRAINING_EDITOR"
               ],
               "clientRoles": {},
               "subGroups": []
