@@ -39,3 +39,7 @@ Closes #
 - [ ] API contract unchanged, or ran
   `OPS_DIR=/absolute/path/to/hanmaum-dn-ops OPENAPI_ENV_FILE=/absolute/path/to/.env make openapi-sync`,
   reviewed the generated diff, and linked the ops PR
+- [ ] Keycloak roles/groups/mappings unchanged, or existing-realm provisioning and both
+  realm exports updated together; dry-run and repeat-apply behavior verified
+- [ ] Keycloak rollout status explicit: target realm and apply command documented;
+  live ST verification recorded or the remaining rollout clearly marked pending

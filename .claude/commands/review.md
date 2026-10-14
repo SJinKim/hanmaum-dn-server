@@ -18,6 +18,9 @@ Act as a strict senior reviewer on this branch before it becomes a PR.
    - Error handling — not swallowed, not a generic `catch(Exception)`?
    - Public API breaking changes flagged?
    - DB migrations reversible and safe on a live DB?
+   - Keycloak roles/groups/mappings: existing-realm provisioning and both exports updated
+     together? Dry-run and repeat-apply behavior tested? Live rollout status explicit,
+     with ST evidence rather than a claim based only on exports or a merged PR?
 4. Produce a report with three sections:
    - **Must fix** — blocks PR
    - **Should fix** — before merge

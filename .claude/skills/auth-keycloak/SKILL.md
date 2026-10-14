@@ -35,6 +35,30 @@ This runs inside the JWT authentication filter — never in a controller.
   `@Value("\${app.keycloak.issuer-uri:http://localhost:8091/realms/hanmaum}")`
 - Local Keycloak runs on port 8091 via Docker Compose with explicit port mapping.
 
+## Realm changes and rollout
+
+Every change to application realm roles, groups or group-role mappings includes:
+
+- Update `scripts/keycloak/configure-realm.sh` or the declarative configuration it reads,
+  and both checked-in realm exports, in the same change. This applies when an endpoint
+  introduces a new role, not just when the task explicitly mentions Keycloak automation.
+  Extend the existing managed configuration; an export or manual console checklist alone
+  does not update an existing realm.
+- Preserve the script's dry-run default and `APPLY=1` mode. Test missing and partially
+  configured state, applying twice without duplicates, and a final dry run with no changes.
+  Preserve unrelated realm configuration and user memberships. Do not assign people to
+  privileged groups merely because the groups were created.
+- Document the target realm and application command in `KEYCLOAK_RUNBOOK.md` or
+  `KEYCLOAK_ENVIRONMENTS.md`. An ordinary backend deploy currently copies the script;
+  it does not run realm reconciliation. Use the actual configured realm name.
+- Verify the roles, group paths and leaf-group role mappings after application in ST,
+  then verify authorization with refreshed tokens. Apply to Prod after ST verification
+  when Prod rollout is in scope. Do not print credentials or tokens.
+- Report repository implementation, deployment, realm application and live verification
+  separately. If live rollout is pending, state the remaining step; do not report it as
+  completed because the PR merged. This workflow does not itself authorize a deployment
+  or a live realm change beyond the user's task.
+
 ## Don't do
 - Don't use email as a primary identity key anywhere — it's mutable.
 - Don't duplicate member rows if the same Keycloak user exists.
