@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Brings one deployed realm to the target state from KEYCLOAK_ENVIRONMENTS.md (#235):
-# login theme and locales, brute-force protection (#244), audience scope and clients.
+# application roles/groups from the checked-in exports, login theme and locales,
+# brute-force protection (#244), audience scope and clients.
 #
 # Runs on the host that runs the Keycloak container and talks to it through kcadm inside
 # the container. Dry run by default; APPLY=1 writes. Re-running is safe: every step first
@@ -8,7 +9,7 @@
 #
 # Required:
 #   KC_REALM          hanmaum-dn-st | hanmaum-dn-prod
-#   DASHBOARD_URLS    comma-separated HTTPS origins of the admin dashboard,
+#   DASHBOARD_URLS    required outside KC_ACCESS_ONLY=1: comma-separated HTTPS origins,
 #                     e.g. https://dn-admin-dashboard.st.graceops.de. Set it empty
 #                     (DASHBOARD_URLS=) while an environment has no dashboard: the
 #                     dashboard client then accepts no redirect, so no one can log in there.
@@ -16,6 +17,7 @@
 #                     the login theme links from its error and expired-link pages (#243).
 # Optional:
 #   APPLY=1                      write changes (default: dry run)
+#   KC_ACCESS_ONLY=1             reconcile only application roles/groups (default: 0)
 #   MOBILE_REDIRECT_URIS         default com.hanmaum.dn.mobile:/oauth2redirect
 #   MOBILE_DIRECT_GRANTS         default true: the app logs in with its own password form
 #   VERIFY_USERNAME              user for the example access token check (aud and iss)
@@ -27,8 +29,13 @@
 set -euo pipefail
 
 : "${KC_REALM:?KC_REALM must be set (hanmaum-dn-st or hanmaum-dn-prod)}"
-: "${DASHBOARD_URLS?DASHBOARD_URLS must be set (comma-separated HTTPS origins, or empty)}"
 APPLY="${APPLY:-0}"
+KC_ACCESS_ONLY="${KC_ACCESS_ONLY:-0}"
+if [[ "$KC_ACCESS_ONLY" == "1" ]]; then
+    DASHBOARD_URLS=""
+else
+    : "${DASHBOARD_URLS?DASHBOARD_URLS must be set (comma-separated HTTPS origins, or empty)}"
+fi
 MOBILE_REDIRECT_URIS="${MOBILE_REDIRECT_URIS:-com.hanmaum.dn.mobile:/oauth2redirect}"
 MOBILE_DIRECT_GRANTS="${MOBILE_DIRECT_GRANTS:-true}"
 VERIFY_USERNAME="${VERIFY_USERNAME:-}"
@@ -59,6 +66,17 @@ readonly KCADM_CONFIG="/tmp/kcadm-hdn-235.config"
 command -v jq >/dev/null || { echo "jq is required" >&2; exit 1; }
 [[ "$MOBILE_DIRECT_GRANTS" == "true" || "$MOBILE_DIRECT_GRANTS" == "false" ]] \
     || { echo "MOBILE_DIRECT_GRANTS must be true or false" >&2; exit 1; }
+
+[[ "$APPLY" == "0" || "$APPLY" == "1" ]] \
+    || { echo "APPLY must be 0 or 1" >&2; exit 1; }
+[[ "$KC_ACCESS_ONLY" == "0" || "$KC_ACCESS_ONLY" == "1" ]] \
+    || { echo "KC_ACCESS_ONLY must be 0 or 1" >&2; exit 1; }
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$script_dir/realm-access.sh"
+export_dir="$script_dir/../../infrastructure/docker/keycloak/export"
+# Validate both projections before authenticating or applying any realm changes.
+managed_access="$(realm_access_config "$export_dir/hanmaum-realm.json" "$export_dir/realm-export.json")"
 
 changes=0
 
@@ -101,7 +119,7 @@ if jq -e 'map(select(startswith("https://") | not)) | length > 0' <<<"$dashboard
     echo "DASHBOARD_URLS must all be https:// origins in a deployed realm" >&2
     exit 1
 fi
-if [[ "$dashboard_origins" == "[]" ]]; then
+if [[ "$KC_ACCESS_ONLY" != "1" && "$dashboard_origins" == "[]" ]]; then
     log "DASHBOARD_URLS is empty: $DASHBOARD_CLIENT gets no redirect URIs and no web origins"
 fi
 
@@ -285,13 +303,17 @@ log "realm $KC_REALM on $KC_CONTAINER ($([[ "$APPLY" == "1" ]] && echo apply || 
 login
 kc get "realms/$KC_REALM" --fields realm >/dev/null
 
-ensure_realm_login_pages
-ensure_realm_brute_force
-ensure_audience_scope
-ensure_user_client "$DASHBOARD_CLIENT" "$dashboard_redirects" "$dashboard_origins" false "$dashboard_base_url"
-# Native app: no CORS, no browser origin.
-ensure_user_client "$MOBILE_CLIENT" "$mobile_redirects" "[]" "$MOBILE_DIRECT_GRANTS"
-ensure_backend_client
+ensure_realm_access "$managed_access"
+
+if [[ "$KC_ACCESS_ONLY" != "1" ]]; then
+    ensure_realm_login_pages
+    ensure_realm_brute_force
+    ensure_audience_scope
+    ensure_user_client "$DASHBOARD_CLIENT" "$dashboard_redirects" "$dashboard_origins" false "$dashboard_base_url"
+    # Native app: no CORS, no browser origin.
+    ensure_user_client "$MOBILE_CLIENT" "$mobile_redirects" "[]" "$MOBILE_DIRECT_GRANTS"
+    ensure_backend_client
+fi
 
 log "$changes change(s) $([[ "$APPLY" == "1" ]] && echo applied || echo pending)"
-if [[ "$APPLY" == "1" || "$changes" == "0" ]]; then verify_tokens; fi
+if [[ "$KC_ACCESS_ONLY" != "1" && ( "$APPLY" == "1" || "$changes" == "0" ) ]]; then verify_tokens; fi

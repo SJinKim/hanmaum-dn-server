@@ -51,6 +51,9 @@ jobs:
       - name: Verify shared edge ownership contract
         run: ./scripts/test-shared-edge-ownership.sh
 
+      - name: Test realm access reconciliation
+        run: python3 scripts/keycloak/test-realm-access.py
+
       - name: Compile
         run: ./gradlew compileKotlin compileTestKotlin --no-daemon
 
@@ -114,3 +117,12 @@ jobs:
         env:
           TITLE: ${{ github.event.pull_request.title }}
         run: printf '%s\n' "$TITLE" | npx commitlint --verbose
+
+  keycloak-access:
+    name: Keycloak access provisioning
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify against disposable Keycloak 26.3
+        run: python3 scripts/keycloak/test-realm-access-integration.py

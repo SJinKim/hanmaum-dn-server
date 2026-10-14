@@ -173,6 +173,19 @@ Run everything on the Hetzner host, from the deploy directory. Both deploys copy
 container and logs in with that container's bootstrap admin, so no password is typed or
 printed. It needs `jq` on the host. Without `APPLY=1` it only prints what it would change.
 
+The script now also reads application roles and group-role mappings from both realm
+exports. New definitions must be present in both files. It only adds missing access
+configuration and preserves existing groups, extra grants and user memberships.
+Use `KC_ACCESS_ONLY=1` to apply just this access configuration (no `DASHBOARD_URLS`
+required); see `KEYCLOAK_RUNBOOK.md` for dry-run/apply/verify commands.
+A deploy only copies the files and does not apply realm changes automatically.
+
+This limited roles/groups reconciler reuses the existing in-container Admin CLI,
+including its authentication and dry-run workflow. Before expanding it to permission
+composites or client-role mappings in #299, evaluate a declarative importer such as
+[keycloak-config-cli](https://github.com/adorsys/keycloak-config-cli) against the
+requirements to preserve unrelated grants, users and realm configuration.
+
 1. Dry run against staging:
 
    ```bash

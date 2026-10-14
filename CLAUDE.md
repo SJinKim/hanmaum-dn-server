@@ -27,6 +27,10 @@ Pre-MVP. See `.claude/skills/mvp-focus/` for scope rules.
     No PII, no tokens, no full JWT contents — ever.
 11. Errors: never swallow. Domain errors → `ProblemDetail` response. Infra errors →
     wrap with context and re-throw. No generic `catch(Exception)`.
+12. Keycloak realm roles, groups and role mappings must be provisioned for existing realms
+    by `scripts/keycloak/configure-realm.sh` or declarative input it consumes, in the same
+    change as both realm exports. Export-only changes are incomplete. Record rollout
+    separately from merge; verify ST first and never claim live configuration from Git alone.
 
 ## Layout
 - `src/main/kotlin/.../controller` — REST endpoints (thin)
