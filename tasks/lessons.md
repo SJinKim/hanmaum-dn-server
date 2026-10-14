@@ -218,3 +218,8 @@
 ### Realm configuration automation belongs to every access change
 - **Correction**: New training roles and groups were added to exports without an existing-realm provisioning path, leaving the user to discover the missing live configuration.
 - **Rule**: Whenever roles, groups or role mappings change, update configure-realm.sh or its managed input and both exports in the same change, verify dry-run and repeated application, and report live rollout separately. This is part of the feature, without needing a separate reminder from the user.
+
+
+### Reconciliation must surface parser failures and follow configuration growth
+- **Correction**: Review found unchecked jq process substitutions, a fixed group count in the integration test and validation of an unused dashboard URL in access-only mode.
+- **Rule**: Materialize parsed work lists with checked exit codes before any writes. Derive expected managed state from the configuration, and isolate validation to the settings used by the selected mode. Keep failed integration diagnostics visible after temporary resources are removed.

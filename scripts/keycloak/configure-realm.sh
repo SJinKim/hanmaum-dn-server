@@ -32,7 +32,7 @@ set -euo pipefail
 APPLY="${APPLY:-0}"
 KC_ACCESS_ONLY="${KC_ACCESS_ONLY:-0}"
 if [[ "$KC_ACCESS_ONLY" == "1" ]]; then
-    DASHBOARD_URLS="${DASHBOARD_URLS:-}"
+    DASHBOARD_URLS=""
 else
     : "${DASHBOARD_URLS?DASHBOARD_URLS must be set (comma-separated HTTPS origins, or empty)}"
 fi

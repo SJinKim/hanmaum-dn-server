@@ -122,7 +122,7 @@ Attendance-log and bulletin controllers default to the write rule; their GET
 methods explicitly allow readers, so a new unannotated handler does not admit
 ordinary members or viewers.
 
-Both checked-in realm exports are the source for the managed application roles and
+Both checked-in realm exports are the source for the managed application role names/descriptions and
 full group paths. `scripts/keycloak/configure-realm.sh` reads only that projection;
 it does not import realm keys, clients, users, local IDs or default roles.
 
@@ -140,7 +140,8 @@ clients, redirect URIs and other realm settings alone. The full mode also
 reconciles application roles/groups before its existing client and realm steps.
 A backend deploy copies the script and exports; it does not execute this command.
 
-The reconciler adds missing roles, groups and direct group-role mappings. It
+The reconciler adds missing roles, groups and direct group-role mappings, and
+updates managed role descriptions from the exports. It
 preserves existing group IDs, extra mappings, unrelated groups and all user
 memberships. It does not remove stale grants, move users, or implement permission
 composites; inspect unexpected existing grants separately. For new access rights,
@@ -149,8 +150,8 @@ any live writes. New role/group names must be URL-safe; application composite ro
 and group client-role mappings are rejected until supported explicitly.
 
 After application, inspect the realm roles and each leaf group's role mappings.
-Assign people to the intended leaf groups through the normal access-management
-process, refresh tokens and verify the API access matrix. Report realm application
+Add people to the intended leaf groups; do not grant application roles directly
+to individual users. Refresh tokens and verify the API access matrix. Report realm application
 and live verification separately from the merge/deploy status. Apply to Prod only
 after ST verification and when the Prod environment is ready.
 

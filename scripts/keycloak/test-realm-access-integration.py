@@ -5,6 +5,7 @@ import http.client
 import os
 from pathlib import Path
 import secrets
+import sys
 import subprocess
 import tempfile
 import time
@@ -23,7 +24,8 @@ PASSWORD = secrets.token_hex(24)
 
 def main():
     with tempfile.TemporaryDirectory(prefix='hdn-realm-access-') as tmp:
-        log = Path(tmp) / 'container.log'
+        failed = True
+        owned = False
         token = None
 
         def refresh_token():
@@ -67,14 +69,15 @@ def main():
             return result
 
         def snapshot():
-            return dict(roles=sorted(r['name'] for r in api('roles?max=1000')), groups=groups(),
+            return dict(roles={r['name']: r.get('description', '') for r in api('roles?max=1000')}, groups=groups(),
                         memberships=sorted(g['id'] for g in api(f'users/{user_id}/groups')),
                         clients=sorted(c['clientId'] for c in api('clients')))
 
         def configure(apply=False):
             env = dict(os.environ, KC_CONTAINER=CONTAINER, KC_REALM=REALM, KC_ACCESS_ONLY='1', APPLY='1' if apply else '0')
             # The access-only mode requires neither a dashboard URL nor host credentials.
-            for key in ['KC_ADMIN_USER', 'DASHBOARD_URLS', 'VERIFY_USERNAME']:
+            env['DASHBOARD_URLS'] = 'http://localhost:3000'  # Must be ignored in access-only mode.
+            for key in ['KC_ADMIN_USER', 'VERIFY_USERNAME']:
                 env.pop(key, None)
             with (Path(tmp) / 'configure.log').open('w') as output:
                 result = subprocess.run(['bash', str(ROOT / 'scripts/keycloak/configure-realm.sh')], env=env,
@@ -91,6 +94,7 @@ def main():
                             '-v', f'{ROOT}/infrastructure/docker/keycloak/themes/hanmaum:/opt/keycloak/themes/hanmaum:ro',
                             'quay.io/keycloak/keycloak:26.3.0', 'start-dev', '--http-port=8090'],
                            env=env, check=True, stdout=subprocess.DEVNULL)
+            owned = True
             deadline = time.monotonic() + 120
             while True:
                 try:
@@ -103,7 +107,7 @@ def main():
             refresh_token()
             request('/admin/realms', dict(realm=REALM, enabled=True, displayName='Preserve this fixture'), 'POST')
             for role in ['TRAINING_VIEWER', 'external-role']:
-                api('roles', {'name': role}, 'POST')
+                api('roles', {'name': role, 'description': 'outdated fixture description', 'attributes': {'fixture': ['preserve']}}, 'POST')
             ministries = create_group('ministries')
             training = create_group('training', ministries)
             editors = create_group('editors', training)
@@ -128,7 +132,20 @@ def main():
                               and r['name'] not in ['offline_access', 'uma_authorization']}
             assert expected_roles <= set(applied['roles'])
             assert 'default-roles-hanmaum' not in applied['roles']
-            assert len(applied['groups']) == 18, 'Unexpected paths: ' + repr(sorted(applied['groups']))
+            expected_paths = set()
+
+            def expected_walk(nodes, parent=''):
+                for group in nodes:
+                    path = parent + '/' + group['name']
+                    expected_paths.add(path)
+                    expected_walk(group.get('subGroups', []), path)
+
+            expected_walk(expected['groups'])
+            assert set(applied['groups']) == expected_paths | set(before['groups'])
+            for role in expected['roles']['realm']:
+                if role['name'] in expected_roles:
+                    assert applied['roles'][role['name']] == role.get('description', '')
+            assert api('roles/TRAINING_VIEWER')['attributes'] == {'fixture': ['preserve']}
             for path in ['/ministries', '/ministries/training', '/ministries/training/editors']:
                 assert applied['groups'][path]['id'] == before['groups'][path]['id'], 'Existing group replaced'
             assert applied['memberships'] == before['memberships']
@@ -152,10 +169,21 @@ def main():
             assert {'TRAINING_EDITOR', 'TRAINING_VIEWER'} <= set(claims['realm_access']['roles'])
             assert 'admin' not in claims['realm_access']['roles']
             print('PASS: server-evaluated user claims inherit both training roles without admin', flush=True)
+            failed = False
         finally:
-            with log.open('w') as output:
-                subprocess.run(['docker', 'logs', CONTAINER], stdout=output, stderr=subprocess.STDOUT)
-            subprocess.run(['docker', 'rm', '-f', CONTAINER], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if owned:
+                if failed:
+                    diagnostics = subprocess.run(['docker', 'logs', CONTAINER], capture_output=True, text=True)
+                    output = diagnostics.stdout + diagnostics.stderr
+                    # Only test-generated credentials exist here; still redact them if logged.
+                    output = output.replace(PASSWORD, '<redacted>')
+                    if token:
+                        output = output.replace(token, '<redacted>')
+                    print('Disposable Keycloak diagnostics:\n' + output, file=sys.stderr)
+                    config_log = Path(tmp) / 'configure.log'
+                    if config_log.exists():
+                        print('Reconciler diagnostics:\n' + config_log.read_text(), file=sys.stderr)
+                subprocess.run(['docker', 'rm', '-f', CONTAINER], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 if __name__ == '__main__':
