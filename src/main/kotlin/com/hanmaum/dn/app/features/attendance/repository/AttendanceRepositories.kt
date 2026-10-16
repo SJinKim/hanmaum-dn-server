@@ -37,6 +37,31 @@ interface AttendanceDefinitionRepository : JpaRepository<AttendanceDefinition, L
      * ever overlap after all, e.g. rows written before the overlap check existed.
      */
     fun findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(dayOfWeek: DayOfWeek): List<AttendanceDefinition>
+
+    /**
+     * Definitions of [date]'s weekday that were held on [date], i.e. have an accepted check-in
+     * that day, earliest window first. Active or not: a definition deactivated since then still
+     * owns that day's history (HDN-312).
+     */
+    @Query(
+        """
+        SELECT d FROM AttendanceDefinition d
+        WHERE d.deletedAt IS NULL
+          AND d.dayOfWeek = :dayOfWeek
+          AND EXISTS (
+              SELECT 1 FROM AttendanceLog l
+              WHERE l.definition = d
+                AND l.attendanceDate = :date
+                AND l.attended = true
+                AND l.deletedAt IS NULL
+          )
+        ORDER BY d.windowStart ASC, d.id ASC
+        """,
+    )
+    fun findHeldOn(
+        @Param("dayOfWeek") dayOfWeek: DayOfWeek,
+        @Param("date") date: LocalDate,
+    ): List<AttendanceDefinition>
 }
 
 @Repository

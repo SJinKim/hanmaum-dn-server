@@ -587,6 +587,38 @@ class AttendanceServiceTest {
         assertEquals(0, result.totalQuickRecordCount)
     }
 
+    @Test
+    fun `getGroupCounts keeps historical quick records after their definition is deactivated`() {
+        val historical = makeDefinition(id = 1L).apply { isActive = false }
+        val newcomerGroup = makeGroup(id = 9L, name = "새가족").apply { this.newcomerGroup = true }
+        `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(historical.publicId)).thenReturn(Optional.of(historical))
+        `when`(definitionRepo.findHeldOn(DayOfWeek.SUNDAY, attendanceDate)).thenReturn(listOf(historical))
+        `when`(newcomerVisitRepo.countQuickRecordsWithoutCheckIn(attendanceDate, 1L)).thenReturn(2L)
+        `when`(churchGroupRepo.findFirstByNewcomerGroupTrueAndDeletedAtIsNull()).thenReturn(newcomerGroup)
+        `when`(logRepo.countByChurchGroup(1L, attendanceDate))
+            .thenReturn(listOf(countView(newcomerGroup.publicId, null, "새가족", 1)))
+
+        val result = service.getGroupCounts(historical.publicId, attendanceDate)
+
+        assertEquals(2, result.totalQuickRecordCount)
+        assertEquals(3, result.totalCount)
+        verify(definitionRepo, never()).findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(any())
+    }
+
+    @Test
+    fun `getGroupCounts leaves quick records off the replacement of a definition held that day`() {
+        val historical = makeDefinition(id = 1L).apply { isActive = false }
+        val replacement = makeDefinition(id = 2L)
+        `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(replacement.publicId)).thenReturn(Optional.of(replacement))
+        `when`(definitionRepo.findHeldOn(DayOfWeek.SUNDAY, attendanceDate)).thenReturn(listOf(historical))
+        `when`(logRepo.countByChurchGroup(2L, attendanceDate)).thenReturn(emptyList())
+
+        val result = service.getGroupCounts(replacement.publicId, attendanceDate)
+
+        assertEquals(0, result.totalQuickRecordCount)
+        verify(newcomerVisitRepo, never()).countQuickRecordsWithoutCheckIn(any(), any())
+    }
+
     private fun countView(
         publicId: UUID,
         division: String?,
