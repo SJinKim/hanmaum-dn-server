@@ -246,22 +246,15 @@ class AttendanceService(
      * 빠른 등록 visits of [date] for the 새가족 row (HDN-312), or null when none apply.
      *
      * Visitors without an approved account cannot check in, so their quick record is their
-     * attendance. A day can carry several definitions; the visits belong to one of them only,
-     * so they are counted once and not once per service. That one is the earliest definition
-     * held on [date], active or not, so deactivating or replacing a definition later leaves the
-     * history unchanged. A day nobody checked in falls back to the earliest active definition.
+     * attendance. Each visit is pinned to one definition when it is recorded
+     * ([NewcomerVisit.definition]), so a day with several services counts it once, and
+     * deactivating or replacing a definition later leaves the history unchanged.
      */
     private fun quickRecordsFor(
         definition: AttendanceDefinition,
         date: LocalDate,
     ): QuickRecords? {
         if (definition.dayOfWeek != date.dayOfWeek) return null
-        val primary =
-            definitionRepo.findHeldOn(date.dayOfWeek, date).firstOrNull()
-                ?: definitionRepo
-                    .findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(date.dayOfWeek)
-                    .firstOrNull()
-        if (primary?.id != definition.id) return null
         val count = newcomerVisitRepo.countQuickRecordsWithoutCheckIn(date, definition.id!!)
         if (count == 0L) return null
         val newcomerGroup = churchGroupRepo.findFirstByNewcomerGroupTrueAndDeletedAtIsNull()

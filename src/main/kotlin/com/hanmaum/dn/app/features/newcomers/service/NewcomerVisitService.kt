@@ -1,5 +1,7 @@
 package com.hanmaum.dn.app.features.newcomers.service
 
+import com.hanmaum.dn.app.features.attendance.domain.AttendanceDefinition
+import com.hanmaum.dn.app.features.attendance.repository.AttendanceDefinitionRepository
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.CreateNewcomerVisitRequest
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.NewcomerVisitDayCount
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.NewcomerVisitResponse
@@ -34,6 +36,7 @@ import java.util.UUID
 class NewcomerVisitService(
     private val visitRepo: NewcomerVisitRepository,
     private val profileRepo: NewcomerProfileRepository,
+    private val definitionRepo: AttendanceDefinitionRepository,
     private val clock: Clock,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -74,6 +77,7 @@ class NewcomerVisitService(
                 visitType = request.visitType,
                 source = request.source,
                 note = request.note?.trim()?.ifEmpty { null },
+                definition = definitionOf(visitDate),
             )
         val saved = visitRepo.save(visit)
         log.info("Newcomer visit recorded visitDate={} visitType={}", saved.visitDate, saved.visitType)
@@ -88,7 +92,10 @@ class NewcomerVisitService(
         val visit = find(publicId)
         request.visitDate?.let {
             requireNotFuture(it)
-            visit.visitDate = it
+            if (it != visit.visitDate) {
+                visit.visitDate = it
+                visit.definition = definitionOf(it)
+            }
         }
         request.lastName?.let { visit.lastName = requireName(it) }
         request.firstName?.let { visit.firstName = requireName(it) }
@@ -99,6 +106,17 @@ class NewcomerVisitService(
         request.note?.let { visit.note = it.trim().ifEmpty { null } }
         return visit.toResponse()
     }
+
+    /**
+     * The definition whose 순별 counts a visit on [date] joins (HDN-312): the earliest one held
+     * that day, else the earliest active one of that weekday. Stored on the visit, so the
+     * choice does not follow later changes to which definitions are active.
+     */
+    private fun definitionOf(date: LocalDate): AttendanceDefinition? =
+        definitionRepo.findHeldOn(date.dayOfWeek, date).firstOrNull()
+            ?: definitionRepo
+                .findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(date.dayOfWeek)
+                .firstOrNull()
 
     @Transactional
     fun softDelete(publicId: UUID) {

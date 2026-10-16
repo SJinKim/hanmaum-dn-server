@@ -513,8 +513,6 @@ class AttendanceServiceTest {
         val newcomerGroup = makeGroup(id = 9L, name = "새가족").apply { this.newcomerGroup = true }
         `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(definition.publicId))
             .thenReturn(Optional.of(definition))
-        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
-            .thenReturn(listOf(definition))
         `when`(newcomerVisitRepo.countQuickRecordsWithoutCheckIn(attendanceDate, 1L)).thenReturn(3L)
         `when`(churchGroupRepo.findFirstByNewcomerGroupTrueAndDeletedAtIsNull()).thenReturn(newcomerGroup)
         `when`(logRepo.countByChurchGroup(1L, attendanceDate))
@@ -539,12 +537,10 @@ class AttendanceServiceTest {
     }
 
     @Test
-    fun `getGroupCounts counts quick records once when a day has several definitions`() {
-        val first = makeDefinition(id = 1L)
+    fun `getGroupCounts counts only the quick records pinned to the definition`() {
         val second = makeDefinition(id = 2L, windowStart = LocalTime.of(14, 0), windowEnd = LocalTime.of(16, 0))
         `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(second.publicId)).thenReturn(Optional.of(second))
-        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
-            .thenReturn(listOf(first, second))
+        `when`(newcomerVisitRepo.countQuickRecordsWithoutCheckIn(attendanceDate, 2L)).thenReturn(0L)
         `when`(logRepo.countByChurchGroup(2L, attendanceDate))
             .thenReturn(listOf(countView(UUID.randomUUID(), "청년부", "새가족", 1)))
 
@@ -552,7 +548,7 @@ class AttendanceServiceTest {
 
         assertEquals(1, result.totalCount)
         assertEquals(0, result.totalQuickRecordCount)
-        verify(newcomerVisitRepo, never()).countQuickRecordsWithoutCheckIn(any(), any())
+        verify(churchGroupRepo, never()).findFirstByNewcomerGroupTrueAndDeletedAtIsNull()
     }
 
     @Test
@@ -574,8 +570,6 @@ class AttendanceServiceTest {
         val definition = makeDefinition()
         `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(definition.publicId))
             .thenReturn(Optional.of(definition))
-        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
-            .thenReturn(listOf(definition))
         `when`(newcomerVisitRepo.countQuickRecordsWithoutCheckIn(attendanceDate, 1L)).thenReturn(2L)
         `when`(churchGroupRepo.findFirstByNewcomerGroupTrueAndDeletedAtIsNull()).thenReturn(null)
         `when`(logRepo.countByChurchGroup(1L, attendanceDate))
@@ -592,7 +586,6 @@ class AttendanceServiceTest {
         val historical = makeDefinition(id = 1L).apply { isActive = false }
         val newcomerGroup = makeGroup(id = 9L, name = "새가족").apply { this.newcomerGroup = true }
         `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(historical.publicId)).thenReturn(Optional.of(historical))
-        `when`(definitionRepo.findHeldOn(DayOfWeek.SUNDAY, attendanceDate)).thenReturn(listOf(historical))
         `when`(newcomerVisitRepo.countQuickRecordsWithoutCheckIn(attendanceDate, 1L)).thenReturn(2L)
         `when`(churchGroupRepo.findFirstByNewcomerGroupTrueAndDeletedAtIsNull()).thenReturn(newcomerGroup)
         `when`(logRepo.countByChurchGroup(1L, attendanceDate))
@@ -607,16 +600,14 @@ class AttendanceServiceTest {
 
     @Test
     fun `getGroupCounts leaves quick records off the replacement of a definition held that day`() {
-        val historical = makeDefinition(id = 1L).apply { isActive = false }
         val replacement = makeDefinition(id = 2L)
         `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(replacement.publicId)).thenReturn(Optional.of(replacement))
-        `when`(definitionRepo.findHeldOn(DayOfWeek.SUNDAY, attendanceDate)).thenReturn(listOf(historical))
+        `when`(newcomerVisitRepo.countQuickRecordsWithoutCheckIn(attendanceDate, 2L)).thenReturn(0L)
         `when`(logRepo.countByChurchGroup(2L, attendanceDate)).thenReturn(emptyList())
 
         val result = service.getGroupCounts(replacement.publicId, attendanceDate)
 
         assertEquals(0, result.totalQuickRecordCount)
-        verify(newcomerVisitRepo, never()).countQuickRecordsWithoutCheckIn(any(), any())
     }
 
     private fun countView(

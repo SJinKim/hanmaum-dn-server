@@ -46,8 +46,24 @@ class NewcomerVisitRepositoryIT {
         firstName: String,
         date: LocalDate = sunday,
         profile: NewcomerProfile? = null,
-    ) = NewcomerVisit(visitDate = date, lastName = "홍", firstName = firstName, newcomerProfile = profile)
-        .also { entityManager.persist(it) }
+        definition: AttendanceDefinition? = null,
+    ) = NewcomerVisit(
+        visitDate = date,
+        lastName = "홍",
+        firstName = firstName,
+        newcomerProfile = profile,
+        definition = definition,
+    ).also { entityManager.persist(it) }
+
+    private fun sundayService(
+        title: String = "주일예배",
+        start: LocalTime = LocalTime.of(10, 0),
+    ) = AttendanceDefinition(
+        title = title,
+        dayOfWeek = DayOfWeek.SUNDAY,
+        windowStart = start,
+        windowEnd = start.plusHours(2),
+    ).also { entityManager.persist(it) }
 
     @Test
     fun `findInRange keeps the range, newest day first, and drops soft-deleted rows`() {
@@ -132,21 +148,18 @@ class NewcomerVisitRepositoryIT {
     }
 
     @Test
-    fun `countQuickRecordsWithoutCheckIn skips checked-in links, other days and deleted rows`() {
-        val definition =
-            AttendanceDefinition(
-                title = "주일예배",
-                dayOfWeek = DayOfWeek.SUNDAY,
-                windowStart = LocalTime.of(10, 0),
-                windowEnd = LocalTime.of(12, 0),
-            ).also { entityManager.persist(it) }
+    fun `countQuickRecordsWithoutCheckIn skips checked-in links, other days, other definitions and deleted rows`() {
+        val definition = sundayService()
+        val afternoon = sundayService(title = "오후예배", start = LocalTime.of(14, 0))
         val checkedIn = Member(lastName = "홍", firstName = "길동").also { entityManager.persist(it) }
         val notCheckedIn = Member(lastName = "Doe", firstName = "John").also { entityManager.persist(it) }
-        visit("길동", profile = NewcomerProfile(member = checkedIn).also { entityManager.persist(it) })
-        visit("John", profile = NewcomerProfile(member = notCheckedIn).also { entityManager.persist(it) })
-        visit("길순")
-        visit("길자").deletedAt = Instant.now()
-        visit("길남", date = sunday.minusWeeks(1))
+        visit("길동", profile = NewcomerProfile(member = checkedIn).also { entityManager.persist(it) }, definition = definition)
+        visit("John", profile = NewcomerProfile(member = notCheckedIn).also { entityManager.persist(it) }, definition = definition)
+        visit("길순", definition = definition)
+        visit("길자", definition = definition).deletedAt = Instant.now()
+        visit("길남", date = sunday.minusWeeks(1), definition = definition)
+        visit("길수", definition = afternoon)
+        visit("길영")
         entityManager.flush()
         attendanceLogRepository.insertIfAbsent(
             publicId = UUID.randomUUID(),
@@ -160,5 +173,19 @@ class NewcomerVisitRepositoryIT {
         val count = repository.countQuickRecordsWithoutCheckIn(sunday, definition.id!!)
 
         assertEquals(2, count)
+    }
+
+    @Test
+    fun `quick records of a day without check-ins stay on their definition after it is replaced`() {
+        val original = sundayService()
+        visit("길동", definition = original)
+        visit("길순", definition = original)
+        entityManager.flush()
+        original.isActive = false
+        val replacement = sundayService(title = "새 주일예배")
+        entityManager.flush()
+
+        assertEquals(2, repository.countQuickRecordsWithoutCheckIn(sunday, original.id!!))
+        assertEquals(0, repository.countQuickRecordsWithoutCheckIn(sunday, replacement.id!!))
     }
 }

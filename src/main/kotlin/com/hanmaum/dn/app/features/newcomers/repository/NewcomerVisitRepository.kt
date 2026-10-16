@@ -62,7 +62,9 @@ interface NewcomerVisitRepository : JpaRepository<NewcomerVisit, Long> {
     ): Optional<NewcomerVisit>
 
     /**
-     * Quick records (빠른 등록) on [visitDate] that the 순별 counts add to the 새가족 순 (HDN-312).
+     * Quick records (빠른 등록) on [visitDate] that the 순별 counts of [definitionId] add to the
+     * 새가족 순 (HDN-312). Only visits pinned to that definition count, so a day with several
+     * services counts each visit once.
      *
      * A visit whose linked profile's member has an attended log for [definitionId] on that day
      * is already counted through the check-in, so it is left out here.
@@ -74,6 +76,7 @@ interface NewcomerVisitRepository : JpaRepository<NewcomerVisit, Long> {
         LEFT JOIN newcomer_profiles AS profile ON profile.id = visit.newcomer_profile_id
         WHERE visit.deleted_at IS NULL
           AND visit.visit_date = :visitDate
+          AND visit.definition_id = :definitionId
           AND NOT EXISTS (
               SELECT 1
               FROM attendance_logs AS attendance_log
