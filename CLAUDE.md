@@ -142,3 +142,7 @@ When Codex, Claude, or another session works on this repository at the same time
    Release only your claim after the PR is merged/closed or an explicit handoff. Keep code
    completion, merge, deployment and verified live configuration separate. This protocol
    does not authorize automatic merges, deployments or cross-repository implementation.
+6. When new product or architecture decisions require the user, collect the unresolved
+   choices in the final report with affected issues/PRs, options and a recommendation.
+   Keep affected PRs open and continue independent work. Do not infer approval or revisit
+   decisions the user has already approved. Do not merge PRs during this issue queue.
