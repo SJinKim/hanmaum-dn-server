@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.attendance.service
 
 import com.hanmaum.dn.app.common.domainvalue.CheckInPresence
+import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceCheckInRequest
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.CreateDefinitionRequest
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.UpdateDefinitionRequest
@@ -108,8 +109,9 @@ class AttendanceServiceTest {
         id: Long = 1L,
         keycloakId: String = "kc-001",
         group: ChurchGroup? = null,
+        status: MemberStatus = MemberStatus.ACTIVE,
     ): Member {
-        val member = Member(lastName = "김", firstName = "철수", group = group)
+        val member = Member(lastName = "김", firstName = "철수", group = group).also { it.memberStatus = status }
         setId(member, id)
         setField(member, Member::class.java, "keycloakId", keycloakId)
         return member
@@ -465,6 +467,19 @@ class AttendanceServiceTest {
         val exception = assertThrows<ResponseStatusException> { service.checkIn("kc-001") }
 
         assertEquals(400, exception.statusCode.value())
+        verify(logRepo, never()).insertIfAbsent(any(), any(), any(), any(), any(), any())
+    }
+
+    @Test
+    fun `checkIn rejects every member that is not ACTIVE without reading a window or writing a log`() {
+        listOf(MemberStatus.PENDING, MemberStatus.INACTIVE, MemberStatus.REJECTED, MemberStatus.DELETED).forEach { status ->
+            `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(makeMember(status = status))
+
+            val exception = assertThrows<ResponseStatusException> { service.checkIn("kc-001") }
+
+            assertEquals(403, exception.statusCode.value(), "status $status")
+        }
+        verify(definitionRepo, never()).findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(any())
         verify(logRepo, never()).insertIfAbsent(any(), any(), any(), any(), any(), any())
     }
 
