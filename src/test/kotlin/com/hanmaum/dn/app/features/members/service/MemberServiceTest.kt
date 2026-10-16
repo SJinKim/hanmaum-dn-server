@@ -156,6 +156,102 @@ class MemberServiceTest {
     }
 
     @Test
+    fun `accepting applications sends one notification per course and skips repeated replacement`() {
+        val member = memberWithId(1L)
+        val courses =
+            listOf(
+                Training(TrainingCode.QT_BASIC_SEMINAR, "QT", 1, nameKo = "큐티"),
+                Training(TrainingCode.BIBLE_OVERVIEW, "성경개관", 2),
+            )
+        val rows = courses.map { UserTraining(member, it, TrainingStatus.APPLIED) }
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(userTrainingRepository.findByMemberId(1L)).thenReturn(rows)
+        courses.forEach { course ->
+            `when`(trainingRepository.findByPublicIdAndDeletedAtIsNull(course.publicId)).thenReturn(Optional.of(course))
+        }
+        val request = ReplaceMemberTrainingsRequest(courses.map { MemberTrainingItem(it.publicId.toString(), "ENROLLED") })
+
+        repeat(2) { memberService.replaceMemberTrainings(member.publicId, request) }
+
+        val events = argumentCaptor<MemberNotificationRequested>()
+        verify(eventPublisher, times(2)).publishEvent(events.capture())
+        assertEquals(courses.map { it.publicId }.toSet(), events.allValues.map { it.referencePublicId }.toSet())
+        assertEquals(setOf("큐티 과정 신청이 승인되었습니다.", "성경개관 과정 신청이 승인되었습니다."), events.allValues.map { it.body }.toSet())
+        events.allValues.forEach { event ->
+            assertEquals(1L, event.memberId)
+            assertEquals(NotificationType.TRAINING, event.type)
+            assertEquals(NotificationReferenceType.TRAINING, event.referenceType)
+            assertEquals("양육 신청 승인", event.title)
+        }
+    }
+
+    @Test
+    fun `accepting multiple participation rows for the same course sends one notification`() {
+        val member = memberWithId(1L)
+        val course = Training(TrainingCode.BIBLE_OVERVIEW, "성경개관", 1)
+        val rows =
+            listOf(
+                UserTraining(member, course, TrainingStatus.APPLIED, variant = TrainingVariant.OLD_TESTAMENT),
+                UserTraining(member, course, TrainingStatus.APPLIED, variant = TrainingVariant.NEW_TESTAMENT),
+            )
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(userTrainingRepository.findByMemberId(1L)).thenReturn(rows)
+        `when`(trainingRepository.findByPublicIdAndDeletedAtIsNull(course.publicId)).thenReturn(Optional.of(course))
+
+        memberService.replaceMemberTrainings(
+            member.publicId,
+            ReplaceMemberTrainingsRequest(listOf(MemberTrainingItem(course.publicId.toString(), "ENROLLED"))),
+        )
+
+        val event = argumentCaptor<MemberNotificationRequested>()
+        verify(eventPublisher).publishEvent(event.capture())
+        assertEquals(course.publicId, event.firstValue.referencePublicId)
+        assertEquals(listOf(TrainingStatus.ENROLLED, TrainingStatus.ENROLLED), rows.map { it.status })
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+        "ENROLLED,ENROLLED",
+        "IN_PROGRESS,ENROLLED",
+        "COMPLETED,ENROLLED",
+        "APPLIED,APPLIED",
+        "APPLIED,COMPLETED",
+        "APPLIED,IN_PROGRESS",
+    )
+    fun `other course transitions do not send enrollment notifications`(
+        previous: TrainingStatus,
+        target: TrainingStatus,
+    ) {
+        val member = memberWithId(1L)
+        val course = Training(TrainingCode.QT_BASIC_SEMINAR, "QT", 1)
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(userTrainingRepository.findByMemberId(1L)).thenReturn(listOf(UserTraining(member, course, previous)))
+        `when`(trainingRepository.findByPublicIdAndDeletedAtIsNull(course.publicId)).thenReturn(Optional.of(course))
+
+        memberService.replaceMemberTrainings(
+            member.publicId,
+            ReplaceMemberTrainingsRequest(listOf(MemberTrainingItem(course.publicId.toString(), target.name))),
+        )
+
+        org.mockito.kotlin.verifyNoInteractions(eventPublisher)
+    }
+
+    @Test
+    fun `direct enrollment without an application does not send an acceptance notification`() {
+        val member = memberWithId(1L)
+        val course = Training(TrainingCode.QT_BASIC_SEMINAR, "QT", 1)
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(trainingRepository.findByPublicIdAndDeletedAtIsNull(course.publicId)).thenReturn(Optional.of(course))
+
+        memberService.replaceMemberTrainings(
+            member.publicId,
+            ReplaceMemberTrainingsRequest(listOf(MemberTrainingItem(course.publicId.toString(), "ENROLLED"))),
+        )
+
+        org.mockito.kotlin.verifyNoInteractions(eventPublisher)
+    }
+
+    @Test
     fun `replaceMemberTrainings updates dates and keeps imported details on existing rows`() {
         val member = memberWithId(1L)
         val training = Training(TrainingCode.QT_BASIC_SEMINAR, "QT", 1)
@@ -173,7 +269,7 @@ class MemberServiceTest {
                 mentorNameRaw = "imported mentor",
                 note = "imported note",
             )
-        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
         `when`(userTrainingRepository.findByMemberId(1L)).thenReturn(listOf(row))
         `when`(trainingRepository.findByPublicIdAndDeletedAtIsNull(training.publicId)).thenReturn(Optional.of(training))
 
@@ -207,7 +303,7 @@ class MemberServiceTest {
         val removed = Training(TrainingCode.BIBLE_OVERVIEW, "Bible", 2)
         val retainedRow = UserTraining(member, retained)
         val removedRow = UserTraining(member, removed)
-        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
         `when`(userTrainingRepository.findByMemberId(1L)).thenReturn(listOf(retainedRow, removedRow))
         `when`(trainingRepository.findByPublicIdAndDeletedAtIsNull(retained.publicId)).thenReturn(Optional.of(retained))
 
@@ -227,7 +323,7 @@ class MemberServiceTest {
         val member = memberWithId(1L)
         val training = Training(TrainingCode.QT_BASIC_SEMINAR, "QT", 1)
         val start = LocalDate.of(2024, 2, 1)
-        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
         `when`(trainingRepository.findByPublicIdAndDeletedAtIsNull(training.publicId)).thenReturn(Optional.of(training))
 
         val result =

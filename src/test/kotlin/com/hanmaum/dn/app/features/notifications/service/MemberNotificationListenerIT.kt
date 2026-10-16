@@ -5,6 +5,8 @@ import com.hanmaum.dn.app.common.observability.OperationalMetrics
 import com.hanmaum.dn.app.common.pii.PiiCryptoConfiguration
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
+import com.hanmaum.dn.app.features.members.api.v1.dto.MemberTrainingItem
+import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberTrainingsRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
@@ -12,6 +14,11 @@ import com.hanmaum.dn.app.features.members.service.CurrentMemberResolver
 import com.hanmaum.dn.app.features.members.service.MemberService
 import com.hanmaum.dn.app.features.notifications.domain.NotificationType
 import com.hanmaum.dn.app.features.notifications.repository.AppNotificationRepository
+import com.hanmaum.dn.app.features.training.domain.Training
+import com.hanmaum.dn.app.features.training.domain.TrainingStatus
+import com.hanmaum.dn.app.features.training.domain.UserTraining
+import com.hanmaum.dn.app.features.training.repository.TrainingRepository
+import com.hanmaum.dn.app.features.training.repository.UserTrainingRepository
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -51,6 +58,10 @@ class MemberNotificationListenerIT {
 
     @Autowired private lateinit var transactionManager: PlatformTransactionManager
 
+    @Autowired private lateinit var courses: TrainingRepository
+
+    @Autowired private lateinit var participations: UserTrainingRepository
+
     @MockitoBean private lateinit var keycloak: Keycloak
 
     @MockitoBean private lateinit var resolver: CurrentMemberResolver
@@ -67,11 +78,58 @@ class MemberNotificationListenerIT {
         TransactionTemplate(transactionManager).executeWithoutResult {
             createdMembers.forEach { memberId ->
                 notifications.deleteAllByMemberId(memberId)
+                participations.deleteByMemberId(memberId)
                 members.deleteById(memberId)
             }
             createdGroups.forEach(groups::deleteById)
         }
     }
+
+    @Test
+    fun `course acceptance commits one notification per course and retries do not duplicate it`() {
+        val member = pendingMember()
+        val applied = appliedCourses(member)
+        val transaction = TransactionTemplate(transactionManager)
+        val request = ReplaceMemberTrainingsRequest(applied.map { MemberTrainingItem(it.publicId.toString(), "ENROLLED") })
+
+        repeat(2) {
+            transaction.executeWithoutResult { service.replaceMemberTrainings(member.publicId, request) }
+        }
+
+        val rows = notifications.findAllByMemberIdOrderByCreatedAtDesc(member.id!!, PageRequest.of(0, 10))
+        assertEquals(2L, rows.totalElements)
+        assertEquals(applied.map { it.publicId }.toSet(), rows.content.map { it.referencePublicId }.toSet())
+        rows.forEach { assertEquals(NotificationType.TRAINING, it.type) }
+        assertEquals(listOf(TrainingStatus.ENROLLED, TrainingStatus.ENROLLED), participations.findByMemberId(member.id!!).map { it.status })
+    }
+
+    @Test
+    fun `rolled back course acceptance retains applied status without notifications`() {
+        val member = pendingMember()
+        val applied = appliedCourses(member)
+
+        TransactionTemplate(transactionManager).executeWithoutResult { status ->
+            service.replaceMemberTrainings(
+                member.publicId,
+                ReplaceMemberTrainingsRequest(applied.map { MemberTrainingItem(it.publicId.toString(), "ENROLLED") }),
+            )
+            status.setRollbackOnly()
+        }
+
+        assertEquals(0L, notifications.countByMemberIdAndSeenAtIsNull(member.id!!))
+        assertEquals(listOf(TrainingStatus.APPLIED, TrainingStatus.APPLIED), participations.findByMemberId(member.id!!).map { it.status })
+        verifyNoInteractions(push)
+    }
+
+    private fun appliedCourses(member: Member): List<Training> =
+        requireNotNull(
+            TransactionTemplate(transactionManager).execute {
+                val applied = courses.findAllByDeletedAtIsNullOrderBySortOrderAsc().take(2)
+                check(applied.size == 2)
+                participations.saveAllAndFlush(applied.map { UserTraining(member, it, TrainingStatus.APPLIED) })
+                applied
+            },
+        )
 
     @Test
     fun `approval commit persists one notification and repeated approval does not duplicate it`() {

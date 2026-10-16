@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased] — 2026-03-30
 
 ### Fixed
+- HDN-135: Notify members once per course when an existing application is accepted as ENROLLED, after the replacement commits.
 - HDN-133: Notify members after their pending membership is approved; respect push preferences and skip rolled-back changes.
 - HDN-299: Reconcile application realm roles, nested groups and role mappings from both exports on existing Keycloak realms; add an access-only mode and repeat-apply checks.
 - HDN-307: Preserve training flags during concurrent member edits, require ACTIVE church-group leaders and keep new group handlers admin-only by default.
