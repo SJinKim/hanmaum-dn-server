@@ -487,7 +487,7 @@ class AttendanceServiceTest {
                 listOf(
                     countView(UUID.randomUUID(), "청년부", "다니엘조", 4),
                     countView(UUID.randomUUID(), "청년부", "요셉조", 0),
-                    countView(null, null, null, 1),
+                    countView(UUID.randomUUID(), null, "새가족", 1),
                 ),
             )
 
@@ -496,13 +496,13 @@ class AttendanceServiceTest {
         assertEquals(5, result.totalCount)
         assertEquals(3, result.groups.size)
         assertEquals(0, result.groups[1].attendanceCount)
-        assertEquals(null, result.groups[2].groupPublicId)
+        assertEquals("새가족", result.groups[2].groupName)
     }
 
     private fun countView(
-        publicId: UUID?,
+        publicId: UUID,
         division: String?,
-        name: String?,
+        name: String,
         count: Long,
         inPlace: Long = 0,
         outside: Long = 0,

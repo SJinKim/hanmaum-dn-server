@@ -1,6 +1,9 @@
 package com.hanmaum.dn.app.features.members.service
 
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
+import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
+import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
+import com.hanmaum.dn.app.features.groups.service.NewcomerGroupAssigner
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberClaimConflictRepository
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
@@ -46,6 +49,34 @@ class CurrentMemberResolverReconciliationTest {
         assertNull(registration.keycloakId)
         assertEquals(MemberStatus.DELETED, registration.memberStatus)
         assertNotNull(registration.deletedAt)
+    }
+
+    @Test
+    fun `linking an ungrouped member puts them into the newcomer group`() {
+        val groups = mock<ChurchGroupRepository>()
+        val newcomerGroup =
+            ChurchGroup(name = "새가족").apply {
+                id = 20
+                this.newcomerGroup = true
+            }
+        whenever(groups.findFirstByNewcomerGroupTrueAndDeletedAtIsNull()).thenReturn(newcomerGroup)
+        val linkingResolver =
+            CurrentMemberResolver(members, claimConflicts, reconciliations, profiles, NewcomerGroupAssigner(groups))
+        val registration =
+            member(1, "홍", "길동", LocalDate.of(1998, 2, 3)).apply {
+                keycloakId = "kc-1"
+                email = null
+            }
+        val existing = member(2, "홍", "길동", LocalDate.of(1998, 2, 3)).apply { email = "same@example.com" }
+        whenever(members.findByKeycloakIdAndDeletedAtIsNull("kc-1")).thenReturn(registration)
+        whenever(members.findByEmailAndDeletedAtIsNullForUpdate("same@example.com")).thenReturn(existing)
+        whenever(members.saveAndFlush(registration)).thenReturn(registration)
+        whenever(members.save(existing)).thenReturn(existing)
+
+        val resolved = linkingResolver.resolveAndLink("kc-1", "same@example.com", true)
+
+        assertEquals(existing, resolved)
+        assertEquals(newcomerGroup, existing.group)
     }
 
     @Test

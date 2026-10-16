@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.members.service
 
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
+import com.hanmaum.dn.app.features.groups.service.NewcomerGroupAssigner
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.domain.MemberClaimConflict
 import com.hanmaum.dn.app.features.members.repository.MemberClaimConflictRepository
@@ -42,6 +43,7 @@ class CurrentMemberResolver(
     private val conflictRepository: MemberClaimConflictRepository,
     private val reconciliationRepository: MemberReconciliationRepository? = null,
     private val newcomerProfileRepository: NewcomerProfileRepository? = null,
+    private val newcomerGroupAssigner: NewcomerGroupAssigner? = null,
 ) {
     private val log = LoggerFactory.getLogger(CurrentMemberResolver::class.java)
     private val intake = reconciliationRepository?.let { MemberReconciliationIntake(memberRepository, it) }
@@ -106,6 +108,7 @@ class CurrentMemberResolver(
         candidate.keycloakId = keycloakSubject
         copyRegisteredValues(registration, candidate)
         moveNewcomerProfile(registration, candidate)
+        newcomerGroupAssigner?.assignIfUngrouped(candidate)
         return memberRepository.save(candidate)
     }
 

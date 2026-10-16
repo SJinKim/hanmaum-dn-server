@@ -123,7 +123,11 @@ class NewcomerGraduationServiceTest {
     fun `newcomer group cannot be selected as a destination`() {
         val member = Member(lastName = "김", firstName = "새봄").apply { id = 1 }
         val profile = NewcomerProfile(member).apply { id = 10 }
-        val newcomerGroup = ChurchGroup(name = "새가족").apply { id = 20 }
+        val newcomerGroup =
+            ChurchGroup(name = "새가족").apply {
+                id = 20
+                newcomerGroup = true
+            }
         whenever(profiles.findForUpdate(profile.publicId)).thenReturn(profile)
         whenever(groups.findByPublicIdAndDeletedAtIsNull(newcomerGroup.publicId)).thenReturn(Optional.of(newcomerGroup))
 

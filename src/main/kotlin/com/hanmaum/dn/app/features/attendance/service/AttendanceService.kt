@@ -207,7 +207,7 @@ class AttendanceService(
                 .countByChurchGroup(definition.id!!, attendanceDate)
                 .map { count ->
                     ChurchGroupAttendanceCountResponse(
-                        groupPublicId = count.groupPublicId?.toString(),
+                        groupPublicId = count.groupPublicId.toString(),
                         groupDivision = count.groupDivision,
                         groupName = count.groupName,
                         attendanceCount = count.attendanceCount,

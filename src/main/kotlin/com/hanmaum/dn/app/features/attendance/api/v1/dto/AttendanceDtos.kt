@@ -84,12 +84,12 @@ data class AttendanceCheckInResponse(
 )
 
 data class ChurchGroupAttendanceCountResponse(
-    /** Church-group identifier, or null for members without a group. */
-    val groupPublicId: String?,
+    /** Church-group identifier. Check-ins without a 순 are not counted (HDN-313). */
+    val groupPublicId: String,
     /** Optional church-group division/category. */
     val groupDivision: String?,
-    /** Church-group name, or null for members without a group. */
-    val groupName: String?,
+    /** Church-group name. */
+    val groupName: String,
     /** Number of accepted check-ins attributed to this group snapshot. */
     val attendanceCount: Long,
     /** Of those, the ones the server could place inside the church geofence. */
@@ -114,7 +114,7 @@ data class AttendanceGroupCountsResponse(
     val definitionTitle: String,
     /** Calendar date represented by this summary. */
     val attendanceDate: LocalDate,
-    /** Total accepted check-ins across all groups and ungrouped members. */
+    /** Total accepted check-ins across all groups. */
     val totalCount: Long,
     /** Of the total, those placed inside the church geofence. */
     val totalInPlaceCount: Long,

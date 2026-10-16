@@ -1,5 +1,8 @@
 package com.hanmaum.dn.app.features.newcomers.service
 
+import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
+import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
+import com.hanmaum.dn.app.features.groups.service.NewcomerGroupAssigner
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.domain.MemberOrigin
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
@@ -51,6 +54,36 @@ class MemberReconciliationServiceTest {
         assertNotNull(registration.deletedAt)
         assertEquals(selected, review.selectedMember)
         verify(members).findForUpdateByPublicIdAndDeletedAtIsNull(selected.publicId)
+    }
+
+    @Test
+    fun `link puts an ungrouped member into the newcomer group`() {
+        val groups = mock<ChurchGroupRepository>()
+        val newcomerGroup =
+            ChurchGroup(name = "새가족").apply {
+                id = 20
+                this.newcomerGroup = true
+            }
+        whenever(groups.findFirstByNewcomerGroupTrueAndDeletedAtIsNull()).thenReturn(newcomerGroup)
+        val linking =
+            MemberReconciliationService(reviews, members, profiles, newcomerGroupAssigner = NewcomerGroupAssigner(groups))
+        val registration = member(1).apply { keycloakId = "kc-registration" }
+        val selected = member(2)
+        val review =
+            MemberReconciliation(registration, "EMAIL_MATCH_IDENTITY_MISMATCH").apply {
+                candidateMemberIds += selected.id!!
+            }
+        whenever(reviews.findForUpdate(review.publicId)).thenReturn(review)
+        whenever(members.findForUpdateByPublicIdAndDeletedAtIsNull(selected.publicId)).thenReturn(Optional.of(selected))
+        whenever(profiles.findByMemberIdAndDeletedAtIsNull(1)).thenReturn(null)
+        whenever(profiles.findByMemberIdAndDeletedAtIsNull(2)).thenReturn(null)
+        whenever(members.saveAndFlush(registration)).thenReturn(registration)
+        whenever(members.save(selected)).thenReturn(selected)
+        whenever(reviews.saveAndFlush(review)).thenReturn(review)
+
+        linking.link(review.publicId, selected.publicId, 0, "kc-admin", false)
+
+        assertEquals(newcomerGroup, selected.group)
     }
 
     @Test
