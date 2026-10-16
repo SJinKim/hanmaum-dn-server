@@ -65,4 +65,13 @@ enum class ApiErrorCode {
      * them. The draft itself is unchanged and can still be saved as it is.
      */
     BULLETIN_INCOMPLETE,
+
+    /**
+     * An ACTIVE member would be left without a 순: the 순 was cleared, or the member was
+     * approved without one.
+     *
+     * fieldErrors names groupPublicId, so the dashboard can mark the 순 field. PENDING and
+     * INACTIVE members may still be without a 순.
+     */
+    MEMBER_GROUP_REQUIRED,
 }
