@@ -3,6 +3,7 @@ package com.hanmaum.dn.app.features.newcomers.service
 import com.hanmaum.dn.app.common.domainvalue.Baptism
 import com.hanmaum.dn.app.common.domainvalue.Gender
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
+import com.hanmaum.dn.app.features.groups.service.NewcomerGroupAssigner
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.domain.MemberOrigin
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
@@ -52,6 +53,7 @@ class NewcomerImportService(
     private val members: MemberRepository,
     private val profiles: NewcomerProfileRepository,
     private val records: NewcomerImportRecordRepository,
+    private val newcomerGroupAssigner: NewcomerGroupAssigner,
 ) {
     @Transactional
     fun import(
@@ -105,7 +107,9 @@ class NewcomerImportService(
                 imported++
                 return@forEach
             }
-            val member = selected ?: members.save(candidate.toMember())
+            // A new row is ACTIVE and needs a 순 (HDN-314); it starts in the 새가족 순.
+            val member =
+                selected ?: members.save(candidate.toMember()).also(newcomerGroupAssigner::assignIfUngrouped)
             candidate.applyTo(member)
             val profile =
                 profiles

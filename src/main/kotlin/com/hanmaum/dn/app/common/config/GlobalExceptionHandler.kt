@@ -6,6 +6,7 @@ import com.hanmaum.dn.app.common.security.securityProblemDetail
 import com.hanmaum.dn.app.features.attendance.service.AttendanceWindowOverlapException
 import com.hanmaum.dn.app.features.bulletin.service.BulletinIncompleteException
 import com.hanmaum.dn.app.features.courseapplication.service.CourseApplicationException
+import com.hanmaum.dn.app.features.members.service.MemberGroupRequiredException
 import com.hanmaum.dn.app.features.members.service.MemberProfileNotFoundException
 import com.hanmaum.dn.app.features.newcomers.service.NewcomerException
 import jakarta.persistence.EntityNotFoundException
@@ -117,6 +118,21 @@ class GlobalExceptionHandler {
                 error = status.reasonPhrase,
                 message = e.message ?: status.reasonPhrase,
                 code = ApiErrorCode.BULLETIN_INCOMPLETE,
+                fieldErrors = e.fieldErrors,
+            )
+        return ResponseEntity(response, status)
+    }
+
+    @ExceptionHandler(MemberGroupRequiredException::class)
+    fun handleMemberGroupRequired(e: MemberGroupRequiredException): ResponseEntity<ErrorResponse> {
+        logger.warn("Member update rejected: ACTIVE member without a group")
+        val status = HttpStatus.BAD_REQUEST
+        val response =
+            ErrorResponse(
+                status = status.value(),
+                error = status.reasonPhrase,
+                message = e.message ?: status.reasonPhrase,
+                code = ApiErrorCode.MEMBER_GROUP_REQUIRED,
                 fieldErrors = e.fieldErrors,
             )
         return ResponseEntity(response, status)

@@ -129,9 +129,12 @@ class TrainingMatrixServiceIT {
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     fun `concurrent admin contact edit preserves the training flag after waiting for its transaction`() {
+        // An ACTIVE member needs a 순, otherwise updateMember rejects the edit (#314).
+        val group = groups.saveAndFlush(ChurchGroup(name = "concurrent-matrix"))
         val member =
             members.saveAndFlush(
-                Member(lastName = "김", firstName = "테스트", email = "concurrent-matrix@example.org", memberStatus = MemberStatus.ACTIVE),
+                Member(lastName = "김", firstName = "테스트", email = "concurrent-matrix@example.org", memberStatus = MemberStatus.ACTIVE)
+                    .also { it.group = group },
             )
         val attempted = CountDownLatch(1)
         val executor = Executors.newSingleThreadExecutor()
@@ -159,6 +162,7 @@ class TrainingMatrixServiceIT {
             executor.shutdownNow()
             assertTrue(executor.awaitTermination(10, TimeUnit.SECONDS))
             members.deleteById(requireNotNull(member.id))
+            groups.deleteById(requireNotNull(group.id))
         }
     }
 }
