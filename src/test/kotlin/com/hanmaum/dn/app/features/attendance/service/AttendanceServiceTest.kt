@@ -10,10 +10,12 @@ import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
 import com.hanmaum.dn.app.features.attendance.repository.ChurchGroupAttendanceCountView
 import com.hanmaum.dn.app.features.church.service.ChurchGeofenceService
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
+import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.members.service.CurrentMemberResolver
 import com.hanmaum.dn.app.features.members.service.MemberProfileNotFoundException
+import com.hanmaum.dn.app.features.newcomers.repository.NewcomerVisitRepository
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.BeforeEach
@@ -51,6 +53,10 @@ class AttendanceServiceTest {
 
     @Mock private lateinit var churchGeofenceService: ChurchGeofenceService
 
+    @Mock private lateinit var churchGroupRepo: ChurchGroupRepository
+
+    @Mock private lateinit var newcomerVisitRepo: NewcomerVisitRepository
+
     private lateinit var service: AttendanceService
 
     private val berlinZone = ZoneId.of("Europe/Berlin")
@@ -66,6 +72,8 @@ class AttendanceServiceTest {
                 memberRepo,
                 CurrentMemberResolver(memberRepo, org.mockito.kotlin.mock()),
                 churchGeofenceService,
+                churchGroupRepo,
+                newcomerVisitRepo,
                 clock,
             )
         // The real evaluator never returns null: with no position, no geofence, or a fix it
@@ -497,6 +505,86 @@ class AttendanceServiceTest {
         assertEquals(3, result.groups.size)
         assertEquals(0, result.groups[1].attendanceCount)
         assertEquals("새가족", result.groups[2].groupName)
+    }
+
+    @Test
+    fun `getGroupCounts adds the day's quick records to the 새가족 row only`() {
+        val definition = makeDefinition()
+        val newcomerGroup = makeGroup(id = 9L, name = "새가족").apply { this.newcomerGroup = true }
+        `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(definition.publicId))
+            .thenReturn(Optional.of(definition))
+        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
+            .thenReturn(listOf(definition))
+        `when`(newcomerVisitRepo.countQuickRecordsWithoutCheckIn(attendanceDate, 1L)).thenReturn(3L)
+        `when`(churchGroupRepo.findFirstByNewcomerGroupTrueAndDeletedAtIsNull()).thenReturn(newcomerGroup)
+        `when`(logRepo.countByChurchGroup(1L, attendanceDate))
+            .thenReturn(
+                listOf(
+                    countView(UUID.randomUUID(), "청년부", "다니엘조", 4, inPlace = 4, unconfirmed = 0),
+                    countView(newcomerGroup.publicId, "청년부", "새가족", 1),
+                ),
+            )
+
+        val result = service.getGroupCounts(definition.publicId, attendanceDate)
+
+        val newcomerRow = result.groups.single { it.groupName == "새가족" }
+        assertEquals(4, newcomerRow.attendanceCount)
+        assertEquals(3, newcomerRow.quickRecordCount)
+        assertEquals(1, newcomerRow.unconfirmedCount)
+        assertEquals(0, result.groups.single { it.groupName == "다니엘조" }.quickRecordCount)
+        assertEquals(8, result.totalCount)
+        assertEquals(3, result.totalQuickRecordCount)
+        assertEquals(4, result.totalInPlaceCount)
+        assertEquals(1, result.totalUnconfirmedCount)
+    }
+
+    @Test
+    fun `getGroupCounts counts quick records once when a day has several definitions`() {
+        val first = makeDefinition(id = 1L)
+        val second = makeDefinition(id = 2L, windowStart = LocalTime.of(14, 0), windowEnd = LocalTime.of(16, 0))
+        `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(second.publicId)).thenReturn(Optional.of(second))
+        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
+            .thenReturn(listOf(first, second))
+        `when`(logRepo.countByChurchGroup(2L, attendanceDate))
+            .thenReturn(listOf(countView(UUID.randomUUID(), "청년부", "새가족", 1)))
+
+        val result = service.getGroupCounts(second.publicId, attendanceDate)
+
+        assertEquals(1, result.totalCount)
+        assertEquals(0, result.totalQuickRecordCount)
+        verify(newcomerVisitRepo, never()).countQuickRecordsWithoutCheckIn(any(), any())
+    }
+
+    @Test
+    fun `getGroupCounts ignores quick records for a date off the definition's weekday`() {
+        val definition = makeDefinition()
+        val monday = attendanceDate.plusDays(1)
+        `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(definition.publicId))
+            .thenReturn(Optional.of(definition))
+        `when`(logRepo.countByChurchGroup(1L, monday)).thenReturn(emptyList())
+
+        val result = service.getGroupCounts(definition.publicId, monday)
+
+        assertEquals(0, result.totalQuickRecordCount)
+        verify(newcomerVisitRepo, never()).countQuickRecordsWithoutCheckIn(any(), any())
+    }
+
+    @Test
+    fun `getGroupCounts leaves counts unchanged without a 새가족 group`() {
+        val definition = makeDefinition()
+        `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(definition.publicId))
+            .thenReturn(Optional.of(definition))
+        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
+            .thenReturn(listOf(definition))
+        `when`(newcomerVisitRepo.countQuickRecordsWithoutCheckIn(attendanceDate, 1L)).thenReturn(2L)
+        `when`(churchGroupRepo.findFirstByNewcomerGroupTrueAndDeletedAtIsNull()).thenReturn(null)
+        `when`(logRepo.countByChurchGroup(1L, attendanceDate))
+            .thenReturn(listOf(countView(UUID.randomUUID(), "청년부", "다니엘조", 4)))
+
+        val result = service.getGroupCounts(definition.publicId, attendanceDate)
+
+        assertEquals(4, result.totalCount)
+        assertEquals(0, result.totalQuickRecordCount)
     }
 
     private fun countView(

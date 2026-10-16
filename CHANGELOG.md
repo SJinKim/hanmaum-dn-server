@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - HDN-202: Align newcomer import fingerprint column types with Hibernate's VARCHAR(64) mapping so schema validation can start the app.
 
 ### Added
+- HDN-312: Count the day's 빠른 등록 visits in the 새가족 row of the 순별 attendance counts, once per day, without counting a linked newcomer who also checked in; expose `quickRecordCount` and `totalQuickRecordCount`.
 - HDN-307: Add 양육-team roles and groups, a scoped ACTIVE-member matrix and 예비순장 flag API, and church-group leader management.
 - HDN-306: General operations viewers read attendance, events, ministries, bulletins and announcements; editors also manage them across all ministries.
 - HDN-170: Active members can apply to ministries with a private introduction; leaders receive an email, review pending team applications, and send a private rejection message before reapplication.

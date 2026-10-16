@@ -1,6 +1,9 @@
 package com.hanmaum.dn.app.features.newcomers.repository
 
+import com.hanmaum.dn.app.common.domainvalue.CheckInPresence
 import com.hanmaum.dn.app.common.pii.PiiCryptoConfiguration
+import com.hanmaum.dn.app.features.attendance.domain.AttendanceDefinition
+import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerProfile
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerVisit
@@ -17,8 +20,11 @@ import org.springframework.context.annotation.Import
 import org.springframework.data.domain.PageRequest
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
+import java.util.UUID
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -31,6 +37,8 @@ class NewcomerVisitRepositoryIT {
     @Autowired lateinit var entityManager: EntityManager
 
     @Autowired lateinit var jdbcTemplate: JdbcTemplate
+
+    @Autowired lateinit var attendanceLogRepository: AttendanceLogRepository
 
     private val sunday = LocalDate.of(2026, 6, 14)
 
@@ -121,5 +129,36 @@ class NewcomerVisitRepositoryIT {
         val reloaded = repository.findActive(row.publicId).orElseThrow()
 
         assertNull(reloaded.newcomerProfile)
+    }
+
+    @Test
+    fun `countQuickRecordsWithoutCheckIn skips checked-in links, other days and deleted rows`() {
+        val definition =
+            AttendanceDefinition(
+                title = "주일예배",
+                dayOfWeek = DayOfWeek.SUNDAY,
+                windowStart = LocalTime.of(10, 0),
+                windowEnd = LocalTime.of(12, 0),
+            ).also { entityManager.persist(it) }
+        val checkedIn = Member(lastName = "홍", firstName = "길동").also { entityManager.persist(it) }
+        val notCheckedIn = Member(lastName = "Doe", firstName = "John").also { entityManager.persist(it) }
+        visit("길동", profile = NewcomerProfile(member = checkedIn).also { entityManager.persist(it) })
+        visit("John", profile = NewcomerProfile(member = notCheckedIn).also { entityManager.persist(it) })
+        visit("길순")
+        visit("길자").deletedAt = Instant.now()
+        visit("길남", date = sunday.minusWeeks(1))
+        entityManager.flush()
+        attendanceLogRepository.insertIfAbsent(
+            publicId = UUID.randomUUID(),
+            definitionId = definition.id!!,
+            memberId = checkedIn.id!!,
+            groupId = null,
+            attendanceDate = sunday,
+            presence = CheckInPresence.UNCONFIRMED.name,
+        )
+
+        val count = repository.countQuickRecordsWithoutCheckIn(sunday, definition.id!!)
+
+        assertEquals(2, count)
     }
 }
