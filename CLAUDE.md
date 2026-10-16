@@ -113,3 +113,32 @@ of tool output I don't need to keep?
   subagent's file reads and tool output stay in its context and are discarded, while inline
   reads compound in the main context and are re-sent every turn. Use one per task, only for
   tasks specified well enough that verification is running a command, not reviewing a design.
+
+## Concurrent agent coordination
+
+When Codex, Claude, or another session works on this repository at the same time:
+
+1. Before choosing an issue or editing code, resolve the shared coordination directory with
+   `git rev-parse --path-format=absolute --git-common-dir` plus `/agent-coordination`.
+   Read `codex.md`, `claude.md`, active issue claims and current GitHub PRs. A worktree
+   isolates files but does not prevent two agents from implementing the same issue.
+2. Claim the issue atomically before coding. Create the parent `issues/` directory with
+   `mkdir -p`, then use plain `mkdir issues/<issue-number>` inside the coordination directory
+   (never `mkdir -p` for the individual claim). If the claim already exists, read its owner
+   and coordinate instead of overwriting it. Record owner/session, UTC timestamp, branch,
+   worktree, scope and PR in its `owner.md` and in your own status file. Claims remain owned
+   through review; stale claims require checking the owner, worktree and GitHub state before
+   an explicit takeover. Never infer a handoff merely from silence.
+3. Use a separate worktree and feature branch per issue. Do not change another session's
+   checkout or uncommitted files. Coordinate shared databases, Docker containers, Keycloak,
+   OpenAPI generation and ports before use; disposable test infrastructure must have its own
+   name and explicit port. Read the peer's status again before taking the next issue.
+4. Request reciprocal reviews when both sessions are reachable. Record the exact reviewed
+   commit SHA, findings and tests; after a head change, review the new diff before carrying
+   findings forward. If both agents use the same GitHub account, post COMMENT reviews and
+   do not claim that these satisfy an approving-review requirement. An unavailable peer is
+   a pending review, not an implicit approval.
+5. Update your own status at implementation, test, PR, review and handoff checkpoints.
+   Release only your claim after the PR is merged/closed or an explicit handoff. Keep code
+   completion, merge, deployment and verified live configuration separate. This protocol
+   does not authorize automatic merges, deployments or cross-repository implementation.
