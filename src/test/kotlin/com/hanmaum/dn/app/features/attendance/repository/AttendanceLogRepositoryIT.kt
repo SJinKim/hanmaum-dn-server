@@ -97,4 +97,40 @@ class AttendanceLogRepositoryIT {
         assertEquals(null, anonymizedMemberId)
         assertEquals(1, countsAfterMemberDeletion.single { it.groupPublicId == originalGroup.publicId }.attendanceCount)
     }
+
+    @Test
+    fun `group count query has no row for check-ins without a group`() {
+        val group = ChurchGroup(division = "청년부", name = "다니엘조")
+        entityManager.persist(group)
+        val grouped = Member(lastName = "홍", firstName = "길동", group = group)
+        val ungrouped = Member(lastName = "Doe", firstName = "John")
+        entityManager.persist(grouped)
+        entityManager.persist(ungrouped)
+        val definition =
+            AttendanceDefinition(
+                title = "주일예배",
+                dayOfWeek = DayOfWeek.SUNDAY,
+                windowStart = LocalTime.of(10, 0),
+                windowEnd = LocalTime.of(12, 0),
+            )
+        entityManager.persist(definition)
+        entityManager.flush()
+
+        val attendanceDate = LocalDate.of(2026, 6, 14)
+        listOf(grouped to group.id, ungrouped to null).forEach { (member, groupId) ->
+            repository.insertIfAbsent(
+                publicId = UUID.randomUUID(),
+                definitionId = definition.id!!,
+                memberId = member.id!!,
+                groupId = groupId,
+                attendanceDate = attendanceDate,
+                presence = CheckInPresence.UNCONFIRMED.name,
+            )
+        }
+
+        val counts = repository.countByChurchGroup(definition.id!!, attendanceDate)
+
+        assertEquals(1, counts.single { it.groupPublicId == group.publicId }.attendanceCount)
+        assertEquals(1, counts.sumOf { it.attendanceCount })
+    }
 }

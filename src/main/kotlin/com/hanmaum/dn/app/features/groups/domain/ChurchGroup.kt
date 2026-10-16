@@ -14,5 +14,9 @@ class ChurchGroup(
     @Column(nullable = false)
     var name: String,
 ) : BaseEntity() {
+    /** The 새가족 순. Ungrouped members fall into it when they link an app account (HDN-313). */
+    @Column(name = "is_newcomer_group", nullable = false)
+    var newcomerGroup: Boolean = false
+
     fun getFullName(): String = if (division != null) "$division - $name" else name
 }
