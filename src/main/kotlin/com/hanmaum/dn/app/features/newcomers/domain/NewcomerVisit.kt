@@ -7,6 +7,7 @@ import com.hanmaum.dn.app.common.pii.EncryptedNewcomerVisitGenderConverter
 import com.hanmaum.dn.app.common.pii.EncryptedNewcomerVisitLastNameConverter
 import com.hanmaum.dn.app.common.pii.EncryptedNewcomerVisitNoteConverter
 import com.hanmaum.dn.app.common.pii.PiiCryptoContext
+import com.hanmaum.dn.app.features.attendance.domain.AttendanceDefinition
 import jakarta.persistence.Column
 import jakarta.persistence.Convert
 import jakarta.persistence.Entity
@@ -62,6 +63,14 @@ class NewcomerVisit(
     var newcomerProfile: NewcomerProfile? = null,
     @Column(name = "pii_key_id", length = 50)
     var piiKeyId: String? = null,
+    /**
+     * The attendance definition whose 순별 counts include this visit (HDN-312). Pinned when the
+     * visit is recorded or its day changes, so deactivating or replacing a definition later
+     * leaves past counts as they were. Null when that weekday had no definition.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "definition_id")
+    var definition: AttendanceDefinition? = null,
 ) : BaseEntity() {
     @PrePersist
     @PreUpdate

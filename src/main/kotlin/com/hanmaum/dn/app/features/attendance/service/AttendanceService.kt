@@ -14,8 +14,10 @@ import com.hanmaum.dn.app.features.attendance.domain.AttendanceDefinition
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceDefinitionRepository
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
 import com.hanmaum.dn.app.features.church.service.ChurchGeofenceService
+import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.members.service.CurrentMemberResolver
+import com.hanmaum.dn.app.features.newcomers.repository.NewcomerVisitRepository
 import jakarta.persistence.EntityNotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -36,6 +38,8 @@ class AttendanceService(
     private val memberRepo: MemberRepository,
     private val currentMemberResolver: CurrentMemberResolver,
     private val churchGeofenceService: ChurchGeofenceService,
+    private val churchGroupRepo: ChurchGroupRepository,
+    private val newcomerVisitRepo: NewcomerVisitRepository,
     private val clock: Clock,
 ) {
     private val log = LoggerFactory.getLogger(AttendanceService::class.java)
@@ -209,18 +213,23 @@ class AttendanceService(
                 .findByPublicIdAndDeletedAtIsNull(definitionPublicId)
                 .orElseThrow { EntityNotFoundException("AttendanceDefinition not found: $definitionPublicId") }
 
+        val quickRecords = quickRecordsFor(definition, attendanceDate)
         val groups =
             logRepo
                 .countByChurchGroup(definition.id!!, attendanceDate)
                 .map { count ->
+                    val own = quickRecords?.takeIf { it.groupPublicId == count.groupPublicId }
+                    val added = own?.count ?: 0
                     ChurchGroupAttendanceCountResponse(
                         groupPublicId = count.groupPublicId.toString(),
                         groupDivision = count.groupDivision,
                         groupName = count.groupName,
-                        attendanceCount = count.attendanceCount,
+                        attendanceCount = count.attendanceCount + added,
                         inPlaceCount = count.inPlaceCount,
                         outsideCount = count.outsideCount,
                         unconfirmedCount = count.unconfirmedCount,
+                        quickRecordCount = added,
+                        rosteredQuickRecordCount = own?.rostered ?: 0,
                     )
                 }
 
@@ -232,7 +241,38 @@ class AttendanceService(
             totalInPlaceCount = groups.sumOf { it.inPlaceCount },
             totalOutsideCount = groups.sumOf { it.outsideCount },
             totalUnconfirmedCount = groups.sumOf { it.unconfirmedCount },
+            totalQuickRecordCount = groups.sumOf { it.quickRecordCount },
             groups = groups,
         )
+    }
+
+    private data class QuickRecords(
+        val groupPublicId: UUID,
+        val count: Long,
+        val rostered: Long,
+    )
+
+    /**
+     * 빠른 등록 visits of [date] for the 새가족 row (HDN-312), or null when none apply.
+     *
+     * Visitors without an approved account cannot check in, so their quick record is their
+     * attendance. Each visit is pinned to one definition when it is recorded
+     * ([NewcomerVisit.definition]), so a day with several services counts it once, and
+     * deactivating, replacing or moving a definition to another weekday later leaves the
+     * history unchanged.
+     */
+    private fun quickRecordsFor(
+        definition: AttendanceDefinition,
+        date: LocalDate,
+    ): QuickRecords? {
+        val count = newcomerVisitRepo.countQuickRecordsWithoutCheckIn(date, definition.id!!)
+        if (count == 0L) return null
+        val newcomerGroup = churchGroupRepo.findFirstByNewcomerGroupTrueAndDeletedAtIsNull()
+        if (newcomerGroup == null) {
+            log.warn("No 새가족 group; {} quick records on {} are not counted", count, date)
+            return null
+        }
+        val rostered = newcomerVisitRepo.countRosteredQuickRecordsWithoutCheckIn(date, definition.id!!, newcomerGroup.id!!)
+        return QuickRecords(newcomerGroup.publicId, count, rostered)
     }
 }

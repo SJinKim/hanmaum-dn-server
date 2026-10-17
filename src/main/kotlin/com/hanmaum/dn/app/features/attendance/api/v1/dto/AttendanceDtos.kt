@@ -90,7 +90,10 @@ data class ChurchGroupAttendanceCountResponse(
     val groupDivision: String?,
     /** Church-group name. */
     val groupName: String,
-    /** Number of accepted check-ins attributed to this group snapshot. */
+    /**
+     * Number of accepted check-ins attributed to this group snapshot. On the 새가족 row it also
+     * includes [quickRecordCount] (HDN-312).
+     */
     val attendanceCount: Long,
     /** Of those, the ones the server could place inside the church geofence. */
     val inPlaceCount: Long,
@@ -105,6 +108,16 @@ data class ChurchGroupAttendanceCountResponse(
      * distinction is the whole reason the record has three states rather than a boolean.
      */
     val unconfirmedCount: Long,
+    /**
+     * 빠른 등록 visits of that day counted as present in this row (HDN-312). Non-zero only on
+     * the 새가족 row; included in [attendanceCount] but in none of the presence counts.
+     */
+    val quickRecordCount: Long = 0,
+    /**
+     * Of [quickRecordCount], the visitors whose linked member already stands ACTIVE in this
+     * group (HDN-312). A roster-based 전체 adds only the rest, so nobody holds two places.
+     */
+    val rosteredQuickRecordCount: Long = 0,
 )
 
 data class AttendanceGroupCountsResponse(
@@ -114,7 +127,7 @@ data class AttendanceGroupCountsResponse(
     val definitionTitle: String,
     /** Calendar date represented by this summary. */
     val attendanceDate: LocalDate,
-    /** Total accepted check-ins across all groups. */
+    /** Total accepted check-ins across all groups, plus [totalQuickRecordCount]. */
     val totalCount: Long,
     /** Of the total, those placed inside the church geofence. */
     val totalInPlaceCount: Long,
@@ -122,6 +135,8 @@ data class AttendanceGroupCountsResponse(
     val totalOutsideCount: Long,
     /** Of the total, those with no usable position. */
     val totalUnconfirmedCount: Long,
+    /** Of the total, the 빠른 등록 visits counted in the 새가족 row (HDN-312). */
+    val totalQuickRecordCount: Long = 0,
     /** Per-group counts, including active groups with zero check-ins. */
     val groups: List<ChurchGroupAttendanceCountResponse>,
 )

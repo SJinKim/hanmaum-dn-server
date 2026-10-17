@@ -28,6 +28,8 @@ import java.util.UUID
 class AttendanceLogRepositoryIT {
     @Autowired lateinit var repository: AttendanceLogRepository
 
+    @Autowired lateinit var definitionRepository: AttendanceDefinitionRepository
+
     @Autowired lateinit var entityManager: EntityManager
 
     @Autowired lateinit var jdbcTemplate: JdbcTemplate
@@ -132,5 +134,44 @@ class AttendanceLogRepositoryIT {
 
         assertEquals(1, counts.single { it.groupPublicId == group.publicId }.attendanceCount)
         assertEquals(1, counts.sumOf { it.attendanceCount })
+    }
+
+    @Test
+    fun `findHeldOn returns the definitions held that day, deactivated ones included`() {
+        val member = Member(lastName = "홍", firstName = "길동")
+        entityManager.persist(member)
+
+        fun sunday(
+            start: Int,
+            active: Boolean,
+        ) = AttendanceDefinition(
+            title = "주일예배 $start",
+            dayOfWeek = DayOfWeek.SUNDAY,
+            windowStart = LocalTime.of(start, 0),
+            windowEnd = LocalTime.of(start + 1, 0),
+            isActive = active,
+        ).also { entityManager.persist(it) }
+        val deactivated = sunday(10, active = false)
+        val replacement = sunday(9, active = true)
+        val later = sunday(14, active = true)
+        entityManager.flush()
+
+        val heldDay = LocalDate.of(2026, 6, 14)
+        listOf(deactivated, later).forEach { definition ->
+            repository.insertIfAbsent(
+                publicId = UUID.randomUUID(),
+                definitionId = definition.id!!,
+                memberId = member.id!!,
+                groupId = null,
+                attendanceDate = heldDay,
+                presence = CheckInPresence.UNCONFIRMED.name,
+            )
+        }
+
+        val held = definitionRepository.findHeldOn(DayOfWeek.SUNDAY, heldDay)
+
+        assertEquals(listOf(deactivated.id, later.id), held.map { it.id })
+        assertEquals(false, held.any { it.id == replacement.id })
+        assertEquals(emptyList<AttendanceDefinition>(), definitionRepository.findHeldOn(DayOfWeek.SUNDAY, heldDay.plusWeeks(1)))
     }
 }

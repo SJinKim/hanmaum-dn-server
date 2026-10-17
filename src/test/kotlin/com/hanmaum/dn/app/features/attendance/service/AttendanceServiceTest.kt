@@ -11,10 +11,12 @@ import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
 import com.hanmaum.dn.app.features.attendance.repository.ChurchGroupAttendanceCountView
 import com.hanmaum.dn.app.features.church.service.ChurchGeofenceService
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
+import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.members.service.CurrentMemberResolver
 import com.hanmaum.dn.app.features.members.service.MemberProfileNotFoundException
+import com.hanmaum.dn.app.features.newcomers.repository.NewcomerVisitRepository
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.BeforeEach
@@ -52,6 +54,10 @@ class AttendanceServiceTest {
 
     @Mock private lateinit var churchGeofenceService: ChurchGeofenceService
 
+    @Mock private lateinit var churchGroupRepo: ChurchGroupRepository
+
+    @Mock private lateinit var newcomerVisitRepo: NewcomerVisitRepository
+
     private lateinit var service: AttendanceService
 
     private val berlinZone = ZoneId.of("Europe/Berlin")
@@ -67,6 +73,8 @@ class AttendanceServiceTest {
                 memberRepo,
                 CurrentMemberResolver(memberRepo, org.mockito.kotlin.mock()),
                 churchGeofenceService,
+                churchGroupRepo,
+                newcomerVisitRepo,
                 clock,
             )
         // The real evaluator never returns null: with no position, no geofence, or a fix it
@@ -512,6 +520,138 @@ class AttendanceServiceTest {
         assertEquals(3, result.groups.size)
         assertEquals(0, result.groups[1].attendanceCount)
         assertEquals("새가족", result.groups[2].groupName)
+    }
+
+    @Test
+    fun `getGroupCounts adds the day's quick records to the 새가족 row only`() {
+        val definition = makeDefinition()
+        val newcomerGroup = makeGroup(id = 9L, name = "새가족").apply { this.newcomerGroup = true }
+        `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(definition.publicId))
+            .thenReturn(Optional.of(definition))
+        `when`(newcomerVisitRepo.countQuickRecordsWithoutCheckIn(attendanceDate, 1L)).thenReturn(3L)
+        `when`(churchGroupRepo.findFirstByNewcomerGroupTrueAndDeletedAtIsNull()).thenReturn(newcomerGroup)
+        `when`(logRepo.countByChurchGroup(1L, attendanceDate))
+            .thenReturn(
+                listOf(
+                    countView(UUID.randomUUID(), "청년부", "다니엘조", 4, inPlace = 4, unconfirmed = 0),
+                    countView(newcomerGroup.publicId, "청년부", "새가족", 1),
+                ),
+            )
+
+        val result = service.getGroupCounts(definition.publicId, attendanceDate)
+
+        val newcomerRow = result.groups.single { it.groupName == "새가족" }
+        assertEquals(4, newcomerRow.attendanceCount)
+        assertEquals(3, newcomerRow.quickRecordCount)
+        assertEquals(1, newcomerRow.unconfirmedCount)
+        assertEquals(0, result.groups.single { it.groupName == "다니엘조" }.quickRecordCount)
+        assertEquals(8, result.totalCount)
+        assertEquals(3, result.totalQuickRecordCount)
+        assertEquals(4, result.totalInPlaceCount)
+        assertEquals(1, result.totalUnconfirmedCount)
+    }
+
+    @Test
+    fun `getGroupCounts counts only the quick records pinned to the definition`() {
+        val second = makeDefinition(id = 2L, windowStart = LocalTime.of(14, 0), windowEnd = LocalTime.of(16, 0))
+        `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(second.publicId)).thenReturn(Optional.of(second))
+        `when`(newcomerVisitRepo.countQuickRecordsWithoutCheckIn(attendanceDate, 2L)).thenReturn(0L)
+        `when`(logRepo.countByChurchGroup(2L, attendanceDate))
+            .thenReturn(listOf(countView(UUID.randomUUID(), "청년부", "새가족", 1)))
+
+        val result = service.getGroupCounts(second.publicId, attendanceDate)
+
+        assertEquals(1, result.totalCount)
+        assertEquals(0, result.totalQuickRecordCount)
+        verify(churchGroupRepo, never()).findFirstByNewcomerGroupTrueAndDeletedAtIsNull()
+    }
+
+    @Test
+    fun `getGroupCounts keeps pinned quick records after the definition moved to another weekday`() {
+        // Codex review of #323: the pinned definition_id, not the definition's current weekday,
+        // decides which visits a past date counts.
+        val moved = makeDefinition(id = 1L).apply { dayOfWeek = DayOfWeek.MONDAY }
+        val newcomerGroup = makeGroup(id = 9L, name = "새가족").apply { this.newcomerGroup = true }
+        `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(moved.publicId)).thenReturn(Optional.of(moved))
+        `when`(newcomerVisitRepo.countQuickRecordsWithoutCheckIn(attendanceDate, 1L)).thenReturn(2L)
+        `when`(churchGroupRepo.findFirstByNewcomerGroupTrueAndDeletedAtIsNull()).thenReturn(newcomerGroup)
+        `when`(logRepo.countByChurchGroup(1L, attendanceDate))
+            .thenReturn(listOf(countView(newcomerGroup.publicId, null, "새가족", 0)))
+
+        val result = service.getGroupCounts(moved.publicId, attendanceDate)
+
+        assertEquals(2, result.totalQuickRecordCount)
+        assertEquals(2, result.totalCount)
+    }
+
+    @Test
+    fun `getGroupCounts reports the quick records whose member already stands in the 새가족 roster`() {
+        val definition = makeDefinition()
+        val newcomerGroup = makeGroup(id = 9L, name = "새가족").apply { this.newcomerGroup = true }
+        `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(definition.publicId))
+            .thenReturn(Optional.of(definition))
+        `when`(newcomerVisitRepo.countQuickRecordsWithoutCheckIn(attendanceDate, 1L)).thenReturn(3L)
+        `when`(churchGroupRepo.findFirstByNewcomerGroupTrueAndDeletedAtIsNull()).thenReturn(newcomerGroup)
+        `when`(newcomerVisitRepo.countRosteredQuickRecordsWithoutCheckIn(attendanceDate, 1L, 9L)).thenReturn(1L)
+        `when`(logRepo.countByChurchGroup(1L, attendanceDate))
+            .thenReturn(
+                listOf(
+                    countView(UUID.randomUUID(), "청년부", "다니엘조", 4),
+                    countView(newcomerGroup.publicId, "청년부", "새가족", 0),
+                ),
+            )
+
+        val result = service.getGroupCounts(definition.publicId, attendanceDate)
+
+        val newcomerRow = result.groups.single { it.groupName == "새가족" }
+        assertEquals(3, newcomerRow.quickRecordCount)
+        assertEquals(1, newcomerRow.rosteredQuickRecordCount)
+        assertEquals(0, result.groups.single { it.groupName == "다니엘조" }.rosteredQuickRecordCount)
+    }
+
+    @Test
+    fun `getGroupCounts leaves counts unchanged without a 새가족 group`() {
+        val definition = makeDefinition()
+        `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(definition.publicId))
+            .thenReturn(Optional.of(definition))
+        `when`(newcomerVisitRepo.countQuickRecordsWithoutCheckIn(attendanceDate, 1L)).thenReturn(2L)
+        `when`(churchGroupRepo.findFirstByNewcomerGroupTrueAndDeletedAtIsNull()).thenReturn(null)
+        `when`(logRepo.countByChurchGroup(1L, attendanceDate))
+            .thenReturn(listOf(countView(UUID.randomUUID(), "청년부", "다니엘조", 4)))
+
+        val result = service.getGroupCounts(definition.publicId, attendanceDate)
+
+        assertEquals(4, result.totalCount)
+        assertEquals(0, result.totalQuickRecordCount)
+    }
+
+    @Test
+    fun `getGroupCounts keeps historical quick records after their definition is deactivated`() {
+        val historical = makeDefinition(id = 1L).apply { isActive = false }
+        val newcomerGroup = makeGroup(id = 9L, name = "새가족").apply { this.newcomerGroup = true }
+        `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(historical.publicId)).thenReturn(Optional.of(historical))
+        `when`(newcomerVisitRepo.countQuickRecordsWithoutCheckIn(attendanceDate, 1L)).thenReturn(2L)
+        `when`(churchGroupRepo.findFirstByNewcomerGroupTrueAndDeletedAtIsNull()).thenReturn(newcomerGroup)
+        `when`(logRepo.countByChurchGroup(1L, attendanceDate))
+            .thenReturn(listOf(countView(newcomerGroup.publicId, null, "새가족", 1)))
+
+        val result = service.getGroupCounts(historical.publicId, attendanceDate)
+
+        assertEquals(2, result.totalQuickRecordCount)
+        assertEquals(3, result.totalCount)
+        verify(definitionRepo, never()).findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(any())
+    }
+
+    @Test
+    fun `getGroupCounts leaves quick records off the replacement of a definition held that day`() {
+        val replacement = makeDefinition(id = 2L)
+        `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(replacement.publicId)).thenReturn(Optional.of(replacement))
+        `when`(newcomerVisitRepo.countQuickRecordsWithoutCheckIn(attendanceDate, 2L)).thenReturn(0L)
+        `when`(logRepo.countByChurchGroup(2L, attendanceDate)).thenReturn(emptyList())
+
+        val result = service.getGroupCounts(replacement.publicId, attendanceDate)
+
+        assertEquals(0, result.totalQuickRecordCount)
     }
 
     private fun countView(

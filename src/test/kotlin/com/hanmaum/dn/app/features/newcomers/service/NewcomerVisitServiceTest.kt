@@ -1,6 +1,8 @@
 package com.hanmaum.dn.app.features.newcomers.service
 
 import com.hanmaum.dn.app.common.domainvalue.Gender
+import com.hanmaum.dn.app.features.attendance.domain.AttendanceDefinition
+import com.hanmaum.dn.app.features.attendance.repository.AttendanceDefinitionRepository
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.CreateNewcomerVisitRequest
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.UpdateNewcomerVisitRequest
@@ -20,7 +22,9 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
+import org.mockito.Mockito.lenient
 import org.mockito.Mockito.never
+import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
@@ -31,8 +35,10 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.http.HttpStatus
 import org.springframework.web.server.ResponseStatusException
 import java.time.Clock
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 import java.util.Optional
 import java.util.UUID
@@ -43,6 +49,8 @@ class NewcomerVisitServiceTest {
 
     @Mock private lateinit var profileRepo: NewcomerProfileRepository
 
+    @Mock private lateinit var definitionRepo: AttendanceDefinitionRepository
+
     private lateinit var service: NewcomerVisitService
 
     // Sunday 2026-06-14, 10:30 in Berlin.
@@ -51,11 +59,23 @@ class NewcomerVisitServiceTest {
 
     @BeforeEach
     fun setUp() {
-        service = NewcomerVisitService(visitRepo, profileRepo, clock)
+        service = NewcomerVisitService(visitRepo, profileRepo, definitionRepo, clock)
     }
 
     private fun profile(lifecycle: NewcomerLifecycle = NewcomerLifecycle.SUBMITTED) =
         NewcomerProfile(member = Member(lastName = "홍", firstName = "길동"), lifecycleStatus = lifecycle)
+
+    private fun definition(
+        title: String,
+        start: LocalTime,
+        active: Boolean = true,
+    ) = AttendanceDefinition(
+        title = title,
+        dayOfWeek = DayOfWeek.SUNDAY,
+        windowStart = start,
+        windowEnd = start.plusHours(2),
+        isActive = active,
+    )
 
     private fun visit(
         date: LocalDate = sunday,
@@ -89,6 +109,69 @@ class NewcomerVisitServiceTest {
         assertEquals(2000, row.birthYear)
         assertNull(row.note)
         assertEquals(NewcomerVisitType.FIRST, row.visitType)
+    }
+
+    @Test
+    fun `create before anyone checked in pins the earliest active definition`() {
+        val early = definition("1부 예배", LocalTime.of(9, 0))
+        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
+            .thenReturn(listOf(early, definition("2부 예배", LocalTime.of(11, 0))))
+        `when`(visitRepo.save(any<NewcomerVisit>())).thenAnswer { it.arguments[0] }
+
+        service.create(CreateNewcomerVisitRequest(lastName = "홍", firstName = "길동"))
+
+        val saved = argumentCaptor<NewcomerVisit>()
+        verify(visitRepo).save(saved.capture())
+        assertEquals(early, saved.firstValue.definition)
+        verify(definitionRepo, never()).findHeldOn(any(), any())
+    }
+
+    @Test
+    fun `create keeps the earliest active definition after only a later service checked in`() {
+        // Codex review of #323: the web reads the first active Sunday definition, so a check-in
+        // on the later one must not move the day's next visitor over to it.
+        val early = definition("1부 예배", LocalTime.of(9, 0))
+        val later = definition("2부 예배", LocalTime.of(14, 0))
+        lenient().`when`(definitionRepo.findHeldOn(DayOfWeek.SUNDAY, sunday)).thenReturn(emptyList(), listOf(later))
+        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
+            .thenReturn(listOf(early, later))
+        `when`(visitRepo.save(any<NewcomerVisit>())).thenAnswer { it.arguments[0] }
+
+        service.create(CreateNewcomerVisitRequest(lastName = "Doe", firstName = "John"))
+        service.create(CreateNewcomerVisitRequest(lastName = "Mustermann", firstName = "Max"))
+
+        val saved = argumentCaptor<NewcomerVisit>()
+        verify(visitRepo, times(2)).save(saved.capture())
+        assertEquals(early, saved.allValues[0].definition)
+        assertEquals(early, saved.allValues[1].definition)
+    }
+
+    @Test
+    fun `create joins the definition the day's earlier visits are pinned to`() {
+        val pinned = definition("1부 예배", LocalTime.of(9, 0), active = false)
+        `when`(visitRepo.findPinnedDefinitionsOn(sunday)).thenReturn(listOf(pinned))
+        `when`(visitRepo.save(any<NewcomerVisit>())).thenAnswer { it.arguments[0] }
+
+        service.create(CreateNewcomerVisitRequest(lastName = "홍", firstName = "길동"))
+
+        val saved = argumentCaptor<NewcomerVisit>()
+        verify(visitRepo).save(saved.capture())
+        assertEquals(pinned, saved.firstValue.definition)
+        verify(definitionRepo, never()).findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(any())
+        verify(definitionRepo, never()).findHeldOn(any(), any())
+    }
+
+    @Test
+    fun `create without an active definition pins the earliest one held that day`() {
+        val held = definition("1부 예배", LocalTime.of(9, 0), active = false)
+        `when`(definitionRepo.findHeldOn(DayOfWeek.SUNDAY, sunday)).thenReturn(listOf(held))
+        `when`(visitRepo.save(any<NewcomerVisit>())).thenAnswer { it.arguments[0] }
+
+        service.create(CreateNewcomerVisitRequest(lastName = "홍", firstName = "길동"))
+
+        val saved = argumentCaptor<NewcomerVisit>()
+        verify(visitRepo).save(saved.capture())
+        assertEquals(held, saved.firstValue.definition)
     }
 
     @Test
@@ -149,6 +232,25 @@ class NewcomerVisitServiceTest {
         assertEquals(NewcomerVisitType.REVISIT, row.visitType)
         assertEquals(NewcomerVisitSource.FRIEND_FAMILY, row.source)
         assertEquals("길동", row.firstName)
+    }
+
+    @Test
+    fun `update re-pins the definition only when the day changes`() {
+        val pinned = definition("주일예배", LocalTime.of(10, 0), active = false)
+        val existing = visit().apply { definition = pinned }
+        `when`(visitRepo.findActive(existing.publicId)).thenReturn(Optional.of(existing))
+
+        service.update(existing.publicId, UpdateNewcomerVisitRequest(visitDate = sunday, note = "다시"))
+        assertEquals(pinned, existing.definition)
+
+        val lastWeek = sunday.minusWeeks(1)
+        val current = definition("주일예배", LocalTime.of(10, 0))
+        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
+            .thenReturn(listOf(current))
+        service.update(existing.publicId, UpdateNewcomerVisitRequest(visitDate = lastWeek))
+
+        assertEquals(lastWeek, existing.visitDate)
+        assertEquals(current, existing.definition)
     }
 
     @Test
