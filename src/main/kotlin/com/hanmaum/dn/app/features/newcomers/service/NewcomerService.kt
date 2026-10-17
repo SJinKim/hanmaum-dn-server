@@ -3,6 +3,7 @@ package com.hanmaum.dn.app.features.newcomers.service
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
+import com.hanmaum.dn.app.features.groups.service.NewcomerGroupAssigner
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.domain.MemberOrigin
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
@@ -36,6 +37,7 @@ class NewcomerService(
     private val memberRepository: MemberRepository,
     private val groupRepository: ChurchGroupRepository,
     private val ministryAssignmentRepository: MinistryAssignmentRepository,
+    private val newcomerGroupAssigner: NewcomerGroupAssigner,
 ) {
     @Transactional
     fun create(request: CreateNewcomerRequest): NewcomerResponse {
@@ -62,6 +64,8 @@ class NewcomerService(
                     origin = MemberOrigin.NEWCOMER_FORM,
                 ),
             )
+        // ACTIVE needs a 순 (HDN-314); a new 새가족 starts in the 새가족 순.
+        newcomerGroupAssigner.assignIfUngrouped(member)
         val profile =
             NewcomerProfile(
                 member = member,

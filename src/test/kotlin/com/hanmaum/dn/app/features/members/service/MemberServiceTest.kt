@@ -1042,6 +1042,55 @@ class MemberServiceTest {
         verify(churchGroupRepository, never()).findByPublicIdAndDeletedAtIsNull(any<UUID>())
     }
 
+    @Test
+    fun `updateMember rejects clearing the group of an active member`() {
+        val grp = group(1L, "기존 그룹")
+        val member = memberWithId(10L)
+        member.group = grp
+        member.memberStatus = MemberStatus.ACTIVE
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
+
+        val e =
+            assertThrows<MemberGroupRequiredException> {
+                memberService.updateMember(member.publicId, UpdateMemberRequest(groupPublicId = ""))
+            }
+
+        assertEquals(setOf("groupPublicId"), e.fieldErrors.keys)
+        verify(memberRepository, never()).save(any<Member>())
+    }
+
+    @Test
+    fun `updateMember rejects approving a member without a group`() {
+        val member = memberWithId(10L)
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
+
+        assertThrows<MemberGroupRequiredException> {
+            memberService.updateMember(member.publicId, UpdateMemberRequest(memberStatus = "ACTIVE"))
+        }
+        verify(memberRepository, never()).save(any<Member>())
+    }
+
+    @Test
+    fun `updateMember approves a member together with a group`() {
+        val grp = group(1L, "다니엘순")
+        val member = memberWithId(10L)
+        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
+        `when`(churchGroupRepository.findByPublicIdAndDeletedAtIsNull(grp.publicId)).thenReturn(Optional.of(grp))
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+
+        val result =
+            memberService.updateMember(
+                member.publicId,
+                UpdateMemberRequest(memberStatus = "ACTIVE", groupPublicId = grp.publicId.toString()),
+            )
+
+        assertEquals("ACTIVE", result.memberStatus)
+        assertEquals("다니엘순", result.groupName)
+    }
+
     // --- rejectMember ---
 
     @Test

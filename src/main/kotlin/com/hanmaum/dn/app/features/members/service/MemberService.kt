@@ -703,7 +703,8 @@ class MemberService(
         request.groupPublicId?.let { gpid ->
             member.group =
                 if (gpid.isBlank()) {
-                    // Explicit blank string clears the group assignment.
+                    // Explicit blank string clears the group assignment; an ACTIVE member is
+                    // rejected below (HDN-314).
                     null
                 } else {
                     val groupPublicId = UUID.fromString(gpid)
@@ -715,6 +716,11 @@ class MemberService(
                             .orElseThrow { EntityNotFoundException("Group not found: $gpid") }
                     }
                 }
+        }
+        // An ACTIVE member checks in and is counted per 순, so one without a 순 would be
+        // counted nowhere. Covers both clearing the 순 and approving without one (HDN-314).
+        if (member.memberStatus == MemberStatus.ACTIVE && member.group == null) {
+            throw MemberGroupRequiredException()
         }
         endLeadershipIfMovedOutOfGroup(member, previousGroupId)
 
