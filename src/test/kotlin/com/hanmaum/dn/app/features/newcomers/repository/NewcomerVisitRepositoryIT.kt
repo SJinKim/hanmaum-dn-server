@@ -1,9 +1,11 @@
 package com.hanmaum.dn.app.features.newcomers.repository
 
 import com.hanmaum.dn.app.common.domainvalue.CheckInPresence
+import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.common.pii.PiiCryptoConfiguration
 import com.hanmaum.dn.app.features.attendance.domain.AttendanceDefinition
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
+import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerProfile
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerVisit
@@ -187,5 +189,53 @@ class NewcomerVisitRepositoryIT {
 
         assertEquals(2, repository.countQuickRecordsWithoutCheckIn(sunday, original.id!!))
         assertEquals(0, repository.countQuickRecordsWithoutCheckIn(sunday, replacement.id!!))
+    }
+
+    @Test
+    fun `countRosteredQuickRecordsWithoutCheckIn counts only quick records of active 새가족 members`() {
+        val definition = sundayService()
+        val newcomers = ChurchGroup(division = "청년부", name = "새가족").also { entityManager.persist(it) }
+        val other = ChurchGroup(division = "청년부", name = "다니엘조").also { entityManager.persist(it) }
+
+        fun linkedVisit(
+            firstName: String,
+            group: ChurchGroup?,
+            status: MemberStatus = MemberStatus.ACTIVE,
+            deleted: Boolean = false,
+        ) {
+            val member =
+                Member(lastName = "홍", firstName = firstName).also {
+                    it.group = group
+                    it.memberStatus = status
+                    if (deleted) it.deletedAt = Instant.now()
+                    entityManager.persist(it)
+                }
+            visit(firstName, profile = NewcomerProfile(member = member).also { entityManager.persist(it) }, definition = definition)
+        }
+        linkedVisit("길동", newcomers)
+        linkedVisit("길순", newcomers, status = MemberStatus.PENDING)
+        linkedVisit("길자", newcomers, deleted = true)
+        linkedVisit("길남", other)
+        linkedVisit("길수", null)
+        visit("길영", definition = definition)
+        entityManager.flush()
+
+        assertEquals(6, repository.countQuickRecordsWithoutCheckIn(sunday, definition.id!!))
+        assertEquals(1, repository.countRosteredQuickRecordsWithoutCheckIn(sunday, definition.id!!, newcomers.id!!))
+    }
+
+    @Test
+    fun `findPinnedDefinitionsOn returns the day's definitions, first pinned first`() {
+        val afternoon = sundayService(title = "오후예배", start = LocalTime.of(14, 0))
+        val morning = sundayService()
+        visit("길동", definition = afternoon)
+        visit("길순", definition = morning)
+        visit("길자")
+        visit("길남", date = sunday.minusWeeks(1), definition = morning)
+        entityManager.flush()
+
+        val pinned = repository.findPinnedDefinitionsOn(sunday)
+
+        assertEquals(listOf(afternoon.id, morning.id), pinned.map { it.id })
     }
 }

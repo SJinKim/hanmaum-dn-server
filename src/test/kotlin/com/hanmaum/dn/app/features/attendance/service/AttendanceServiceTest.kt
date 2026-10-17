@@ -552,17 +552,46 @@ class AttendanceServiceTest {
     }
 
     @Test
-    fun `getGroupCounts ignores quick records for a date off the definition's weekday`() {
+    fun `getGroupCounts keeps pinned quick records after the definition moved to another weekday`() {
+        // Codex review of #323: the pinned definition_id, not the definition's current weekday,
+        // decides which visits a past date counts.
+        val moved = makeDefinition(id = 1L).apply { dayOfWeek = DayOfWeek.MONDAY }
+        val newcomerGroup = makeGroup(id = 9L, name = "새가족").apply { this.newcomerGroup = true }
+        `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(moved.publicId)).thenReturn(Optional.of(moved))
+        `when`(newcomerVisitRepo.countQuickRecordsWithoutCheckIn(attendanceDate, 1L)).thenReturn(2L)
+        `when`(churchGroupRepo.findFirstByNewcomerGroupTrueAndDeletedAtIsNull()).thenReturn(newcomerGroup)
+        `when`(logRepo.countByChurchGroup(1L, attendanceDate))
+            .thenReturn(listOf(countView(newcomerGroup.publicId, null, "새가족", 0)))
+
+        val result = service.getGroupCounts(moved.publicId, attendanceDate)
+
+        assertEquals(2, result.totalQuickRecordCount)
+        assertEquals(2, result.totalCount)
+    }
+
+    @Test
+    fun `getGroupCounts reports the quick records whose member already stands in the 새가족 roster`() {
         val definition = makeDefinition()
-        val monday = attendanceDate.plusDays(1)
+        val newcomerGroup = makeGroup(id = 9L, name = "새가족").apply { this.newcomerGroup = true }
         `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(definition.publicId))
             .thenReturn(Optional.of(definition))
-        `when`(logRepo.countByChurchGroup(1L, monday)).thenReturn(emptyList())
+        `when`(newcomerVisitRepo.countQuickRecordsWithoutCheckIn(attendanceDate, 1L)).thenReturn(3L)
+        `when`(churchGroupRepo.findFirstByNewcomerGroupTrueAndDeletedAtIsNull()).thenReturn(newcomerGroup)
+        `when`(newcomerVisitRepo.countRosteredQuickRecordsWithoutCheckIn(attendanceDate, 1L, 9L)).thenReturn(1L)
+        `when`(logRepo.countByChurchGroup(1L, attendanceDate))
+            .thenReturn(
+                listOf(
+                    countView(UUID.randomUUID(), "청년부", "다니엘조", 4),
+                    countView(newcomerGroup.publicId, "청년부", "새가족", 0),
+                ),
+            )
 
-        val result = service.getGroupCounts(definition.publicId, monday)
+        val result = service.getGroupCounts(definition.publicId, attendanceDate)
 
-        assertEquals(0, result.totalQuickRecordCount)
-        verify(newcomerVisitRepo, never()).countQuickRecordsWithoutCheckIn(any(), any())
+        val newcomerRow = result.groups.single { it.groupName == "새가족" }
+        assertEquals(3, newcomerRow.quickRecordCount)
+        assertEquals(1, newcomerRow.rosteredQuickRecordCount)
+        assertEquals(0, result.groups.single { it.groupName == "다니엘조" }.rosteredQuickRecordCount)
     }
 
     @Test

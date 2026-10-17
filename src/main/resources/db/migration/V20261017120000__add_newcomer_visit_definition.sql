@@ -7,10 +7,22 @@ ALTER TABLE newcomer_visits
     FOREIGN KEY (definition_id) REFERENCES attendance_definitions(id) ON DELETE SET NULL;
 CREATE INDEX idx_newcomer_visits_definition_date ON newcomer_visits (definition_id, visit_date);
 
--- Existing rows: the earliest definition held that day (an accepted check-in), otherwise the
--- earliest active one of that weekday. The same rule the service applies to new visits.
+-- Existing rows: the earliest active definition of that weekday (the one the dashboard reads),
+-- otherwise the earliest one held that day (an accepted check-in). Every visit of a day gets the
+-- same one; the service applies the same rule to new visits.
 UPDATE newcomer_visits AS visit
 SET definition_id = COALESCE(
+    (
+        SELECT definition.id
+        FROM attendance_definitions AS definition
+        WHERE definition.deleted_at IS NULL
+          AND definition.is_active = TRUE
+          AND definition.day_of_week =
+              (ARRAY['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'])
+                  [EXTRACT(ISODOW FROM visit.visit_date)::INT]
+        ORDER BY definition.window_start, definition.id
+        LIMIT 1
+    ),
     (
         SELECT definition.id
         FROM attendance_definitions AS definition
@@ -26,17 +38,6 @@ SET definition_id = COALESCE(
                 AND attendance_log.attended = TRUE
                 AND attendance_log.deleted_at IS NULL
           )
-        ORDER BY definition.window_start, definition.id
-        LIMIT 1
-    ),
-    (
-        SELECT definition.id
-        FROM attendance_definitions AS definition
-        WHERE definition.deleted_at IS NULL
-          AND definition.is_active = TRUE
-          AND definition.day_of_week =
-              (ARRAY['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'])
-                  [EXTRACT(ISODOW FROM visit.visit_date)::INT]
         ORDER BY definition.window_start, definition.id
         LIMIT 1
     )

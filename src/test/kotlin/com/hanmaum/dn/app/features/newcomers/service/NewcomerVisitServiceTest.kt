@@ -22,7 +22,9 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
+import org.mockito.Mockito.lenient
 import org.mockito.Mockito.never
+import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
@@ -110,20 +112,6 @@ class NewcomerVisitServiceTest {
     }
 
     @Test
-    fun `create pins the visit to the earliest definition held that day`() {
-        val held = definition("1부 예배", LocalTime.of(9, 0), active = false)
-        `when`(definitionRepo.findHeldOn(DayOfWeek.SUNDAY, sunday)).thenReturn(listOf(held))
-        `when`(visitRepo.save(any<NewcomerVisit>())).thenAnswer { it.arguments[0] }
-
-        service.create(CreateNewcomerVisitRequest(lastName = "홍", firstName = "길동"))
-
-        val saved = argumentCaptor<NewcomerVisit>()
-        verify(visitRepo).save(saved.capture())
-        assertEquals(held, saved.firstValue.definition)
-        verify(definitionRepo, never()).findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(any())
-    }
-
-    @Test
     fun `create before anyone checked in pins the earliest active definition`() {
         val early = definition("1부 예배", LocalTime.of(9, 0))
         `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
@@ -135,6 +123,55 @@ class NewcomerVisitServiceTest {
         val saved = argumentCaptor<NewcomerVisit>()
         verify(visitRepo).save(saved.capture())
         assertEquals(early, saved.firstValue.definition)
+        verify(definitionRepo, never()).findHeldOn(any(), any())
+    }
+
+    @Test
+    fun `create keeps the earliest active definition after only a later service checked in`() {
+        // Codex review of #323: the web reads the first active Sunday definition, so a check-in
+        // on the later one must not move the day's next visitor over to it.
+        val early = definition("1부 예배", LocalTime.of(9, 0))
+        val later = definition("2부 예배", LocalTime.of(14, 0))
+        lenient().`when`(definitionRepo.findHeldOn(DayOfWeek.SUNDAY, sunday)).thenReturn(emptyList(), listOf(later))
+        `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
+            .thenReturn(listOf(early, later))
+        `when`(visitRepo.save(any<NewcomerVisit>())).thenAnswer { it.arguments[0] }
+
+        service.create(CreateNewcomerVisitRequest(lastName = "Doe", firstName = "John"))
+        service.create(CreateNewcomerVisitRequest(lastName = "Mustermann", firstName = "Max"))
+
+        val saved = argumentCaptor<NewcomerVisit>()
+        verify(visitRepo, times(2)).save(saved.capture())
+        assertEquals(early, saved.allValues[0].definition)
+        assertEquals(early, saved.allValues[1].definition)
+    }
+
+    @Test
+    fun `create joins the definition the day's earlier visits are pinned to`() {
+        val pinned = definition("1부 예배", LocalTime.of(9, 0), active = false)
+        `when`(visitRepo.findPinnedDefinitionsOn(sunday)).thenReturn(listOf(pinned))
+        `when`(visitRepo.save(any<NewcomerVisit>())).thenAnswer { it.arguments[0] }
+
+        service.create(CreateNewcomerVisitRequest(lastName = "홍", firstName = "길동"))
+
+        val saved = argumentCaptor<NewcomerVisit>()
+        verify(visitRepo).save(saved.capture())
+        assertEquals(pinned, saved.firstValue.definition)
+        verify(definitionRepo, never()).findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(any())
+        verify(definitionRepo, never()).findHeldOn(any(), any())
+    }
+
+    @Test
+    fun `create without an active definition pins the earliest one held that day`() {
+        val held = definition("1부 예배", LocalTime.of(9, 0), active = false)
+        `when`(definitionRepo.findHeldOn(DayOfWeek.SUNDAY, sunday)).thenReturn(listOf(held))
+        `when`(visitRepo.save(any<NewcomerVisit>())).thenAnswer { it.arguments[0] }
+
+        service.create(CreateNewcomerVisitRequest(lastName = "홍", firstName = "길동"))
+
+        val saved = argumentCaptor<NewcomerVisit>()
+        verify(visitRepo).save(saved.capture())
+        assertEquals(held, saved.firstValue.definition)
     }
 
     @Test

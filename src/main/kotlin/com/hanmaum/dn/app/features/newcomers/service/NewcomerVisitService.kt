@@ -108,15 +108,17 @@ class NewcomerVisitService(
     }
 
     /**
-     * The definition whose 순별 counts a visit on [date] joins (HDN-312): the earliest one held
-     * that day, else the earliest active one of that weekday. Stored on the visit, so the
-     * choice does not follow later changes to which definitions are active.
+     * The definition whose 순별 counts a visit on [date] joins (HDN-312). One per day: the one
+     * the day's earlier visits are pinned to, else the earliest active one of that weekday (the
+     * one the dashboard reads), else the earliest one held that day. Stored on the visit, so the
+     * choice follows neither later check-ins nor later changes to which definitions are active.
      */
     private fun definitionOf(date: LocalDate): AttendanceDefinition? =
-        definitionRepo.findHeldOn(date.dayOfWeek, date).firstOrNull()
+        visitRepo.findPinnedDefinitionsOn(date).firstOrNull()
             ?: definitionRepo
                 .findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(date.dayOfWeek)
                 .firstOrNull()
+            ?: definitionRepo.findHeldOn(date.dayOfWeek, date).firstOrNull()
 
     @Transactional
     fun softDelete(publicId: UUID) {

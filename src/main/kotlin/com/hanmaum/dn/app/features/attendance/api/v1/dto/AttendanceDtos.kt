@@ -113,6 +113,11 @@ data class ChurchGroupAttendanceCountResponse(
      * the 새가족 row; included in [attendanceCount] but in none of the presence counts.
      */
     val quickRecordCount: Long = 0,
+    /**
+     * Of [quickRecordCount], the visitors whose linked member already stands ACTIVE in this
+     * group (HDN-312). A roster-based 전체 adds only the rest, so nobody holds two places.
+     */
+    val rosteredQuickRecordCount: Long = 0,
 )
 
 data class AttendanceGroupCountsResponse(

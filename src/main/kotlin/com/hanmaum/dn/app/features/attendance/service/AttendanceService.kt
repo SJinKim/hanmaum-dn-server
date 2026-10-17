@@ -211,7 +211,8 @@ class AttendanceService(
             logRepo
                 .countByChurchGroup(definition.id!!, attendanceDate)
                 .map { count ->
-                    val added = quickRecords?.takeIf { it.groupPublicId == count.groupPublicId }?.count ?: 0
+                    val own = quickRecords?.takeIf { it.groupPublicId == count.groupPublicId }
+                    val added = own?.count ?: 0
                     ChurchGroupAttendanceCountResponse(
                         groupPublicId = count.groupPublicId.toString(),
                         groupDivision = count.groupDivision,
@@ -221,6 +222,7 @@ class AttendanceService(
                         outsideCount = count.outsideCount,
                         unconfirmedCount = count.unconfirmedCount,
                         quickRecordCount = added,
+                        rosteredQuickRecordCount = own?.rostered ?: 0,
                     )
                 }
 
@@ -240,6 +242,7 @@ class AttendanceService(
     private data class QuickRecords(
         val groupPublicId: UUID,
         val count: Long,
+        val rostered: Long,
     )
 
     /**
@@ -248,13 +251,13 @@ class AttendanceService(
      * Visitors without an approved account cannot check in, so their quick record is their
      * attendance. Each visit is pinned to one definition when it is recorded
      * ([NewcomerVisit.definition]), so a day with several services counts it once, and
-     * deactivating or replacing a definition later leaves the history unchanged.
+     * deactivating, replacing or moving a definition to another weekday later leaves the
+     * history unchanged.
      */
     private fun quickRecordsFor(
         definition: AttendanceDefinition,
         date: LocalDate,
     ): QuickRecords? {
-        if (definition.dayOfWeek != date.dayOfWeek) return null
         val count = newcomerVisitRepo.countQuickRecordsWithoutCheckIn(date, definition.id!!)
         if (count == 0L) return null
         val newcomerGroup = churchGroupRepo.findFirstByNewcomerGroupTrueAndDeletedAtIsNull()
@@ -262,6 +265,7 @@ class AttendanceService(
             log.warn("No 새가족 group; {} quick records on {} are not counted", count, date)
             return null
         }
-        return QuickRecords(newcomerGroup.publicId, count)
+        val rostered = newcomerVisitRepo.countRosteredQuickRecordsWithoutCheckIn(date, definition.id!!, newcomerGroup.id!!)
+        return QuickRecords(newcomerGroup.publicId, count, rostered)
     }
 }
