@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased] — 2026-03-30
 
 ### Fixed
+- HDN-135: Notify members once per course when an existing application is accepted as ENROLLED, after the replacement commits.
 - HDN-133: Notify members after their pending membership is approved; respect push preferences and skip rolled-back changes.
 - HDN-245: Restore a verified login email when the matching dashboard member was deleted before the first app login.
 - HDN-284: Label members without a recorded gender as 미입력 in dashboard statistics.

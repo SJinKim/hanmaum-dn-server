@@ -472,7 +472,7 @@ class MemberService(
     ): MemberDto {
         val member =
             memberRepository
-                .findByPublicIdAndDeletedAtIsNull(publicId)
+                .findForUpdateByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow { EntityNotFoundException("Member not found: $publicId") }
         val memberId = member.id!!
 
@@ -481,6 +481,8 @@ class MemberService(
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Duplicate trainingPublicId")
         }
         val existing = userTrainingRepository.findByMemberId(memberId)
+        // Snapshot before existing rows are mutated by the replacement.
+        val appliedTrainingIds = existing.filter { it.status == TrainingStatus.APPLIED }.map { it.training.publicId }.toSet()
         val existingByTraining = existing.groupBy { it.training.publicId }
         val rows =
             request.trainings.flatMapIndexed { index, item ->
@@ -511,6 +513,23 @@ class MemberService(
         val removed = existing.filter { it.training.publicId !in requestedIds }
         if (removed.isNotEmpty()) userTrainingRepository.deleteAll(removed)
         userTrainingRepository.saveAll(rows)
+
+        rows
+            .filter { it.status == TrainingStatus.ENROLLED && it.training.publicId in appliedTrainingIds }
+            .distinctBy { it.training.publicId }
+            .forEach { row ->
+                val courseName = row.training.nameKo?.takeIf(String::isNotBlank) ?: row.training.name
+                eventPublisher.publishEvent(
+                    MemberNotificationRequested(
+                        memberId = memberId,
+                        type = NotificationType.TRAINING,
+                        title = "양육 신청 승인",
+                        body = "$courseName 과정 신청이 승인되었습니다.",
+                        referenceType = NotificationReferenceType.TRAINING,
+                        referencePublicId = row.training.publicId,
+                    ),
+                )
+            }
 
         val trainings = rows.map { it.toDto() }
         val ministries = ministryAssignmentRepository.findByMemberId(memberId).map { it.toHistoryDto() }
