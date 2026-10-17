@@ -108,6 +108,7 @@ class AttendanceController(
     @PostMapping("/check-in")
     @PreAuthorize("isAuthenticated()")
     @OpenApiResponse(responseCode = "201", description = "Attendance check-in accepted")
+    @OpenApiResponse(responseCode = "403", description = "Only ACTIVE members may check in")
     fun checkIn(
         authentication: JwtAuthenticationToken,
         @Valid @RequestBody(required = false) request: AttendanceCheckInRequest?,
