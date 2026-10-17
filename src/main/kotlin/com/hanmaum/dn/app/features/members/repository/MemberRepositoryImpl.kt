@@ -120,7 +120,7 @@ class MemberRepositoryImpl(
                         when (gender) {
                             Gender.M -> "형제"
                             Gender.F -> "자매"
-                            null -> "Unbekannt"
+                            null -> "미입력"
                         },
                     value = count.toLong(),
                 )

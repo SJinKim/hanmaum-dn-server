@@ -51,7 +51,8 @@ class VerseRecordServiceTest {
 
     private val caller = MemberPrincipal(subject = "kc-001", email = "a@example.com", emailVerified = true)
 
-    private fun member(): Member = Member(lastName = "김", firstName = "철수").apply { id = 1L }
+    private fun member(): Member =
+        Member(lastName = "김", firstName = "철수", email = caller.email, keycloakId = caller.subject).apply { id = 1L }
 
     // Defaults live here, not in service(), so a test's own stubbing runs afterwards and
     // wins. Mockito already answers an empty list for the two list-returning queries, so
