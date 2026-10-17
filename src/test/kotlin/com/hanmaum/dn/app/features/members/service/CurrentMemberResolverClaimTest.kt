@@ -45,7 +45,25 @@ class CurrentMemberResolverClaimTest {
         whenever(conflicts.existsByRegistrationMemberIdAndDeletedAtIsNull(1)).thenReturn(false)
 
         assertEquals(registration, resolver.resolveAndLink("kc-1", "same@example.com", false))
+        assertNull(registration.email)
         verify(members, org.mockito.kotlin.never()).findByEmailAndDeletedAtIsNullForUpdate("same@example.com")
+    }
+
+    @Test
+    fun `verified email is saved when the dashboard candidate was deleted before login`() {
+        val registration = member(1, "Kim", "Saebom", LocalDate.of(1998, 2, 3)).apply { keycloakId = "kc-1" }
+        whenever(members.findByKeycloakIdAndDeletedAtIsNull("kc-1")).thenReturn(registration)
+        whenever(members.findByEmailAndDeletedAtIsNullForUpdate("same@example.com")).thenReturn(null)
+        whenever(members.save(registration)).thenReturn(registration)
+
+        val resolved = resolver.resolveAndLink("kc-1", "same@example.com", true)
+
+        assertEquals(registration, resolved)
+        assertEquals("same@example.com", resolved.email)
+        assertEquals("kc-1", resolved.keycloakId)
+        assertEquals(MemberStatus.PENDING, resolved.memberStatus)
+        verify(members).save(registration)
+        verify(conflicts, org.mockito.kotlin.never()).save(org.mockito.kotlin.any())
     }
 
     @Test
@@ -56,6 +74,7 @@ class CurrentMemberResolverClaimTest {
         whenever(members.findByEmailAndDeletedAtIsNullForUpdate("same@example.com")).thenReturn(existing)
 
         assertEquals(registration, resolver.resolveAndLink("kc-1", "same@example.com", true))
+        assertNull(registration.email)
         assertNull(existing.keycloakId)
         verify(members).findByEmailAndDeletedAtIsNullForUpdate("same@example.com")
         verify(conflicts).save(org.mockito.kotlin.any())

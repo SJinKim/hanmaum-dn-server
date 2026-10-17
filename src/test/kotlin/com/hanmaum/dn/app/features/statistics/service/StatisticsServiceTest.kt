@@ -159,6 +159,7 @@ class StatisticsServiceTest {
             listOf(
                 ChartDataDto("형제", 20L),
                 ChartDataDto("자매", 22L),
+                ChartDataDto("미입력", 2L),
             )
         setupMocks(genders = genders)
 

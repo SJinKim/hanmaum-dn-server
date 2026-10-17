@@ -128,7 +128,9 @@ When Codex, Claude, or another session works on this repository at the same time
    and coordinate instead of overwriting it. Record owner/session, UTC timestamp, branch,
    worktree, scope and PR in its `owner.md` and in your own status file. Claims remain owned
    through review; stale claims require checking the owner, worktree and GitHub state before
-   an explicit takeover. Never infer a handoff merely from silence.
+   an explicit takeover. Never infer a handoff merely from silence. Append each takeover to
+   `owner.md` with prior owner, new owner, UTC timestamp and handoff evidence; retain the
+   previous ownership history.
 3. Use a separate worktree and feature branch per issue. Do not change another session's
    checkout or uncommitted files. Coordinate shared databases, Docker containers, Keycloak,
    OpenAPI generation and ports before use; disposable test infrastructure must have its own
@@ -145,4 +147,5 @@ When Codex, Claude, or another session works on this repository at the same time
 6. When new product or architecture decisions require the user, collect the unresolved
    choices in the final report with affected issues/PRs, options and a recommendation.
    Keep affected PRs open and continue independent work. Do not infer approval or revisit
-   decisions the user has already approved. Do not merge PRs during this issue queue.
+   decisions the user has already approved. Do not merge PRs without the user's explicit
+   approval.
