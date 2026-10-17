@@ -1048,7 +1048,7 @@ class MemberServiceTest {
         val member = memberWithId(10L)
         member.group = grp
         member.memberStatus = MemberStatus.ACTIVE
-        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId))
             .thenReturn(Optional.of(member))
 
         val e =
@@ -1063,7 +1063,7 @@ class MemberServiceTest {
     @Test
     fun `updateMember rejects approving a member without a group`() {
         val member = memberWithId(10L)
-        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId))
             .thenReturn(Optional.of(member))
 
         assertThrows<MemberGroupRequiredException> {
@@ -1076,7 +1076,7 @@ class MemberServiceTest {
     fun `updateMember approves a member together with a group`() {
         val grp = group(1L, "다니엘순")
         val member = memberWithId(10L)
-        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId))
             .thenReturn(Optional.of(member))
         `when`(churchGroupRepository.findByPublicIdAndDeletedAtIsNull(grp.publicId)).thenReturn(Optional.of(grp))
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
