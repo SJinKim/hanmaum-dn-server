@@ -38,6 +38,9 @@ import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerLifecycle
 import com.hanmaum.dn.app.features.newcomers.repository.NewcomerProfileRepository
 import com.hanmaum.dn.app.features.newcomers.service.MemberReconciliationIntake
+import com.hanmaum.dn.app.features.notifications.domain.NotificationReferenceType
+import com.hanmaum.dn.app.features.notifications.domain.NotificationType
+import com.hanmaum.dn.app.features.notifications.service.MemberNotificationRequested
 import com.hanmaum.dn.app.features.training.api.toDto
 import com.hanmaum.dn.app.features.training.domain.TrainingCode
 import com.hanmaum.dn.app.features.training.domain.TrainingStatus
@@ -52,6 +55,7 @@ import org.keycloak.representations.idm.CredentialRepresentation
 import org.keycloak.representations.idm.UserRepresentation
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
@@ -80,6 +84,7 @@ class MemberService(
     private val keycloak: Keycloak,
     private val currentMemberResolver: CurrentMemberResolver,
     private val operationalMetrics: OperationalMetrics,
+    private val eventPublisher: ApplicationEventPublisher,
     @Value("\${app.keycloak.realm:hanmaum}") private val realm: String,
     @Value("\${app.member-retention.days:30}") private val memberRetentionDays: Long = 30,
     // Self-registration is anonymous and creates a Keycloak user per call (#237).
@@ -662,8 +667,10 @@ class MemberService(
     ): MemberDto {
         val member =
             memberRepository
-                .findByPublicIdAndDeletedAtIsNull(publicId)
+                .findForUpdateByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow { EntityNotFoundException("Member not found: $publicId") }
+
+        val previousStatus = member.memberStatus
 
         request.email?.let { email ->
             val existing = memberRepository.findByEmailAndDeletedAtIsNull(email)
@@ -692,7 +699,19 @@ class MemberService(
         }
         endLeadershipIfMovedOutOfGroup(member, previousGroupId)
 
-        return memberRepository.save(member).toDto()
+        val saved = memberRepository.save(member)
+        if (previousStatus == MemberStatus.PENDING && saved.memberStatus == MemberStatus.ACTIVE) {
+            eventPublisher.publishEvent(
+                MemberNotificationRequested(
+                    memberId = requireNotNull(saved.id),
+                    type = NotificationType.MEMBER,
+                    title = "회원 가입 승인",
+                    body = "회원 가입이 승인되었습니다. 이제 앱을 이용하실 수 있습니다.",
+                    referenceType = NotificationReferenceType.MEMBER,
+                ),
+            )
+        }
+        return saved.toDto()
     }
 
     /**
