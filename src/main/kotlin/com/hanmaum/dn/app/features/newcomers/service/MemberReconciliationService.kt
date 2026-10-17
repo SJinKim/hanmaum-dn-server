@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.newcomers.service
 
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
+import com.hanmaum.dn.app.features.groups.service.NewcomerGroupAssigner
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.ReconciliationMemberResponse
@@ -29,6 +30,7 @@ class MemberReconciliationService(
     private val newcomerProfileRepository: NewcomerProfileRepository,
     private val keycloak: Keycloak? = null,
     @Value("\${app.keycloak.realm:hanmaum}") private val realm: String = "hanmaum",
+    private val newcomerGroupAssigner: NewcomerGroupAssigner? = null,
 ) {
     private val log = LoggerFactory.getLogger(MemberReconciliationService::class.java)
 
@@ -80,6 +82,7 @@ class MemberReconciliationService(
         memberRepository.saveAndFlush(registration)
         mergeSubmittedProfile(registration, selected, emailIsLogin = subject != null)
         if (subject != null) selected.keycloakId = subject
+        newcomerGroupAssigner?.assignIfUngrouped(selected)
         memberRepository.save(selected)
 
         review.status = ReconciliationStatus.LINKED

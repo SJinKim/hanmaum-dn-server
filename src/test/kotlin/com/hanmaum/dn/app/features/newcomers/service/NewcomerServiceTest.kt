@@ -1,7 +1,9 @@
 package com.hanmaum.dn.app.features.newcomers.service
 
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
+import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
+import com.hanmaum.dn.app.features.groups.service.NewcomerGroupAssigner
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
@@ -26,7 +28,7 @@ class NewcomerServiceTest {
     private val members = mock<MemberRepository>()
     private val groups = mock<ChurchGroupRepository>()
     private val assignments = mock<MinistryAssignmentRepository>()
-    private val service = NewcomerService(profiles, members, groups, assignments)
+    private val service = NewcomerService(profiles, members, groups, assignments, NewcomerGroupAssigner(groups))
 
     @Test
     fun `create stores one member and one linked profile without a keycloak id`() {
@@ -52,6 +54,18 @@ class NewcomerServiceTest {
         service.create(CreateNewcomerRequest(lastName = "김", firstName = "새봄"))
 
         verify(members).save(check<Member> { assertEquals(MemberStatus.ACTIVE, it.memberStatus) })
+    }
+
+    @Test
+    fun `create puts the active newcomer into the newcomer group`() {
+        val newcomerGroup = ChurchGroup(name = "새가족").apply { newcomerGroup = true }
+        whenever(groups.findFirstByNewcomerGroupTrueAndDeletedAtIsNull()).thenReturn(newcomerGroup)
+        whenever(members.save(any<Member>())).thenAnswer { it.arguments[0] as Member }
+        whenever(profiles.save(any<NewcomerProfile>())).thenAnswer { it.arguments[0] as NewcomerProfile }
+
+        service.create(CreateNewcomerRequest(lastName = "홍", firstName = "길동"))
+
+        verify(profiles).save(check<NewcomerProfile> { assertEquals(newcomerGroup, it.member.group) })
     }
 
     @Test
