@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.attendance.service
 
+import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.attendance.api.toDto
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceCheckInRequest
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.AttendanceCheckInResponse
@@ -143,6 +144,12 @@ class AttendanceService(
         request: AttendanceCheckInRequest? = null,
     ): AttendanceCheckInResponse {
         val member = currentMemberResolver.require(keycloakSubject)
+        // Only approved members check in (#311). A PENDING account has no 순 yet, so its log
+        // would land in a "no group" row of every group count. Checked before anything is read
+        // or written.
+        if (member.memberStatus != MemberStatus.ACTIVE) {
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "승인된 회원만 출석 체크인할 수 있습니다.")
+        }
 
         val now = LocalDateTime.now(clock)
         val today = now.toLocalDate()

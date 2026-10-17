@@ -79,7 +79,11 @@ class CurrentMemberResolver(
             memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSubject)
                 ?: throw MemberProfileNotFoundException()
         if (!emailVerified || email.isNullOrBlank() || registration.email != null) return registration
-        val candidate = memberRepository.findByEmailAndDeletedAtIsNullForUpdate(email) ?: return registration
+        val candidate = memberRepository.findByEmailAndDeletedAtIsNullForUpdate(email)
+        if (candidate == null) {
+            registration.email = email
+            return memberRepository.save(registration)
+        }
         if (candidate.id == registration.id ||
             candidate.keycloakId != null ||
             !MemberReconciliationIntake.sameIdentity(registration, candidate)

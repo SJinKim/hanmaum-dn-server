@@ -260,6 +260,8 @@ data class UpdateMemberRequest(
     /**
      * publicId of the church group to assign. Null/absent leaves the current group
      * unchanged; a blank string ("") clears it (leaves the member ungrouped).
+     * An ACTIVE member must keep a 순: clearing it, or setting ACTIVE without one, is a
+     * 400 with code MEMBER_GROUP_REQUIRED and fieldErrors.groupPublicId (HDN-314).
      */
     @Unredacted val groupPublicId: String? = null,
     val profileImageUrl: String? = null,

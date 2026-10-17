@@ -1,6 +1,9 @@
 package com.hanmaum.dn.app.features.newcomers.service
 
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
+import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
+import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
+import com.hanmaum.dn.app.features.groups.service.NewcomerGroupAssigner
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerProfile
@@ -21,7 +24,9 @@ class NewcomerImportServiceTest {
     private val members = mock<MemberRepository>()
     private val profiles = mock<NewcomerProfileRepository>()
     private val records = mock<NewcomerImportRecordRepository>()
-    private val service = NewcomerImportService(NewcomerImportReader(), members, profiles, records)
+    private val groups = mock<ChurchGroupRepository>()
+    private val service =
+        NewcomerImportService(NewcomerImportReader(), members, profiles, records, NewcomerGroupAssigner(groups))
 
     @Test
     fun dryRunReportsAValidRowWithoutWritingMemberOrProvenanceData() {
@@ -91,6 +96,28 @@ class NewcomerImportServiceTest {
         )
         // An imported newcomer has no account, so it is not queued for approval (#275).
         verify(members).save(org.mockito.kotlin.check<Member> { assertEquals(MemberStatus.ACTIVE, it.memberStatus) })
+    }
+
+    @Test
+    fun `puts a new imported member into the newcomer group`() {
+        val file = Files.createTempFile("newcomer-import-", ".csv")
+        file.writeText(
+            """
+            성,이름
+            홍,길동
+            """.trimIndent(),
+        )
+        val newcomerGroup = ChurchGroup(name = "새가족").apply { newcomerGroup = true }
+        val member = Member("홍", "길동")
+        member.id = 1L
+        whenever(groups.findFirstByNewcomerGroupTrueAndDeletedAtIsNull()).thenReturn(newcomerGroup)
+        whenever(members.save(any<Member>())).thenReturn(member)
+        whenever(profiles.findByMemberIdAndDeletedAtIsNull(1L)).thenReturn(null)
+        whenever(profiles.save(any<NewcomerProfile>())).thenAnswer { invocation -> invocation.arguments[0] }
+
+        service.import(file, NewcomerImportLayout.SPREADSHEET_A, false, emptyMap(), emptyMap())
+
+        assertEquals(newcomerGroup, member.group)
     }
 
     @Test

@@ -30,6 +30,9 @@ import com.hanmaum.dn.app.features.ministry.repository.MinistryRepository
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerLifecycle
 import com.hanmaum.dn.app.features.newcomers.repository.NewcomerLifecycleView
 import com.hanmaum.dn.app.features.newcomers.repository.NewcomerProfileRepository
+import com.hanmaum.dn.app.features.notifications.domain.NotificationReferenceType
+import com.hanmaum.dn.app.features.notifications.domain.NotificationType
+import com.hanmaum.dn.app.features.notifications.service.MemberNotificationRequested
 import com.hanmaum.dn.app.features.training.domain.Training
 import com.hanmaum.dn.app.features.training.domain.TrainingCode
 import com.hanmaum.dn.app.features.training.domain.TrainingCohort
@@ -50,6 +53,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 import org.keycloak.admin.client.Keycloak
 import org.keycloak.admin.client.resource.RealmResource
 import org.keycloak.admin.client.resource.UserResource
@@ -65,6 +70,7 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.eq
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.http.HttpStatus
 import org.springframework.web.server.ResponseStatusException
 import java.net.URI
@@ -97,6 +103,8 @@ class MemberServiceTest {
 
     @Mock private lateinit var operationalMetrics: OperationalMetrics
 
+    @Mock private lateinit var eventPublisher: ApplicationEventPublisher
+
     @Mock private lateinit var realmResource: RealmResource
 
     @Mock private lateinit var usersResource: UsersResource
@@ -123,6 +131,7 @@ class MemberServiceTest {
                 keycloak,
                 CurrentMemberResolver(memberRepository, org.mockito.kotlin.mock()),
                 operationalMetrics,
+                eventPublisher,
                 "test-realm",
             )
     }
@@ -147,6 +156,102 @@ class MemberServiceTest {
     }
 
     @Test
+    fun `accepting applications sends one notification per course and skips repeated replacement`() {
+        val member = memberWithId(1L)
+        val courses =
+            listOf(
+                Training(TrainingCode.QT_BASIC_SEMINAR, "QT", 1, nameKo = "큐티"),
+                Training(TrainingCode.BIBLE_OVERVIEW, "성경개관", 2),
+            )
+        val rows = courses.map { UserTraining(member, it, TrainingStatus.APPLIED) }
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(userTrainingRepository.findByMemberId(1L)).thenReturn(rows)
+        courses.forEach { course ->
+            `when`(trainingRepository.findByPublicIdAndDeletedAtIsNull(course.publicId)).thenReturn(Optional.of(course))
+        }
+        val request = ReplaceMemberTrainingsRequest(courses.map { MemberTrainingItem(it.publicId.toString(), "ENROLLED") })
+
+        repeat(2) { memberService.replaceMemberTrainings(member.publicId, request) }
+
+        val events = argumentCaptor<MemberNotificationRequested>()
+        verify(eventPublisher, times(2)).publishEvent(events.capture())
+        assertEquals(courses.map { it.publicId }.toSet(), events.allValues.map { it.referencePublicId }.toSet())
+        assertEquals(setOf("큐티 과정 신청이 승인되었습니다.", "성경개관 과정 신청이 승인되었습니다."), events.allValues.map { it.body }.toSet())
+        events.allValues.forEach { event ->
+            assertEquals(1L, event.memberId)
+            assertEquals(NotificationType.TRAINING, event.type)
+            assertEquals(NotificationReferenceType.TRAINING, event.referenceType)
+            assertEquals("양육 신청 승인", event.title)
+        }
+    }
+
+    @Test
+    fun `accepting multiple participation rows for the same course sends one notification`() {
+        val member = memberWithId(1L)
+        val course = Training(TrainingCode.BIBLE_OVERVIEW, "성경개관", 1)
+        val rows =
+            listOf(
+                UserTraining(member, course, TrainingStatus.APPLIED, variant = TrainingVariant.OLD_TESTAMENT),
+                UserTraining(member, course, TrainingStatus.APPLIED, variant = TrainingVariant.NEW_TESTAMENT),
+            )
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(userTrainingRepository.findByMemberId(1L)).thenReturn(rows)
+        `when`(trainingRepository.findByPublicIdAndDeletedAtIsNull(course.publicId)).thenReturn(Optional.of(course))
+
+        memberService.replaceMemberTrainings(
+            member.publicId,
+            ReplaceMemberTrainingsRequest(listOf(MemberTrainingItem(course.publicId.toString(), "ENROLLED"))),
+        )
+
+        val event = argumentCaptor<MemberNotificationRequested>()
+        verify(eventPublisher).publishEvent(event.capture())
+        assertEquals(course.publicId, event.firstValue.referencePublicId)
+        assertEquals(listOf(TrainingStatus.ENROLLED, TrainingStatus.ENROLLED), rows.map { it.status })
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+        "ENROLLED,ENROLLED",
+        "IN_PROGRESS,ENROLLED",
+        "COMPLETED,ENROLLED",
+        "APPLIED,APPLIED",
+        "APPLIED,COMPLETED",
+        "APPLIED,IN_PROGRESS",
+    )
+    fun `other course transitions do not send enrollment notifications`(
+        previous: TrainingStatus,
+        target: TrainingStatus,
+    ) {
+        val member = memberWithId(1L)
+        val course = Training(TrainingCode.QT_BASIC_SEMINAR, "QT", 1)
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(userTrainingRepository.findByMemberId(1L)).thenReturn(listOf(UserTraining(member, course, previous)))
+        `when`(trainingRepository.findByPublicIdAndDeletedAtIsNull(course.publicId)).thenReturn(Optional.of(course))
+
+        memberService.replaceMemberTrainings(
+            member.publicId,
+            ReplaceMemberTrainingsRequest(listOf(MemberTrainingItem(course.publicId.toString(), target.name))),
+        )
+
+        org.mockito.kotlin.verifyNoInteractions(eventPublisher)
+    }
+
+    @Test
+    fun `direct enrollment without an application does not send an acceptance notification`() {
+        val member = memberWithId(1L)
+        val course = Training(TrainingCode.QT_BASIC_SEMINAR, "QT", 1)
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(trainingRepository.findByPublicIdAndDeletedAtIsNull(course.publicId)).thenReturn(Optional.of(course))
+
+        memberService.replaceMemberTrainings(
+            member.publicId,
+            ReplaceMemberTrainingsRequest(listOf(MemberTrainingItem(course.publicId.toString(), "ENROLLED"))),
+        )
+
+        org.mockito.kotlin.verifyNoInteractions(eventPublisher)
+    }
+
+    @Test
     fun `replaceMemberTrainings updates dates and keeps imported details on existing rows`() {
         val member = memberWithId(1L)
         val training = Training(TrainingCode.QT_BASIC_SEMINAR, "QT", 1)
@@ -164,7 +269,7 @@ class MemberServiceTest {
                 mentorNameRaw = "imported mentor",
                 note = "imported note",
             )
-        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
         `when`(userTrainingRepository.findByMemberId(1L)).thenReturn(listOf(row))
         `when`(trainingRepository.findByPublicIdAndDeletedAtIsNull(training.publicId)).thenReturn(Optional.of(training))
 
@@ -198,7 +303,7 @@ class MemberServiceTest {
         val removed = Training(TrainingCode.BIBLE_OVERVIEW, "Bible", 2)
         val retainedRow = UserTraining(member, retained)
         val removedRow = UserTraining(member, removed)
-        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
         `when`(userTrainingRepository.findByMemberId(1L)).thenReturn(listOf(retainedRow, removedRow))
         `when`(trainingRepository.findByPublicIdAndDeletedAtIsNull(retained.publicId)).thenReturn(Optional.of(retained))
 
@@ -218,7 +323,7 @@ class MemberServiceTest {
         val member = memberWithId(1L)
         val training = Training(TrainingCode.QT_BASIC_SEMINAR, "QT", 1)
         val start = LocalDate.of(2024, 2, 1)
-        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
         `when`(trainingRepository.findByPublicIdAndDeletedAtIsNull(training.publicId)).thenReturn(Optional.of(training))
 
         val result =
@@ -793,7 +898,7 @@ class MemberServiceTest {
     @Test
     fun `updateMember does not call groupRepository when groupPublicId is null`() {
         val member = memberWithId(1L)
-        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId))
             .thenReturn(Optional.of(member))
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
 
@@ -809,7 +914,7 @@ class MemberServiceTest {
     fun `updateMember keeps occupation when omitted and persists a supplied change`() {
         val member = memberWithId(1L)
         member.occupation = "개발자"
-        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId))
             .thenReturn(Optional.of(member))
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
 
@@ -830,7 +935,7 @@ class MemberServiceTest {
         member.group = oldGroup
         val req = UpdateMemberRequest(lastName = "김", firstName = "철수", groupPublicId = newGroup.publicId.toString())
 
-        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId))
             .thenReturn(Optional.of(member))
         `when`(churchGroupRepository.findByPublicIdAndDeletedAtIsNull(newGroup.publicId)).thenReturn(Optional.of(newGroup))
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
@@ -849,7 +954,7 @@ class MemberServiceTest {
         val leadership = GroupLeader(group = oldGroup, member = member, startDate = LocalDate.of(2026, 1, 15))
         val req = UpdateMemberRequest(lastName = "김", firstName = "철수", groupPublicId = newGroup.publicId.toString())
 
-        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId))
             .thenReturn(Optional.of(member))
         `when`(churchGroupRepository.findByPublicIdAndDeletedAtIsNull(newGroup.publicId)).thenReturn(Optional.of(newGroup))
         `when`(groupLeaderRepository.findActiveByGroupId(1L)).thenReturn(leadership)
@@ -871,7 +976,7 @@ class MemberServiceTest {
         val leadership = GroupLeader(group = grp, member = member, startDate = LocalDate.of(2026, 1, 15))
         val req = UpdateMemberRequest(lastName = "김", firstName = "철수", groupPublicId = "")
 
-        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId))
             .thenReturn(Optional.of(member))
         `when`(groupLeaderRepository.findActiveByGroupId(1L)).thenReturn(leadership)
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
@@ -891,7 +996,7 @@ class MemberServiceTest {
         val leadership = GroupLeader(group = oldGroup, member = someoneElse, startDate = LocalDate.of(2026, 1, 15))
         val req = UpdateMemberRequest(lastName = "김", firstName = "철수", groupPublicId = newGroup.publicId.toString())
 
-        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(mover.publicId)).thenReturn(Optional.of(mover))
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(mover.publicId)).thenReturn(Optional.of(mover))
         `when`(churchGroupRepository.findByPublicIdAndDeletedAtIsNull(newGroup.publicId)).thenReturn(Optional.of(newGroup))
         `when`(groupLeaderRepository.findActiveByGroupId(1L)).thenReturn(leadership)
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
@@ -910,7 +1015,7 @@ class MemberServiceTest {
         member.group = grp
         val req = UpdateMemberRequest(lastName = "김", firstName = "철수", groupPublicId = grp.publicId.toString())
 
-        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId))
             .thenReturn(Optional.of(member))
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
 
@@ -926,7 +1031,7 @@ class MemberServiceTest {
         member.group = grp
         val req = UpdateMemberRequest(lastName = "김", firstName = "철수", groupPublicId = "")
 
-        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId))
             .thenReturn(Optional.of(member))
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
 
@@ -937,7 +1042,93 @@ class MemberServiceTest {
         verify(churchGroupRepository, never()).findByPublicIdAndDeletedAtIsNull(any<UUID>())
     }
 
+    @Test
+    fun `updateMember rejects clearing the group of an active member`() {
+        val grp = group(1L, "기존 그룹")
+        val member = memberWithId(10L)
+        member.group = grp
+        member.memberStatus = MemberStatus.ACTIVE
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
+
+        val e =
+            assertThrows<MemberGroupRequiredException> {
+                memberService.updateMember(member.publicId, UpdateMemberRequest(groupPublicId = ""))
+            }
+
+        assertEquals(setOf("groupPublicId"), e.fieldErrors.keys)
+        verify(memberRepository, never()).save(any<Member>())
+    }
+
+    @Test
+    fun `updateMember rejects approving a member without a group`() {
+        val member = memberWithId(10L)
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
+
+        assertThrows<MemberGroupRequiredException> {
+            memberService.updateMember(member.publicId, UpdateMemberRequest(memberStatus = "ACTIVE"))
+        }
+        verify(memberRepository, never()).save(any<Member>())
+    }
+
+    @Test
+    fun `updateMember approves a member together with a group`() {
+        val grp = group(1L, "다니엘순")
+        val member = memberWithId(10L)
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId))
+            .thenReturn(Optional.of(member))
+        `when`(churchGroupRepository.findByPublicIdAndDeletedAtIsNull(grp.publicId)).thenReturn(Optional.of(grp))
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+
+        val result =
+            memberService.updateMember(
+                member.publicId,
+                UpdateMemberRequest(memberStatus = "ACTIVE", groupPublicId = grp.publicId.toString()),
+            )
+
+        assertEquals("ACTIVE", result.memberStatus)
+        assertEquals("다니엘순", result.groupName)
+    }
+
     // --- rejectMember ---
+
+    @Test
+    fun `approving pending membership publishes one Korean notification even when repeated`() {
+        val member = memberWithId(10L).apply { group = group(1L, "Test") }
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+
+        repeat(2) { memberService.updateMember(member.publicId, UpdateMemberRequest(memberStatus = "ACTIVE")) }
+
+        val event = org.mockito.kotlin.argumentCaptor<MemberNotificationRequested>()
+        verify(eventPublisher).publishEvent(event.capture())
+        assertEquals(10L, event.firstValue.memberId)
+        assertEquals(NotificationType.MEMBER, event.firstValue.type)
+        assertEquals("회원 가입 승인", event.firstValue.title)
+        assertEquals("회원 가입이 승인되었습니다. 이제 앱을 이용하실 수 있습니다.", event.firstValue.body)
+        assertEquals(NotificationReferenceType.MEMBER, event.firstValue.referenceType)
+        assertNull(event.firstValue.referencePublicId)
+    }
+
+    @ParameterizedTest
+    @CsvSource("ACTIVE,ACTIVE", "PENDING,PENDING", "ACTIVE,INACTIVE", "INACTIVE,ACTIVE", "REJECTED,ACTIVE")
+    fun `other status changes do not publish approval notifications`(
+        previous: MemberStatus,
+        target: MemberStatus,
+    ) {
+        val member =
+            memberWithId(10L).apply {
+                group = group(1L, "Test")
+                memberStatus = previous
+            }
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+
+        memberService.updateMember(member.publicId, UpdateMemberRequest(memberStatus = target.name))
+
+        org.mockito.kotlin.verifyNoInteractions(eventPublisher)
+    }
 
     @Test
     fun `rejectMember sets a PENDING member to REJECTED`() {
@@ -1080,6 +1271,7 @@ class MemberServiceTest {
                 keycloak,
                 CurrentMemberResolver(memberRepository, org.mockito.kotlin.mock()),
                 operationalMetrics,
+                eventPublisher,
                 "test-realm",
                 registrationRateLimit = 1,
             )
@@ -1115,6 +1307,7 @@ class MemberServiceTest {
                 keycloak,
                 CurrentMemberResolver(memberRepository, org.mockito.kotlin.mock()),
                 operationalMetrics,
+                eventPublisher,
                 "test-realm",
                 reconciliationIntake = intake,
             )
