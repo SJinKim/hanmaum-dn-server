@@ -107,21 +107,8 @@ interface AttendanceLogRepository : JpaRepository<AttendanceLog, Long> {
                 WHERE church_group.deleted_at IS NULL
                    OR target_log.id IS NOT NULL
                 GROUP BY church_group.public_id, church_group.division, church_group.name
-
-                UNION ALL
-
-                SELECT
-                    CAST(NULL AS UUID) AS "groupPublicId",
-                    CAST(NULL AS VARCHAR) AS "groupDivision",
-                    CAST(NULL AS VARCHAR) AS "groupName",
-                    COUNT(target_log.id) AS "attendanceCount",
-                    COUNT(target_log.id) FILTER (WHERE target_log.presence = 'IN_PLACE') AS "inPlaceCount",
-                    COUNT(target_log.id) FILTER (WHERE target_log.presence = 'OUTSIDE') AS "outsideCount",
-                    COUNT(target_log.id) FILTER (WHERE target_log.presence = 'UNCONFIRMED') AS "unconfirmedCount"
-                FROM target_logs AS target_log
-                WHERE target_log.group_id_at_check_in IS NULL
             ) AS group_counts
-            ORDER BY "groupDivision" NULLS LAST, "groupName" NULLS LAST
+            ORDER BY "groupDivision" NULLS LAST, "groupName"
         """,
         nativeQuery = true,
     )
@@ -240,9 +227,9 @@ interface AttendanceLogRepository : JpaRepository<AttendanceLog, Long> {
 }
 
 interface ChurchGroupAttendanceCountView {
-    val groupPublicId: UUID?
+    val groupPublicId: UUID
     val groupDivision: String?
-    val groupName: String?
+    val groupName: String
     val attendanceCount: Long
     val inPlaceCount: Long
     val outsideCount: Long

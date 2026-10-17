@@ -87,7 +87,7 @@ class NewcomerGraduationService(
             groupRepository
                 .findByPublicIdAndDeletedAtIsNull(uuid)
                 .orElseThrow { NewcomerException(HttpStatus.BAD_REQUEST, "The selected group is not active.") }
-        if (group.name.contains("새가족")) {
+        if (group.newcomerGroup) {
             throw NewcomerException(HttpStatus.BAD_REQUEST, "The newcomer group cannot be a graduation destination.")
         }
         return group

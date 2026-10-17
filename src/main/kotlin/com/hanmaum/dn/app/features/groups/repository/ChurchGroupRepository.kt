@@ -15,6 +15,9 @@ interface ChurchGroupRepository : JpaRepository<ChurchGroup, Long> {
 
     /** Lookup by external UUID, excluding soft-deleted rows. */
     fun findByPublicIdAndDeletedAtIsNull(publicId: UUID): Optional<ChurchGroup>
+
+    /** The live 새가족 순, if one is marked. A partial unique index keeps it to one. */
+    fun findFirstByNewcomerGroupTrueAndDeletedAtIsNull(): ChurchGroup?
 }
 
 @Repository
