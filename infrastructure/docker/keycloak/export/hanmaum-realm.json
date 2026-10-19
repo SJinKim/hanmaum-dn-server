@@ -193,6 +193,18 @@
         "clientRole": false,
         "containerId": "313538da-5813-430e-ab02-16db69fc5746",
         "attributes": {}
+      },
+      {
+        "name": "GUIDE_VIEWER",
+        "description": "Read aggregate guide worship reports",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "GUIDE_EDITOR",
+        "description": "Manage aggregate guide worship reports",
+        "composite": false,
+        "clientRole": false
       }
     ],
     "client": {
@@ -618,6 +630,29 @@
                 "TRAINING_EDITOR"
               ],
               "clientRoles": {},
+              "subGroups": []
+            }
+          ]
+        },
+        {
+          "name": "guide",
+          "path": "/ministries/guide",
+          "realmRoles": [],
+          "subGroups": [
+            {
+              "name": "viewers",
+              "path": "/ministries/guide/viewers",
+              "realmRoles": [
+                "GUIDE_VIEWER"
+              ],
+              "subGroups": []
+            },
+            {
+              "name": "editors",
+              "path": "/ministries/guide/editors",
+              "realmRoles": [
+                "GUIDE_EDITOR"
+              ],
               "subGroups": []
             }
           ]

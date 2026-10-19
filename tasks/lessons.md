@@ -7,6 +7,10 @@
 - **Rule**: what to do instead (permanent prevention)
 
 ## Lessons
+
+### Guide historical import — approved year blocks and excluded columns
+- Follow the final user-approved block boundaries, including header 116 as 2024; stored Excel date years and older discussion estimates are not authoritative.
+- Import only Summary B:G/I. Never recover, validate or replace these counts using H, K:X, right-hand comparison tables or weekly room details. Preserve NULL versus accounting-format zero.
 <!-- Claude appends here after each correction -->
 
 ### Publication does not imply immediate member visibility
