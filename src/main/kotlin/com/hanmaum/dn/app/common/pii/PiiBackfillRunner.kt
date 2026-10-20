@@ -171,7 +171,6 @@ class PiiBackfillRunner(
                 "occupation",
                 "work_or_school",
                 "registration_date",
-                "role",
                 "baptism",
                 "keycloak_id",
                 "profile_image_url",

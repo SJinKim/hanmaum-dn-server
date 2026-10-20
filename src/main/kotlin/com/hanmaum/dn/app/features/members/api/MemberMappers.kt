@@ -66,7 +66,6 @@ fun CreateMemberRequest.toEntity(): Member =
         identityStatus = this.identityStatus,
         workOrSchool = this.workOrSchool?.trim()?.ifBlank { null },
         registrationDate = this.registrationDate,
-        churchRole = this.churchRole,
         baptism = mapBaptism(this.baptism),
         profileImageUrl = this.profileImageUrl,
     )
@@ -102,7 +101,6 @@ fun Member.applyPatch(request: UpdateMemberRequest) {
     // A blank 소속 clears it; null leaves it unchanged.
     request.workOrSchool?.let { this.workOrSchool = it.trim().ifBlank { null } }
     request.registrationDate?.let { this.registrationDate = it }
-    request.churchRole?.let { this.churchRole = it }
     request.baptism?.let { this.baptism = mapBaptism(it) }
     request.profileImageUrl?.let { this.profileImageUrl = it }
     request.isNextGroupLeader?.let { this.isNextGroupLeader = it }
@@ -153,7 +151,6 @@ fun Member.toDto(
         workOrSchool = this.workOrSchool,
         registrationDate = this.registrationDate,
         memberStatus = this.memberStatus.name,
-        churchRole = this.churchRole,
         groupPublicId = this.group?.publicId?.toString(),
         groupName = this.group?.name,
         profileImageUrl = this.profileImageUrl,
@@ -192,7 +189,6 @@ fun Member.toSummaryDto(
         latestTraining = latestTraining,
         trainings = trainings,
         activeMinistries = activeMinistries,
-        churchRole = this.churchRole,
         isNextGroupLeader = this.isNextGroupLeader,
         oneOnOneSignupFilled = this.oneOnOneSignupFilled,
         isGroupLeader = groupLeaderSince != null,
@@ -227,7 +223,6 @@ fun Member.toResponse(
         email = this.email,
         emailVerified = emailVerified,
         status = this.memberStatus,
-        churchRole = this.churchRole,
         registrationDate = this.registrationDate,
         groupName = this.group?.name,
         division = this.group?.division,

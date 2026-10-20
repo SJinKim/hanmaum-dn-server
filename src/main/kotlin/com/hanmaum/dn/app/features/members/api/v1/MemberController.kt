@@ -153,7 +153,7 @@ class MemberController(
 
     /**
      * PATCH /api/v1/members/me
-     * Role: any authenticated member — partial self-update of contact, profile image, and address.
+     * Role: any authenticated member — partial self-update of contact, profile image, address, 신분 and 소속.
      */
     @PatchMapping("/me")
     @PreAuthorize("isAuthenticated()")

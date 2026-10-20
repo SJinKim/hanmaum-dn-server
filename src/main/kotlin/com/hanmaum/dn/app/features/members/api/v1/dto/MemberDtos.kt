@@ -44,7 +44,6 @@ data class MemberDto(
     val workOrSchool: String? = null,
     val registrationDate: LocalDate? = null,
     @Unredacted val memberStatus: String,
-    val churchRole: String? = null,
     /** publicId of the member's church group, or null. Used to pre-select the group on edit. */
     @Unredacted val groupPublicId: String? = null,
     @Unredacted val groupName: String? = null,
@@ -94,7 +93,6 @@ data class MemberSummaryDto(
     @Unredacted val trainings: List<SummaryTrainingDto> = emptyList(),
     /** Names of the member's currently-active ministry assignments (end_date IS NULL), sorted. */
     @Unredacted val activeMinistries: List<String> = emptyList(),
-    val churchRole: String? = null,
     @get:JsonProperty("isNextGroupLeader")
     @Unredacted val isNextGroupLeader: Boolean = false,
     @Unredacted val oneOnOneSignupFilled: Boolean = false,
@@ -170,7 +168,6 @@ data class MemberResponse(
     /** Keycloak's current verification state from the authenticated user's JWT. */
     @Unredacted val emailVerified: Boolean = false,
     @Unredacted val status: MemberStatus,
-    val churchRole: String? = null,
     /**
      * Day the member joined the community — the profile's 함께한 시간 figure is the span
      * between this and today.
@@ -235,8 +232,6 @@ data class CreateMemberRequest(
     @field:Size(max = 100)
     val workOrSchool: String? = null,
     val registrationDate: LocalDate? = null,
-    /** Church position/title (직분), not the app access role. */
-    val churchRole: String? = null,
     /** publicId of the church group to assign; null leaves the member ungrouped. */
     @Unredacted val groupPublicId: String? = null,
     val profileImageUrl: String? = null,
@@ -270,7 +265,6 @@ data class UpdateMemberRequest(
     val workOrSchool: String? = null,
     val registrationDate: LocalDate? = null,
     @Unredacted val memberStatus: String? = null,
-    val churchRole: String? = null,
     /**
      * publicId of the church group to assign. Null/absent leaves the current group
      * unchanged; a blank string ("") clears it (leaves the member ungrouped).
@@ -328,7 +322,12 @@ data class RegisterMemberRequest(
     val zipCode: String? = null,
 )
 
-/** PATCH /me — member can update their own contact, profile image, and address. */
+/**
+ * PATCH /me — member can update their own contact, profile image, address, 신분 and 소속.
+ *
+ * `null` leaves a field unchanged, so birthDate and identityStatus, both required at registration,
+ * cannot be cleared here. workOrSchool is optional: a blank value clears it.
+ */
 @Redacted
 data class UpdateMyProfileRequest(
     @field:Size(max = 50)
@@ -340,6 +339,11 @@ data class UpdateMyProfileRequest(
     val houseNumber: String? = null,
     val zipCode: String? = null,
     val city: String? = null,
+    @Unredacted val identityStatus: IdentityStatus? = null,
+    /** 소속: 학교명 / 직장명. */
+    @field:JsonDeserialize(converter = TrimmingStringConverter::class)
+    @field:Size(max = 100)
+    val workOrSchool: String? = null,
 )
 
 /**

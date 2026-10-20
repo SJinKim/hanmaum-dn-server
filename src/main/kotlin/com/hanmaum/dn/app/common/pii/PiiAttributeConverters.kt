@@ -78,9 +78,6 @@ class EncryptedOccupationConverter : EncryptedStringConverter("members.occupatio
 class EncryptedRegistrationDateConverter : EncryptedLocalDateConverter("members.registration_date")
 
 @Converter
-class EncryptedChurchRoleConverter : EncryptedStringConverter("members.role")
-
-@Converter
 class EncryptedBaptismFieldConverter : EncryptedBaptismConverter("members.baptism")
 
 @Converter
@@ -114,10 +111,12 @@ class EncryptedUserTrainingNoteConverter : EncryptedStringConverter("user_traini
 @Converter
 class EncryptedGraduationNoteConverter : EncryptedStringConverter("member_graduations.note")
 
-// 소속 (school or employer). Moved off newcomer_profiles in HDN-332; MemberWorkOrSchoolBackfillRunner
-// re-encrypts the old values under this context.
+// 소속 (school or employer). Moved off newcomer_profiles in HDN-332; V20261021100000 (HDN-339)
+// re-encrypts the old values under this context, so both share the constant.
+const val MEMBER_WORK_OR_SCHOOL_CONTEXT = "members.work_or_school"
+
 @Converter
-class EncryptedWorkOrSchoolConverter : EncryptedStringConverter("members.work_or_school")
+class EncryptedWorkOrSchoolConverter : EncryptedStringConverter(MEMBER_WORK_OR_SCHOOL_CONTEXT)
 
 @Converter
 class EncryptedNewcomerAssignmentReasonConverter : EncryptedStringConverter("newcomer_profiles.assignment_reason")
