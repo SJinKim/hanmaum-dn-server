@@ -93,6 +93,8 @@ the home counters it reads only `GET /members/count`.
 | `/ministries/general_operations/editors` | `GENERAL_OPERATIONS_VIEWER`, `GENERAL_OPERATIONS_EDITOR` | Read and write those five areas; manage every ministry and accept/reject applications |
 | `/ministries/training/viewers` | `TRAINING_VIEWER` | Read church groups and the scoped 양육 member matrix |
 | `/ministries/training/editors` | `TRAINING_VIEWER`, `TRAINING_EDITOR` | Read the matrix, set 예비순장 and appoint/remove church-group leaders |
+| `/ministries/guide/viewers` | `GUIDE_VIEWER` | Read Guide worship-count summaries |
+| `/ministries/guide/editors` | `GUIDE_EDITOR` (server implies `GUIDE_VIEWER`) | Read, create, edit and soft-delete Guide worship-count summaries |
 | `/ministries/<slug>/viewers` | `<SLUG>_VIEWER` | Read the ministry's data in the web app |
 | `/ministries/<slug>/editors` | `<SLUG>_VIEWER`, `<SLUG>_EDITOR` | Read and write the ministry's data in the web app |
 
@@ -125,6 +127,13 @@ ordinary members or viewers.
 Both checked-in realm exports are the source for the managed application role names/descriptions and
 full group paths. `scripts/keycloak/configure-realm.sh` reads only that projection;
 it does not import realm keys, clients, users, local IDs or default roles.
+
+HDN-329 adds the Guide roles/groups through this same reconciler, without user
+assignments. After rollout, refresh tokens and verify viewer GET=200/write=403,
+editor GET/write permitted, ordinary member=403, unauthenticated=401, and
+admin/pastor access. Keep this live evidence with the deployment record. The
+historical import is a separate explicit maintenance action described in
+[`GUIDE_IMPORT_RUNBOOK.md`](GUIDE_IMPORT_RUNBOOK.md).
 
 For an existing staging realm, run from the deployed checkout on the Keycloak host:
 
