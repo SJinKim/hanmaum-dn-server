@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased] — 2026-03-30
 
 ### Fixed
+- HDN-330: Provide Guide calendar-period statistics with complete-report cohorts, nullable comparisons and a shared table/chart snapshot.
 - HDN-331: Harden Guide review flows with explicit editor reads, safe room seeding, bounded detail queries, controlled matrix conflicts, explicit detail revisions and settings-specific validation errors; remove the legacy room code after snapshot backfill.
 - HDN-311: Reject attendance check-ins from members that are not ACTIVE with 403 before any window, geofence or log is touched.
 - HDN-135: Notify members once per course when an existing application is accepted as ENROLLED, after the replacement commits.
