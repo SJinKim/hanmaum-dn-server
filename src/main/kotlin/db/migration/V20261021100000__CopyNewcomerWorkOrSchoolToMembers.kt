@@ -11,9 +11,8 @@ import org.slf4j.LoggerFactory
  *
  * 신분 was copied in SQL by V20261020150000. 소속 is encrypted with its column name as associated
  * data, so it has to be re-encrypted under the member context, which SQL cannot do. Doing it in a
- * migration rather than an ApplicationRunner guarantees it runs before any later migration drops
- * the old columns. The columns stay for now: the code this release replaces still maps them, so
- * dropping them in the same release would make a rollback impossible.
+ * migration rather than an ApplicationRunner guarantees it runs before V20261021110000 drops the
+ * old columns.
  *
  * A member who already has a value keeps it, and soft-deleted profiles and members are left alone
  * so a deliberately removed 소속 does not come back. A row that cannot be decrypted is logged and
