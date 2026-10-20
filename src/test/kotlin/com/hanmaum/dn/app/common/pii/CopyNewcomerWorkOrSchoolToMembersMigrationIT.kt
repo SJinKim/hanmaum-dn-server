@@ -25,8 +25,9 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Flyway has already applied the migration to the test database, so each test seeds legacy
- * values inside its rolled-back transaction and runs the migration against them again.
+ * Flyway has already applied the migration to the test database, and V20261021110000 has dropped
+ * the legacy column since. Each test re-adds the column and seeds legacy values inside its
+ * rolled-back transaction, then runs the migration against them again.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -85,14 +86,32 @@ class CopyNewcomerWorkOrSchoolToMembersMigrationIT {
 
     @Test
     fun `skips an undecryptable row and still copies the others`() {
-        val (brokenMemberId, _) =
-            seed(memberValue = null, legacyValue = PiiCryptoContext.encrypt("TU Berlin", "some.other_column")!!)
-        val (memberId, _) = seed(memberValue = null, legacyValue = encryptLegacy("LMU München"))
+        val (broken, readable) =
+            seed(
+                null to PiiCryptoContext.encrypt("TU Berlin", "some.other_column")!!,
+                null to encryptLegacy("LMU München"),
+            )
+        val brokenMemberId = broken.first
+        val memberId = readable.first
 
         migrate()
 
         assertNull(memberRepository.findById(brokenMemberId).get().workOrSchool)
         assertEquals("LMU München", memberRepository.findById(memberId).get().workOrSchool)
+    }
+
+    @Test
+    fun `the legacy newcomer columns are dropped`() {
+        val remaining =
+            jdbcTemplate.queryForList(
+                """
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'newcomer_profiles' AND column_name IN ('identity_status', 'work_or_school')
+                """.trimIndent(),
+                String::class.java,
+            )
+
+        assertTrue(remaining.isEmpty(), remaining.toString())
     }
 
     @Test
@@ -112,15 +131,28 @@ class CopyNewcomerWorkOrSchoolToMembersMigrationIT {
     private fun seed(
         memberValue: String?,
         legacyValue: String,
-    ): Pair<Long, Long> {
-        val member = Member(lastName = "김", firstName = "새봄", workOrSchool = memberValue)
-        entityManager.persist(member)
-        val profile = NewcomerProfile(member = member)
-        entityManager.persist(profile)
+    ): Pair<Long, Long> = seed(memberValue to legacyValue).single()
+
+    /**
+     * Inserts every row before re-adding the column: an insert prepared against the table before
+     * the ALTER fails afterwards with "cached plan must not change result type".
+     */
+    private fun seed(vararg rows: Pair<String?, String>): List<Pair<Long, Long>> {
+        val seeded =
+            rows.map { (memberValue, legacyValue) ->
+                val member = Member(lastName = "김", firstName = "새봄", workOrSchool = memberValue)
+                entityManager.persist(member)
+                val profile = NewcomerProfile(member = member)
+                entityManager.persist(profile)
+                Triple(member, profile, legacyValue)
+            }
         entityManager.flush()
-        jdbcTemplate.update("UPDATE newcomer_profiles SET work_or_school = ? WHERE id = ?", legacyValue, profile.id)
+        jdbcTemplate.execute("ALTER TABLE newcomer_profiles ADD COLUMN IF NOT EXISTS work_or_school TEXT")
+        seeded.forEach { (_, profile, legacyValue) ->
+            jdbcTemplate.update("UPDATE newcomer_profiles SET work_or_school = ? WHERE id = ?", legacyValue, profile.id)
+        }
         entityManager.clear()
-        return member.id!! to profile.id!!
+        return seeded.map { (member, profile, _) -> member.id!! to profile.id!! }
     }
 
     private fun migrate() {
