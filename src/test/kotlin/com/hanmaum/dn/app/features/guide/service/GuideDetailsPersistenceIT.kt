@@ -20,7 +20,10 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.context.annotation.Import
 import org.springframework.http.HttpStatus
 import org.springframework.test.context.ActiveProfiles
+import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
@@ -44,6 +47,46 @@ class GuideDetailsPersistenceIT {
 
     @Autowired private lateinit var em: EntityManager
     private val date = LocalDate.of(2026, 10, 25)
+
+    @Test fun `home excludes future and deleted reports while a saved detailed zero cell replaces a blank draft`() {
+        summaries.create(WorshipCountRequest(date.minusWeeks(1), 10, 20, 30), "legacy")
+        val blank = service.create(GuideDetailsCreateRequest(date), "editor")
+        summaries.create(WorshipCountRequest(date.plusWeeks(1), 900, 900, 900), "future")
+        val deleted = summaries.create(WorshipCountRequest(date.minusDays(1), 800, 800, 800), "deleted")
+        summaries.delete(deleted.publicId, deleted.version, "editor")
+        em.clear()
+        val clock = Clock.fixed(Instant.parse("2026-10-25T09:00:00Z"), ZoneId.of("Europe/Berlin"))
+        val home = GuideHomeService(reports, details, service, clock)
+        val before = home.get()
+        assertEquals(date.minusWeeks(1), before.attendance?.report?.serviceDate)
+        assertEquals(blank.report.publicId, before.currentSundayReport?.publicId)
+        assertEquals(2, before.lastFourReports.size)
+        assertEquals(emptyList(), details.findConfirmedReportIds(listOf(blank.report.publicId)))
+        val firstCell = guideZeroRows().first().copy(adultCount = 0, schoolCount = null)
+        service.update(blank.report.publicId, GuideDetailsUpdateRequest(date, null, blank.report.version, listOf(firstCell)), "editor")
+        em.clear()
+        val after = home.get()
+        assertEquals("PARTIAL", after.status.name)
+        assertEquals(date, after.attendance?.report?.serviceDate)
+        assertNull(after.attendance?.report?.totalCount)
+        assertEquals(listOf(blank.report.publicId), details.findConfirmedReportIds(listOf(blank.report.publicId)))
+        assertEquals(date.minusWeeks(1), after.metrics.reportDate)
+        assertEquals(2, after.lastFourReports.size)
+    }
+
+    @Test fun `home reuses stored detailed snapshot and counts third service youth once`() {
+        val created = service.create(GuideDetailsCreateRequest(date, null, guideYouthExample()), "editor")
+        em.clear()
+        val clock = Clock.fixed(Instant.parse("2026-10-25T09:00:00Z"), ZoneId.of("Europe/Berlin"))
+        val home = GuideHomeService(reports, details, service, clock).get()
+        assertEquals(created.report.publicId, home.attendance?.report?.publicId)
+        assertEquals("COMPLETE", home.status.name)
+        assertEquals(70L, home.attendance?.report?.totalCount)
+        assertEquals(65L, home.attendance?.totals?.compatibleAdultCount)
+        assertEquals(25L, home.attendance?.totals?.youthCount)
+        assertEquals(70L, home.metrics.totalCount)
+        assertEquals(70, home.shares[2].count)
+    }
 
     @Test fun `detail create persists one parent and twelve unique rows consumed by summary history`() {
         summaries.create(WorshipCountRequest(date.minusWeeks(1), 20, 20, 20), "legacy")
