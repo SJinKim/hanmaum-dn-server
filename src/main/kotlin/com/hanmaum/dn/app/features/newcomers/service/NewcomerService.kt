@@ -4,6 +4,7 @@ import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
 import com.hanmaum.dn.app.features.groups.service.NewcomerGroupAssigner
+import com.hanmaum.dn.app.features.members.domain.IdentityStatus
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.domain.MemberOrigin
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
@@ -25,6 +26,7 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 
@@ -62,6 +64,8 @@ class NewcomerService(
                     profileImageUrl = request.profileImageUrl,
                     keycloakId = null,
                     origin = MemberOrigin.NEWCOMER_FORM,
+                    identityStatus = request.identityStatus,
+                    workOrSchool = request.workOrSchool?.trim()?.ifBlank { null },
                 ),
             )
         // ACTIVE needs a 순 (HDN-314); a new 새가족 starts in the 새가족 순.
@@ -73,8 +77,6 @@ class NewcomerService(
                 intakeRound = request.intakeRound,
                 hasVisited = request.hasVisited,
                 caregiver = resolveCaregiver(request.caregiverPublicId),
-                identityStatus = request.identityStatus,
-                workOrSchool = request.workOrSchool,
                 firstVisitDate = request.firstVisitDate,
                 assignedGroup = resolveAssignableGroup(request.assignedGroupPublicId),
                 assignmentReason = request.assignmentReason,
@@ -99,7 +101,7 @@ class NewcomerService(
         hasVisited: Boolean?,
         caregiverPublicId: UUID?,
         groupPublicId: UUID?,
-        identityStatus: com.hanmaum.dn.app.features.newcomers.domain.NewcomerIdentityStatus?,
+        identityStatus: IdentityStatus?,
         attendance: PostAssignmentAttendance?,
         registeredFrom: LocalDate?,
         registeredTo: LocalDate?,
@@ -175,8 +177,15 @@ class NewcomerService(
         request.intakeRound?.let { profile.intakeRound = it }
         request.hasVisited?.let { profile.hasVisited = it }
         request.caregiverPublicId?.let { profile.caregiver = resolveCaregiver(it) }
+        val identityBefore = profile.identityStatus
+        val workOrSchoolBefore = profile.workOrSchool
         request.identityStatus?.let { profile.identityStatus = it }
-        request.workOrSchool?.let { profile.workOrSchool = it }
+        request.workOrSchool?.let { profile.workOrSchool = it.trim().ifBlank { null } }
+        // Both now live on the member, so editing only them would leave the profile row clean and
+        // skip its @Version bump; touching the profile keeps the optimistic lock covering them.
+        if (profile.identityStatus != identityBefore || profile.workOrSchool != workOrSchoolBefore) {
+            profile.updatedAt = Instant.now()
+        }
         request.firstVisitDate?.let { profile.firstVisitDate = it }
         request.assignedGroupPublicId?.let { profile.assignedGroup = resolveAssignableGroup(it) }
         request.assignmentReason?.let { profile.assignmentReason = it }

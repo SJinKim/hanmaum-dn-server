@@ -2,8 +2,8 @@ package com.hanmaum.dn.app.features.newcomers.api.v1.dto
 
 import com.hanmaum.dn.app.common.domainvalue.Baptism
 import com.hanmaum.dn.app.common.domainvalue.Gender
+import com.hanmaum.dn.app.features.members.domain.IdentityStatus
 import com.hanmaum.dn.app.features.newcomers.domain.ChurchExperience
-import com.hanmaum.dn.app.features.newcomers.domain.NewcomerIdentityStatus
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerLifecycle
 import com.hanmaum.dn.app.features.newcomers.domain.PostAssignmentAttendance
 import dev.zacsweers.redacted.annotations.Redacted
@@ -35,8 +35,8 @@ data class CreateNewcomerRequest(
     @Unredacted val hasVisited: Boolean = false,
     @Unredacted val lifecycleStatus: NewcomerLifecycle = NewcomerLifecycle.SUBMITTED,
     @Unredacted val caregiverPublicId: String? = null,
-    @Unredacted val identityStatus: NewcomerIdentityStatus? = null,
-    val workOrSchool: String? = null,
+    @Unredacted val identityStatus: IdentityStatus? = null,
+    @field:Size(max = 100) val workOrSchool: String? = null,
     val firstVisitDate: LocalDate? = null,
     @Unredacted val assignedGroupPublicId: String? = null,
     val assignmentReason: String? = null,
@@ -68,8 +68,8 @@ data class UpdateNewcomerRequest(
     @Unredacted val hasVisited: Boolean? = null,
     @Unredacted val lifecycleStatus: NewcomerLifecycle? = null,
     @Unredacted val caregiverPublicId: String? = null,
-    @Unredacted val identityStatus: NewcomerIdentityStatus? = null,
-    val workOrSchool: String? = null,
+    @Unredacted val identityStatus: IdentityStatus? = null,
+    @field:Size(max = 100) val workOrSchool: String? = null,
     val firstVisitDate: LocalDate? = null,
     @Unredacted val assignedGroupPublicId: String? = null,
     val assignmentReason: String? = null,
@@ -104,7 +104,7 @@ data class NewcomerResponse(
     @Unredacted val hasVisited: Boolean,
     @Unredacted val lifecycleStatus: NewcomerLifecycle,
     @Unredacted val caregiver: NewcomerOption? = null,
-    @Unredacted val identityStatus: NewcomerIdentityStatus? = null,
+    @Unredacted val identityStatus: IdentityStatus? = null,
     val workOrSchool: String? = null,
     val firstVisitDate: LocalDate? = null,
     @Unredacted val assignedGroup: NewcomerOption? = null,
@@ -129,6 +129,6 @@ data class NewcomerOption(
 data class NewcomerOptionsResponse(
     val caregivers: List<NewcomerOption>,
     val groups: List<NewcomerOption>,
-    val identityStatuses: List<NewcomerIdentityStatus> = NewcomerIdentityStatus.entries,
+    val identityStatuses: List<IdentityStatus> = IdentityStatus.entries,
     val attendanceStatuses: List<PostAssignmentAttendance> = PostAssignmentAttendance.entries,
 )

@@ -3,13 +3,13 @@ package com.hanmaum.dn.app.features.newcomers.api.v1
 import com.hanmaum.dn.app.common.dto.ApiResponse
 import com.hanmaum.dn.app.common.security.NewcomerReadAccess
 import com.hanmaum.dn.app.common.security.NewcomerWriteAccess
+import com.hanmaum.dn.app.features.members.domain.IdentityStatus
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.CreateNewcomerRequest
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.GraduateNewcomerRequest
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.NewcomerGraduationResponse
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.NewcomerOptionsResponse
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.NewcomerResponse
 import com.hanmaum.dn.app.features.newcomers.api.v1.dto.UpdateNewcomerRequest
-import com.hanmaum.dn.app.features.newcomers.domain.NewcomerIdentityStatus
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerLifecycle
 import com.hanmaum.dn.app.features.newcomers.domain.PostAssignmentAttendance
 import com.hanmaum.dn.app.features.newcomers.service.NewcomerGraduationService
@@ -52,7 +52,7 @@ class NewcomerController(
         @RequestParam(required = false) hasVisited: Boolean?,
         @RequestParam(required = false) caregiverPublicId: UUID?,
         @RequestParam(required = false) groupPublicId: UUID?,
-        @RequestParam(required = false) identityStatus: NewcomerIdentityStatus?,
+        @RequestParam(required = false) identityStatus: IdentityStatus?,
         @RequestParam(required = false) attendance: PostAssignmentAttendance?,
         @RequestParam(required = false) registeredFrom: LocalDate?,
         @RequestParam(required = false) registeredTo: LocalDate?,

@@ -69,6 +69,7 @@ jobs:
             --tests "com.hanmaum.dn.app.features.ministry.service.MinistryOwnershipIT" \
             --tests "com.hanmaum.dn.app.features.groups.service.TrainingMatrixServiceIT" \
             --tests "com.hanmaum.dn.app.features.members.repository.MemberPiiRepositoryIT" \
+            --tests "com.hanmaum.dn.app.common.pii.MemberWorkOrSchoolBackfillRunnerIT" \
             --tests "com.hanmaum.dn.app.features.guide.service.GuidePersistenceIT" \
             --no-daemon
         env:

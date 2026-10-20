@@ -114,8 +114,10 @@ class EncryptedUserTrainingNoteConverter : EncryptedStringConverter("user_traini
 @Converter
 class EncryptedGraduationNoteConverter : EncryptedStringConverter("member_graduations.note")
 
+// 소속 (school or employer). Moved off newcomer_profiles in HDN-332; MemberWorkOrSchoolBackfillRunner
+// re-encrypts the old values under this context.
 @Converter
-class EncryptedNewcomerWorkOrSchoolConverter : EncryptedStringConverter("newcomer_profiles.work_or_school")
+class EncryptedWorkOrSchoolConverter : EncryptedStringConverter("members.work_or_school")
 
 @Converter
 class EncryptedNewcomerAssignmentReasonConverter : EncryptedStringConverter("newcomer_profiles.assignment_reason")

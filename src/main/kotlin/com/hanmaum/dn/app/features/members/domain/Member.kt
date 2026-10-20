@@ -20,6 +20,7 @@ import com.hanmaum.dn.app.common.pii.EncryptedPhoneNumberConverter
 import com.hanmaum.dn.app.common.pii.EncryptedProfileImageUrlConverter
 import com.hanmaum.dn.app.common.pii.EncryptedRegistrationDateConverter
 import com.hanmaum.dn.app.common.pii.EncryptedStreetConverter
+import com.hanmaum.dn.app.common.pii.EncryptedWorkOrSchoolConverter
 import com.hanmaum.dn.app.common.pii.EncryptedZipCodeConverter
 import com.hanmaum.dn.app.common.pii.PiiCryptoContext
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
@@ -69,6 +70,14 @@ class Member(
     @Convert(converter = EncryptedOccupationConverter::class)
     @Column(columnDefinition = "TEXT")
     var occupation: String? = null,
+    /** 신분, see [IdentityStatus]. Required at self-registration; null for older and admin-created members. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "identity_status", length = 30)
+    var identityStatus: IdentityStatus? = null,
+    /** 소속 — school or employer name, free text. */
+    @Convert(converter = EncryptedWorkOrSchoolConverter::class)
+    @Column(name = "work_or_school", columnDefinition = "TEXT")
+    var workOrSchool: String? = null,
     // --- ADRESSE ---
     @Convert(converter = EncryptedStreetConverter::class)
     @Column(columnDefinition = "TEXT")

@@ -124,7 +124,6 @@ class MemberReconciliationService(
         }
         target.kakaoId = target.kakaoId ?: source.kakaoId
         target.previousChurch = target.previousChurch ?: source.previousChurch
-        target.workOrSchool = target.workOrSchool ?: source.workOrSchool
         target.assignmentReason = target.assignmentReason ?: source.assignmentReason
         target.overallNotes = target.overallNotes ?: source.overallNotes
         target.additionalNotes = target.additionalNotes ?: source.additionalNotes
@@ -156,6 +155,8 @@ class MemberReconciliationService(
         target.zipCode = source.zipCode ?: target.zipCode
         target.city = source.city ?: target.city
         target.baptism = source.baptism ?: target.baptism
+        target.identityStatus = source.identityStatus ?: target.identityStatus
+        target.workOrSchool = source.workOrSchool ?: target.workOrSchool
         target.profileImageUrl = source.profileImageUrl ?: target.profileImageUrl
         target.group = source.group ?: target.group
     }
