@@ -32,7 +32,10 @@ class GuideImportReaderTest {
             Triple(2026, 222, 223..264),
         )
 
-    private fun fixture(xlsx: Boolean = false): Path {
+    private fun fixture(
+        xlsx: Boolean = false,
+        firstCount: String = "1",
+    ): Path {
         val rows = MutableList(280) { MutableList(30) { "ignored data" } }
         blocks.forEach { (year, header, range) ->
             rows[header - 1][1] = if (header == 116) "2023" else year.toString()
@@ -46,6 +49,15 @@ class GuideImportReaderTest {
                 rows[row - 1][8] = if (row == 223) "메모, note\nsecond line" else ""
             }
         }
+        rows[4][2] = firstCount
+        rows[4][5] =
+            if (firstCount == "1.234") {
+                "3.234"
+            } else if (firstCount == "1.000") {
+                "1.002"
+            } else {
+                "3"
+            }
         val path = dir.resolve(if (xlsx) "source.xlsx" else "source.csv")
         if (!xlsx) {
             Files.newBufferedWriter(path).use { out ->
@@ -103,6 +115,26 @@ class GuideImportReaderTest {
         val text = Files.readString(path).replaceFirst(";1;1;1;3;", ";1;1;1;4;")
         Files.writeString(path, text)
         assertFailsWith<IllegalArgumentException> { reader.read(path) }
+    }
+
+    @Test fun `xlsx fractional cached numbers are rejected while csv thousands remain integers`() {
+        assertFailsWith<IllegalArgumentException> { reader.read(fixture(true, "1.234")) }
+        assertEquals(
+            1000,
+            reader
+                .read(fixture(false, "1.000"))
+                .rows
+                .first()
+                .counts[0],
+        )
+        assertEquals(
+            1002L,
+            reader
+                .read(fixture(false, "1.000"))
+                .rows
+                .first()
+                .total,
+        )
     }
 
     @Test fun `csv accounting dash is zero and approved header override preserves 2024`() {

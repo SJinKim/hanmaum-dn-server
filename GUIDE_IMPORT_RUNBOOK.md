@@ -1,7 +1,8 @@
 # Guide summary import — HDN-329
 
-The importer is disabled by default. It is an explicit maintenance application
-runner, without an HTTP endpoint. Merging this code does not import historical
+The importer is disabled by default. It requires both the enabled flag and the
+explicit `guide-import` maintenance profile, without an HTTP endpoint. Normal
+dev/staging/production profiles alone cannot run it. Merging this code does not import historical
 data or provision an existing Keycloak realm. Rehearse against a disposable or
 staging database before an explicitly approved live import.
 
@@ -58,12 +59,15 @@ CSV  2ca5f6dc17b52c9fb3cb0bb74408906604364d2fb1151300462813efa54ba894
    datasource, PII and Keycloak settings without copying credentials between
    environments. Bind the maintenance process only to loopback on an unused
    port; avoid running another application instance against the wrong database.
-2. Start the built application with the following additional arguments, replacing
-   the jar and source paths. The normal server remains running after the result
-   is logged; stop this maintenance process after reviewing the result.
+2. Start the built application as a separate one-shot maintenance process with
+   the following additional arguments, replacing the jar and source paths.
+   Run it outside the normal web service/orchestrator; use no automatic restart
+   policy. It closes its application context after success or failure, stopping
+   its temporary web server; failures propagate to Boot for a nonzero exit.
 
    ```bash
    java -jar /absolute/path/to/server.jar \
+     --spring.profiles.include=guide-import \
      --server.address=127.0.0.1 --server.port=18089 \
      --app.guide-import.enabled=true \
      --app.guide-import.file=/absolute/path/to/source.xlsx \
@@ -100,6 +104,7 @@ manually existing report produces a conflict; the importer never overwrites it.
 Use the same environment and artifact, **omit** `app.guide-import.file`, and set:
 
 ```text
+--spring.profiles.include=guide-import
 --app.guide-import.enabled=true
 --app.guide-import.rollback-batch=<recorded batch UUID>
 --app.guide-import.dry-run=true
@@ -114,6 +119,10 @@ separately reviewed recovery plan because its ledger remains; do not remove
 ledger rows to bypass this protection. A restored backup is the fallback for a
 rollback that cannot safely run.
 
+This retry refusal is deliberate: importing again must not silently resurrect
+manually deleted or rolled-back reports. Retained tombstones preserve that
+operator decision and provenance. Integration tests pin both refusal paths.
+
 ## API and access
 
 `/api/v1/guide/worship-counts`: paged GET (optional `from`, `to`, zero-based `page`,
@@ -123,6 +132,11 @@ fields and requires the returned version. Stale versions or duplicate active
 dates return 409. Missing/deleted UUIDs return 404. Counts accept integer JSON
 numbers or NULL only; strings, decimals, exponents, negatives and overflow return
 400. Ordinary member access is denied.
+
+Only the named active-date unique constraint and version conflicts map to 409.
+Other integrity failures return a safe 500 and log the operation/SQL state,
+without PostgreSQL row values or notes. Paged week deltas use one bulk lookup
+for previous dates, including dates outside the requested page/filter range.
 
 `GUIDE_VIEWER` reads; `GUIDE_EDITOR` reads and writes through the server role
 hierarchy. Admins and pastors have both. Both realm exports include the roles

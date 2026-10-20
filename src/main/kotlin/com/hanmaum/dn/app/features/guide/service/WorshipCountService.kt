@@ -40,7 +40,11 @@ class WorshipCountService(
             bad("Sort must be serviceDate,asc or serviceDate,desc.")
         }
         val pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.fromString(parts[1]), "serviceDate"))
-        return reports.findRange(from ?: LocalDate.of(1, 1, 1), to ?: LocalDate.of(9999, 12, 31), pageable).map(::dto)
+        val result = reports.findRange(from ?: LocalDate.of(1, 1, 1), to ?: LocalDate.of(9999, 12, 31), pageable)
+        val dates = result.content.map { it.serviceDate.minusWeeks(1) }.toSet()
+        val previousByDate =
+            if (dates.isEmpty()) emptyMap() else reports.findByServiceDateInAndDeletedAtIsNull(dates).associateBy { it.serviceDate }
+        return result.map { dto(it, previousByDate[it.serviceDate.minusWeeks(1)]?.total()) }
     }
 
     fun get(publicId: UUID): WorshipCountResponse = dto(active(publicId))
@@ -122,9 +126,11 @@ class WorshipCountService(
         if (request.serviceDate.year !in 1..9999) bad("Invalid report year.")
     }
 
-    private fun dto(r: WorshipCountReport): WorshipCountResponse {
+    private fun dto(
+        r: WorshipCountReport,
+        previous: Long? = reports.findByServiceDateAndDeletedAtIsNull(r.serviceDate.minusWeeks(1))?.total(),
+    ): WorshipCountResponse {
         val total = r.total()
-        val previous = reports.findByServiceDateAndDeletedAtIsNull(r.serviceDate.minusWeeks(1))?.total()
         return WorshipCountResponse(
             r.publicId,
             r.serviceDate,

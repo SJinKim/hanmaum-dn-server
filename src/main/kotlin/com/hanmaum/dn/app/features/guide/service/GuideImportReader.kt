@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.guide.service
 
+import com.hanmaum.dn.app.features.guide.domain.worshipTotal
 import org.apache.commons.csv.CSVFormat
 import org.apache.poi.openxml4j.opc.OPCPackage
 import org.apache.poi.ss.usermodel.DateUtil
@@ -40,7 +41,7 @@ data class GuideImportRow(
     val source: Map<String, String>,
     val sourceDelta: Long?,
 ) {
-    val total: Long? get() = if (counts.any { it == null }) null else counts.sumOf { it!!.toLong() }
+    val total: Long? get() = worshipTotal(counts)
     val fingerprint: String get() = guideCanonical(date, counts, notes)
 }
 
@@ -56,6 +57,11 @@ class GuideImportReader {
     fun read(path: Path): GuideImportSource {
         require(Files.isRegularFile(path)) { "Import source must be a regular file." }
         val bytes = Files.readAllBytes(path)
+        val isCsv =
+            path.fileName
+                .toString()
+                .substringAfterLast('.')
+                .equals("csv", ignoreCase = true)
         val raw =
             when (
                 path.fileName
@@ -91,7 +97,7 @@ class GuideImportReader {
                             listOf(null, null, null)
                         } else {
                             listOf("C", "D", "E").map { column ->
-                                number(cells[column].orEmpty(), rowNumber)
+                                number(cells[column].orEmpty(), rowNumber, isCsv)
                                     ?.also {
                                         require(it in 0..Int.MAX_VALUE.toLong()) { "Invalid count at row $rowNumber." }
                                     }?.toInt()
@@ -104,12 +110,12 @@ class GuideImportReader {
                             counts,
                             cells["I"]?.takeIf(String::isNotBlank),
                             cells,
-                            number(cells["G"].orEmpty(), rowNumber),
+                            number(cells["G"].orEmpty(), rowNumber, isCsv),
                         )
                     if (row.total !=
                         null
                     ) {
-                        require(number(cells["F"].orEmpty(), rowNumber) == row.total) { "Main total mismatch at row $rowNumber." }
+                        require(number(cells["F"].orEmpty(), rowNumber, isCsv) == row.total) { "Main total mismatch at row $rowNumber." }
                     }
                     row
                 }
@@ -139,13 +145,15 @@ class GuideImportReader {
     private fun number(
         raw: String,
         row: Int,
+        csv: Boolean,
     ): Long? {
         val value = raw.trim()
         if (value.isEmpty()) return null
         // Excel's accounting format exports an actual numeric zero as a dash in CSV.
-        if (value == "-") return 0L
-        require(Regex("-?(?:[0-9]+|[0-9]{1,3}(?:\\.[0-9]{3})+)").matches(value)) { "Invalid integer at row $row." }
-        return value.replace(".", "").toLong()
+        if (csv && value == "-") return 0L
+        val pattern = if (csv) "-?(?:[0-9]+|[0-9]{1,3}(?:\\.[0-9]{3})+)" else "-?[0-9]+"
+        require(Regex(pattern).matches(value)) { "Invalid integer at row $row." }
+        return (if (csv) value.replace(".", "") else value).toLong()
     }
 
     private fun csv(bytes: ByteArray): Map<Int, Map<String, String>> =

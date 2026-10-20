@@ -7,6 +7,11 @@ import jakarta.persistence.Table
 import jakarta.persistence.Version
 import java.time.LocalDate
 
+/** NULL means incomplete; summation promotes each count before adding. */
+fun worshipTotal(counts: List<Int?>): Long? {
+    return counts.fold(0L) { sum, count -> sum + (count?.toLong() ?: return null) }
+}
+
 @Entity
 @Table(name = "guide_worship_reports")
 class WorshipCountReport(
@@ -20,10 +25,5 @@ class WorshipCountReport(
 ) : BaseEntity() {
     @Version var version: Long = 0
 
-    fun total(): Long? =
-        if (service1Count == null || service2Count == null || service3Count == null) {
-            null
-        } else {
-            service1Count!!.toLong() + service2Count!! + service3Count!!
-        }
+    fun total(): Long? = worshipTotal(listOf(service1Count, service2Count, service3Count))
 }

@@ -8,6 +8,11 @@
 
 ## Lessons
 
+### Import review: distinguish source formats and application lifecycle
+- Parse German thousands separators only in CSV; an XLSX cached decimal is fractional data and must be rejected.
+- Translate only the named date-uniqueness constraint to 409. Log safe diagnostics for other persistence failures without PostgreSQL row details.
+- A maintenance runner must not close a successful application context before other startup runners finish. Test the packaged process's success/failure exit, not just its callback.
+
 ### Guide historical import — approved year blocks and excluded columns
 - Follow the final user-approved block boundaries, including header 116 as 2024; stored Excel date years and older discussion estimates are not authoritative.
 - Import only Summary B:G/I. Never recover, validate or replace these counts using H, K:X, right-hand comparison tables or weekly room details. Preserve NULL versus accounting-format zero.

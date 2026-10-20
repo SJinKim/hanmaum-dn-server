@@ -15,6 +15,8 @@ interface WorshipCountRepository : JpaRepository<WorshipCountReport, Long> {
 
     fun findByServiceDateAndDeletedAtIsNull(serviceDate: LocalDate): WorshipCountReport?
 
+    fun findByServiceDateInAndDeletedAtIsNull(serviceDates: Collection<LocalDate>): List<WorshipCountReport>
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from WorshipCountReport r where r.publicId = :publicId and r.deletedAt is null")
     fun lockActive(publicId: UUID): WorshipCountReport?

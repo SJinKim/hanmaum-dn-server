@@ -111,6 +111,11 @@ class GuidePersistenceIT {
         assertEquals(2, importer.rollback(committed.batchPublicId, false))
         assertEquals(0L, service.list(null, null, 0, 20, "serviceDate,desc").totalElements)
         assertEquals(0, importer.rollback(committed.batchPublicId, false))
+        // Tombstones are deliberate: a retry must not resurrect a rolled-back historical batch.
+        assertEquals(listOf(5, 6), importer.import(path).conflictRows)
+        assertFailsWith<IllegalArgumentException> { importer.import(path, false, source.sha256) }
+        assertEquals(2L, records.count())
+        assertEquals(0L, service.list(null, null, 0, 20, "serviceDate,desc").totalElements)
     }
 
     @Test fun `edits block retry and rollback without overwriting user data`() {
@@ -132,6 +137,20 @@ class GuidePersistenceIT {
         assertFailsWith<IllegalArgumentException> { importer.import(path, false, source.sha256) }
         assertEquals(1L, reports.count())
         assertEquals(0L, batches.count())
+    }
+
+    @Test fun `manual deletion cannot be undone by importer retry or batch rollback`() {
+        val source = source()
+        val batch = importer.import(path, false, source.sha256).batchPublicId!!
+        val report = reports.findByServiceDateAndDeletedAtIsNull(date)!!
+        service.delete(report.publicId, report.version, "editor")
+        assertEquals(listOf(6), importer.import(path).conflictRows)
+        assertFailsWith<IllegalArgumentException> { importer.import(path, false, source.sha256) }
+        assertFailsWith<IllegalArgumentException> { importer.rollback(batch, false) }
+        em.clear()
+        assertNull(reports.findByServiceDateAndDeletedAtIsNull(date))
+        assertEquals(1L, service.list(null, null, 0, 20, "serviceDate,desc").totalElements)
+        assertEquals(2L, records.count())
     }
 
     @Test

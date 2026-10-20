@@ -6,6 +6,8 @@ import com.hanmaum.dn.app.features.guide.repository.WorshipCountRepository
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
@@ -65,5 +67,26 @@ class WorshipCountServiceTest {
         assertEquals(1, result.content.size)
         assertFailsWith<GuideException> { service.list(date, date.minusDays(1), 0, 20, "serviceDate,desc") }
         assertFailsWith<GuideException> { service.list(null, null, 0, 201, "serviceDate,desc") }
+    }
+
+    @Test fun `page deltas use one bulk query with exact previous dates including outside page range`() {
+        val r1 = report()
+        val r2 = report(date.plusWeeks(1), 0, 0, 0)
+        val r3 = report(date.plusWeeks(2), 10, null, 0)
+        val r4 = report(date.plusWeeks(3))
+        val before = report(date.minusWeeks(1), 171, 338, 144)
+        whenever(repository.findRange(any(), any(), any<Pageable>())).thenReturn(PageImpl(listOf(r1, r2, r3, r4)))
+        val dates = setOf(date.minusWeeks(1), date, date.plusWeeks(1), date.plusWeeks(2))
+        whenever(repository.findByServiceDateInAndDeletedAtIsNull(dates)).thenReturn(listOf(before, r1, r2, r3))
+        val result = service.list(date, date.plusWeeks(3), 0, 200, "serviceDate,asc")
+        assertEquals(listOf(63L, -716L, null, null), result.content.map { it.previousWeekDelta })
+        verify(repository).findByServiceDateInAndDeletedAtIsNull(dates)
+        verify(repository, never()).findByServiceDateAndDeletedAtIsNull(any())
+    }
+
+    @Test fun `empty page does not query previous weeks`() {
+        whenever(repository.findRange(any(), any(), any<Pageable>())).thenReturn(PageImpl(emptyList()))
+        assertEquals(0, service.list(null, null, 0, 20, "serviceDate,desc").content.size)
+        verify(repository, never()).findByServiceDateInAndDeletedAtIsNull(any())
     }
 }
