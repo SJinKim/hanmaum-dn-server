@@ -101,11 +101,13 @@ internal object PiiLocalPlaintextPolicy {
 /**
  * JPA evaluates enum converters while building Hibernate metadata. Make that
  * bootstrap explicitly depend on the keyring initialization instead of relying
- * on incidental Spring bean ordering.
+ * on incidental Spring bean ordering. Flyway gets the same dependency because
+ * V20261021100000 re-encrypts 소속 while migrating.
  */
 class PiiCryptoJpaBootstrapDependency : BeanFactoryPostProcessor {
     override fun postProcessBeanFactory(beanFactory: ConfigurableListableBeanFactory) {
-        if (!beanFactory.containsBeanDefinition(ENTITY_MANAGER_FACTORY_BEAN)) {
+        val dependents = DEPENDENT_BEANS.filter { beanFactory.containsBeanDefinition(it) }
+        if (dependents.isEmpty()) {
             return
         }
 
@@ -113,17 +115,19 @@ class PiiCryptoJpaBootstrapDependency : BeanFactoryPostProcessor {
             beanFactory
                 .getBeanNamesForType(PiiCryptoConfiguration::class.java, false, false)
                 .single()
-        val definition = beanFactory.getBeanDefinition(ENTITY_MANAGER_FACTORY_BEAN)
-        val dependencies =
-            definition.dependsOn
-                .orEmpty()
-                .filterNot { it == piiConfigurationBean }
-                .plus(piiConfigurationBean)
-                .toTypedArray()
-        definition.setDependsOn(*dependencies)
+        dependents.forEach { beanName ->
+            val definition = beanFactory.getBeanDefinition(beanName)
+            val dependencies =
+                definition.dependsOn
+                    .orEmpty()
+                    .filterNot { it == piiConfigurationBean }
+                    .plus(piiConfigurationBean)
+                    .toTypedArray()
+            definition.setDependsOn(*dependencies)
+        }
     }
 
     private companion object {
-        const val ENTITY_MANAGER_FACTORY_BEAN = "entityManagerFactory"
+        val DEPENDENT_BEANS = listOf("entityManagerFactory", "flyway")
     }
 }
