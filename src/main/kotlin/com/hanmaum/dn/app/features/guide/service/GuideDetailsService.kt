@@ -1,0 +1,173 @@
+package com.hanmaum.dn.app.features.guide.service
+
+import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideDetailEntryRequest
+import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideDetailsCreateRequest
+import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideDetailsResponse
+import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideDetailsUpdateRequest
+import com.hanmaum.dn.app.features.guide.domain.GuideReportMode
+import com.hanmaum.dn.app.features.guide.domain.GuideRoom
+import com.hanmaum.dn.app.features.guide.domain.GuideSummaryConversion
+import com.hanmaum.dn.app.features.guide.domain.GuideWorshipDetail
+import com.hanmaum.dn.app.features.guide.domain.WorshipCountReport
+import com.hanmaum.dn.app.features.guide.repository.GuideSummaryConversionRepository
+import com.hanmaum.dn.app.features.guide.repository.GuideWorshipDetailRepository
+import com.hanmaum.dn.app.features.guide.repository.WorshipCountRepository
+import org.springframework.http.HttpStatus
+import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Isolation
+import org.springframework.transaction.annotation.Transactional
+import java.time.Instant
+import java.time.LocalDate
+import java.util.UUID
+
+@Service
+@Transactional(readOnly = true)
+class GuideDetailsService(
+    private val reports: WorshipCountRepository,
+    private val details: GuideWorshipDetailRepository,
+    private val conversions: GuideSummaryConversionRepository,
+    private val calculator: GuideDetailsCalculator,
+    private val summaries: WorshipCountService,
+) {
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    fun get(publicId: UUID): GuideDetailsResponse {
+        val report = reports.findByPublicIdAndDeletedAtIsNull(publicId) ?: missing()
+        if (report.reportMode == GuideReportMode.SUMMARY_ONLY) {
+            return GuideDetailsResponse(summaries.get(publicId), emptyList(), emptyList(), emptyList(), null)
+        }
+        val rows = details.findAllByReportPublicId(publicId)
+        check(rows.size == 12) { "Stored Guide detail matrix is incomplete." }
+        val calculated =
+            calculator.calculate(
+                rows.map {
+                    GuideDetailEntryRequest(it.room.name, it.serviceNumber, it.adultCount, it.schoolCount, it.youthCount)
+                },
+            )
+        return response(report, calculated)
+    }
+
+    @Transactional
+    fun create(
+        request: GuideDetailsCreateRequest,
+        actor: String,
+    ): GuideDetailsResponse {
+        validateDate(request.serviceDate)
+        val calculated = calculator.calculate(request.entries)
+        available(request.serviceDate, null)
+        val report = WorshipCountReport(request.serviceDate, null, null, null, request.notes, actor)
+        report.reportMode = GuideReportMode.DETAILED
+        applyCounts(report, calculated)
+        reports.saveAndFlush(report)
+        replaceMatrix(report, calculated)
+        return response(report, calculated)
+    }
+
+    @Transactional
+    fun update(
+        publicId: UUID,
+        request: GuideDetailsUpdateRequest,
+        actor: String,
+    ): GuideDetailsResponse {
+        validateDate(request.serviceDate)
+        if (request.version < 0) invalid("version", "Expected version must be nonnegative.")
+        val calculated = calculator.calculate(request.entries)
+        val report = reports.lockActive(publicId) ?: missing()
+        if (request.version != report.version) conflict("Report changed; reload before saving.")
+        available(request.serviceDate, publicId)
+        if (report.reportMode == GuideReportMode.SUMMARY_ONLY) {
+            val confirmation = request.expectedSummary ?: conflict("Explicit summary comparison is required to convert this report.")
+            if (listOf(confirmation.service1Count, confirmation.service2Count, confirmation.service3Count) !=
+                listOf(report.service1Count, report.service2Count, report.service3Count)
+            ) {
+                conflict("The confirmed summary no longer matches this report.")
+            }
+            conversions.save(
+                GuideSummaryConversion(
+                    report,
+                    report.version,
+                    report.serviceDate,
+                    report.service1Count,
+                    report.service2Count,
+                    report.service3Count,
+                    report.notes,
+                    actor,
+                ),
+            )
+        } else if (request.expectedSummary != null) {
+            invalid("expectedSummary", "This report is already detailed; summary conversion is not applicable.")
+        }
+        report.reportMode = GuideReportMode.DETAILED
+        report.serviceDate = request.serviceDate
+        report.notes = request.notes
+        report.updatedBy = actor
+        // Mark the parent dirty for every detail edit, even when actor/date/totals/notes are unchanged.
+        val now = Instant.now()
+        report.updatedAt = if (now == report.updatedAt) now.plusNanos(1) else now
+        applyCounts(report, calculated)
+        replaceMatrix(report, calculated)
+        reports.saveAndFlush(report)
+        return response(report, calculated)
+    }
+
+    private fun replaceMatrix(
+        report: WorshipCountReport,
+        calculated: GuideDetailCalculation,
+    ) {
+        details.deleteMatrix(report.publicId)
+        details.saveAllAndFlush(
+            calculated.rows.map {
+                GuideWorshipDetail(report, GuideRoom.valueOf(it.roomCode), it.serviceNumber, it.adultCount, it.schoolCount, it.youthCount)
+            },
+        )
+    }
+
+    private fun applyCounts(
+        report: WorshipCountReport,
+        calculated: GuideDetailCalculation,
+    ) {
+        report.service1Count =
+            calculated.services[0]
+                .counts.totalCount
+                ?.toInt()
+        report.service2Count =
+            calculated.services[1]
+                .counts.totalCount
+                ?.toInt()
+        report.service3Count =
+            calculated.services[2]
+                .counts.totalCount
+                ?.toInt()
+    }
+
+    private fun response(
+        report: WorshipCountReport,
+        calculated: GuideDetailCalculation,
+    ) = GuideDetailsResponse(
+        summaries.get(report.publicId),
+        calculated.entries,
+        calculated.rooms,
+        calculated.services,
+        calculated.totals,
+    )
+
+    private fun available(
+        date: LocalDate,
+        publicId: UUID?,
+    ) {
+        val existing = reports.findByServiceDateAndDeletedAtIsNull(date)
+        if (existing != null && existing.publicId != publicId) conflict("An active report already exists for this date.")
+    }
+
+    private fun validateDate(date: LocalDate) {
+        if (date.year !in 1..9999) invalid("serviceDate", "Year must be between 1 and 9999.")
+    }
+
+    private fun invalid(
+        field: String,
+        message: String,
+    ): Nothing = throw GuideDetailValidationException(mapOf(field to message))
+
+    private fun conflict(message: String): Nothing = throw GuideException(HttpStatus.CONFLICT, message)
+
+    private fun missing(): Nothing = throw GuideException(HttpStatus.NOT_FOUND, "Report not found.")
+}

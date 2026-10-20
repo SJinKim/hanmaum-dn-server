@@ -3,6 +3,8 @@ package com.hanmaum.dn.app.features.guide.domain
 import com.hanmaum.dn.app.common.jpa.BaseEntity
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
 import jakarta.persistence.Table
 import jakarta.persistence.Version
 import java.time.LocalDate
@@ -25,5 +27,11 @@ class WorshipCountReport(
 ) : BaseEntity() {
     @Version var version: Long = 0
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "report_mode", nullable = false, length = 16)
+    var reportMode: GuideReportMode = GuideReportMode.SUMMARY_ONLY
+
     fun total(): Long? = worshipTotal(listOf(service1Count, service2Count, service3Count))
 }
+
+enum class GuideReportMode { SUMMARY_ONLY, DETAILED }

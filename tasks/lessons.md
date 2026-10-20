@@ -8,6 +8,9 @@
 
 ## Lessons
 
+### Child-only attendance edits must advance the parent version
+- A room redistribution can leave all parent totals unchanged. Touch the parent audit state in the same locked transaction so its optimistic version still advances; prove both same-total saves and an overlapping legacy summary writer with PostgreSQL tests.
+
 ### Import review: distinguish source formats and application lifecycle
 - Parse German thousands separators only in CSV; an XLSX cached decimal is fractional data and must be rejected.
 - Translate only the named date-uniqueness constraint to 409. Log safe diagnostics for other persistence failures without PostgreSQL row details.
