@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.common.pii
 
 import jakarta.annotation.PostConstruct
+import org.flywaydb.core.Flyway
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor
@@ -101,11 +102,16 @@ internal object PiiLocalPlaintextPolicy {
 /**
  * JPA evaluates enum converters while building Hibernate metadata. Make that
  * bootstrap explicitly depend on the keyring initialization instead of relying
- * on incidental Spring bean ordering.
+ * on incidental Spring bean ordering. Every Flyway bean gets the same dependency
+ * because V20261021100000 re-encrypts 소속 while migrating; it is found by type
+ * so a renamed or custom Flyway bean cannot slip past.
  */
 class PiiCryptoJpaBootstrapDependency : BeanFactoryPostProcessor {
     override fun postProcessBeanFactory(beanFactory: ConfigurableListableBeanFactory) {
-        if (!beanFactory.containsBeanDefinition(ENTITY_MANAGER_FACTORY_BEAN)) {
+        val dependents =
+            listOf(ENTITY_MANAGER_FACTORY).filter { beanFactory.containsBeanDefinition(it) } +
+                beanFactory.getBeanNamesForType(Flyway::class.java, true, false)
+        if (dependents.isEmpty()) {
             return
         }
 
@@ -113,17 +119,19 @@ class PiiCryptoJpaBootstrapDependency : BeanFactoryPostProcessor {
             beanFactory
                 .getBeanNamesForType(PiiCryptoConfiguration::class.java, false, false)
                 .single()
-        val definition = beanFactory.getBeanDefinition(ENTITY_MANAGER_FACTORY_BEAN)
-        val dependencies =
-            definition.dependsOn
-                .orEmpty()
-                .filterNot { it == piiConfigurationBean }
-                .plus(piiConfigurationBean)
-                .toTypedArray()
-        definition.setDependsOn(*dependencies)
+        dependents.forEach { beanName ->
+            val definition = beanFactory.getBeanDefinition(beanName)
+            val dependencies =
+                definition.dependsOn
+                    .orEmpty()
+                    .filterNot { it == piiConfigurationBean }
+                    .plus(piiConfigurationBean)
+                    .toTypedArray()
+            definition.setDependsOn(*dependencies)
+        }
     }
 
     private companion object {
-        const val ENTITY_MANAGER_FACTORY_BEAN = "entityManagerFactory"
+        const val ENTITY_MANAGER_FACTORY = "entityManagerFactory"
     }
 }
