@@ -1,13 +1,14 @@
 package com.hanmaum.dn.app.features.guide.service
 
+import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideAreaDefinition
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideCountTotals
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideDetailEntryRequest
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideDetailEntryResponse
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideRoomTotals
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideServiceTotals
-import com.hanmaum.dn.app.features.guide.domain.GuideRoom
 import com.hanmaum.dn.app.features.guide.domain.worshipTotal
 import org.springframework.stereotype.Component
+import java.util.UUID
 
 class GuideDetailValidationException(
     val fieldErrors: Map<String, String>,
@@ -23,10 +24,18 @@ data class GuideDetailCalculation(
 
 @Component
 class GuideDetailsCalculator {
-    fun calculate(entries: List<GuideDetailEntryRequest>): GuideDetailCalculation {
+    fun calculate(
+        entries: List<GuideDetailEntryRequest>,
+        areas: List<GuideAreaDefinition>,
+    ): GuideDetailCalculation {
+        check(
+            areas.isNotEmpty() && areas.map { it.areaPublicId }.distinct().size == areas.size,
+        ) { "Report requires unique counting areas." }
+        val ordered = areas.sortedWith(compareBy({ it.displayOrder }, { it.areaPublicId }))
+        val allowed = areas.map { it.areaPublicId }.toSet()
         val errors = linkedMapOf<String, String>()
-        val seen = mutableSetOf<Pair<String, Int>>()
-        if (entries.size > 12) errors["entries"] = "At most twelve room/service rows are allowed."
+        val seen = mutableSetOf<Pair<UUID, Int>>()
+        if (entries.size > areas.size * 3) errors["entries"] = "Too many counting-area/service rows."
         val nullableEntries: List<GuideDetailEntryRequest?> = entries
         nullableEntries.forEachIndexed { index, entry ->
             val path = "entries[$index]"
@@ -34,9 +43,9 @@ class GuideDetailsCalculator {
                 errors[path] = "A row cannot be null."
                 return@forEachIndexed
             }
-            if (GuideRoom.entries.none { it.name == entry.roomCode }) errors["$path.roomCode"] = "Unknown room code."
+            if (entry.areaPublicId !in allowed) errors["$path.areaPublicId"] = "Counting area does not belong to this report."
             if (entry.serviceNumber !in 1..3) errors["$path.serviceNumber"] = "Service must be 1, 2 or 3."
-            if (!seen.add(entry.roomCode to entry.serviceNumber)) errors[path] = "Duplicate room/service row."
+            if (!seen.add(entry.areaPublicId to entry.serviceNumber)) errors[path] = "Duplicate room/service row."
             if (entry.serviceNumber != 3 && entry.youthCount != null) errors["$path.youthCount"] = "Youth is allowed only for service 3."
             val counts = mapOf("adultCount" to entry.adultCount, "schoolCount" to entry.schoolCount, "youthCount" to entry.youthCount)
             counts.forEach { (field, value) ->
@@ -44,10 +53,10 @@ class GuideDetailsCalculator {
             }
         }
         if (errors.isNotEmpty()) throw GuideDetailValidationException(errors)
-        val byKey = entries.associateBy { it.roomCode to it.serviceNumber }
+        val byKey = entries.associateBy { it.areaPublicId to it.serviceNumber }
         val rows =
-            GuideRoom.entries.flatMap { room ->
-                (1..3).map { service -> byKey[room.name to service] ?: GuideDetailEntryRequest(room.name, service) }
+            ordered.flatMap { area ->
+                (1..3).map { service -> byKey[area.areaPublicId to service] ?: GuideDetailEntryRequest(area.areaPublicId, service) }
             }
         val services =
             (1..3).map { service ->
@@ -60,8 +69,22 @@ class GuideDetailsCalculator {
         if (errors.isNotEmpty()) throw GuideDetailValidationException(errors)
         return GuideDetailCalculation(
             rows,
-            rows.map { GuideDetailEntryResponse(it.roomCode, it.serviceNumber, totals(listOf(it))) },
-            GuideRoom.entries.map { room -> GuideRoomTotals(room.name, room.label, totals(rows.filter { it.roomCode == room.name })) },
+            rows.map { GuideDetailEntryResponse(it.areaPublicId, it.serviceNumber, totals(listOf(it))) },
+            ordered.map { area ->
+                GuideRoomTotals(
+                    area.areaPublicId,
+                    area.roomPublicId,
+                    area.roomName,
+                    area.label,
+                    area.displayOrder,
+                    totals(
+                        rows.filter {
+                            it.areaPublicId ==
+                                area.areaPublicId
+                        },
+                    ),
+                )
+            },
             services,
             totals(rows),
         )

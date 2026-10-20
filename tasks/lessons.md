@@ -235,3 +235,7 @@
 ### Reconciliation must surface parser failures and follow configuration growth
 - **Correction**: Review found unchecked jq process substitutions, a fixed group count in the integration test and validation of an unused dashboard URL in access-only mode.
 - **Rule**: Materialize parsed work lists with checked exit codes before any writes. Derive expected managed state from the configuration, and isolate validation to the settings used by the selected mode. Keep failed integration diagnostics visible after temporary resources are removed.
+
+### Reuse room master data for ministry counting locations
+- **Correction**: Guide counting locations were encoded as a fixed enum despite the existing room master table.
+- **Rule**: Inspect shared location master data before adding feature-specific room identifiers. Reference the existing room by foreign key; model counting areas separately when one room has multiple areas, and retain historical report labels and membership when configuration changes.

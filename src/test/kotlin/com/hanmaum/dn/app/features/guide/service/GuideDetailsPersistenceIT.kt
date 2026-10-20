@@ -5,6 +5,7 @@ import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideDetailsCreateRequest
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideDetailsUpdateRequest
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideSummaryConfirmation
 import com.hanmaum.dn.app.features.guide.api.v1.dto.WorshipCountRequest
+import com.hanmaum.dn.app.features.guide.guideAreas
 import com.hanmaum.dn.app.features.guide.guideYouthExample
 import com.hanmaum.dn.app.features.guide.guideZeroRows
 import com.hanmaum.dn.app.features.guide.repository.GuideSummaryConversionRepository
@@ -99,8 +100,8 @@ class GuideDetailsPersistenceIT {
         val moved =
             guideYouthExample().map {
                 when {
-                    it.roomCode == "MAIN_1F_A" && it.serviceNumber == 3 -> it.copy(youthCount = 0)
-                    it.roomCode == "MAIN_1F_B" && it.serviceNumber == 3 -> it.copy(youthCount = 25)
+                    it.areaPublicId == guideAreas[0].areaPublicId && it.serviceNumber == 3 -> it.copy(youthCount = 0)
+                    it.areaPublicId == guideAreas[1].areaPublicId && it.serviceNumber == 3 -> it.copy(youthCount = 25)
                     else -> it
                 }
             }
@@ -115,7 +116,7 @@ class GuideDetailsPersistenceIT {
                 .get(initial.report.publicId)
                 .entries
                 .single {
-                    it.roomCode == "MAIN_1F_B" && it.serviceNumber == 3
+                    it.areaPublicId == guideAreas[1].areaPublicId && it.serviceNumber == 3
                 }.counts.youthCount,
         )
         assertFailsWith<GuideException> { service.update(initial.report.publicId, request, "editor") }
@@ -139,7 +140,16 @@ class GuideDetailsPersistenceIT {
             )
         assertEquals(0L, zeros.report.totalCount)
         assertEquals(true, zeros.report.complete)
-        val partial = guideZeroRows().map { if (it.roomCode == "PRESCHOOL" && it.serviceNumber == 2) it.copy(schoolCount = null) else it }
+        val partial =
+            guideZeroRows().map {
+                if (it.areaPublicId == guideAreas[3].areaPublicId &&
+                    it.serviceNumber == 2
+                ) {
+                    it.copy(schoolCount = null)
+                } else {
+                    it
+                }
+            }
         val result = service.update(draft.report.publicId, GuideDetailsUpdateRequest(date, null, zeros.report.version, partial), "editor")
         em.clear()
         assertNull(result.report.service2Count)
@@ -153,7 +163,7 @@ class GuideDetailsPersistenceIT {
         val initial = service.create(GuideDetailsCreateRequest(date, entries = guideYouthExample()), "editor")
         val overflow =
             guideYouthExample().map {
-                if (it.roomCode == "MAIN_1F_A" &&
+                if (it.areaPublicId == guideAreas[0].areaPublicId &&
                     it.serviceNumber == 3
                 ) {
                     it.copy(adultCount = Int.MAX_VALUE)

@@ -5,7 +5,6 @@ import com.fasterxml.jackson.annotation.JsonProperty
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotNull
-import jakarta.validation.constraints.Size
 import tools.jackson.core.JsonParser
 import tools.jackson.core.JsonToken
 import tools.jackson.databind.DeserializationContext
@@ -13,6 +12,7 @@ import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ValueDeserializer
 import tools.jackson.databind.annotation.JsonDeserialize
 import java.time.LocalDate
+import java.util.UUID
 
 class GuideVersionDeserializer : ValueDeserializer<Long>() {
     override fun deserialize(
@@ -41,8 +41,11 @@ abstract class GuideStrictRequest {
 
 @Schema(additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
 data class GuideDetailEntryRequest(
-    @field:Schema(requiredMode = Schema.RequiredMode.REQUIRED, allowableValues = ["MAIN_1F_A", "MAIN_1F_B", "MAIN_2F_C", "PRESCHOOL"])
-    val roomCode: String,
+    @field:Schema(
+        requiredMode = Schema.RequiredMode.REQUIRED,
+        description = "Counting area UUID from the report snapshot or current configuration on create.",
+    )
+    val areaPublicId: UUID,
     @field:JsonDeserialize(using = GuideCountDeserializer::class)
     @param:JsonProperty(required = true)
     @field:Schema(requiredMode = Schema.RequiredMode.REQUIRED, minimum = "1", maximum = "3") val serviceNumber: Int,
@@ -65,8 +68,8 @@ data class GuideDetailsCreateRequest(
     @field:Schema(requiredMode = Schema.RequiredMode.REQUIRED)
     val serviceDate: LocalDate,
     val notes: String? = null,
-    @field:Valid @field:Size(max = 12)
-    @field:Schema(description = "Subset allowed; omitted cells/rows become unknown. Normalized to 12 rows, never implicit zero.")
+    @field:Valid
+    @field:Schema(description = "Subset allowed; omitted cells/rows become unknown. Three rows per snapshotted area, never implicit zero.")
     val entries: List<@NotNull GuideDetailEntryRequest> = emptyList(),
 ) : GuideStrictRequest()
 
@@ -92,7 +95,7 @@ data class GuideDetailsUpdateRequest(
     val notes: String?,
     @param:JsonProperty(required = true) @field:JsonDeserialize(using = GuideVersionDeserializer::class)
     @field:Schema(requiredMode = Schema.RequiredMode.REQUIRED, minimum = "0") val version: Long,
-    @param:JsonProperty(required = true) @field:Valid @field:Size(max = 12)
+    @param:JsonProperty(required = true) @field:Valid
     @field:Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Full replacement; omitted rows become unknown.")
     val entries: List<@NotNull GuideDetailEntryRequest>,
     @field:Schema(
@@ -128,14 +131,17 @@ data class GuideCountTotals(
 )
 
 data class GuideDetailEntryResponse(
-    val roomCode: String,
+    val areaPublicId: UUID,
     val serviceNumber: Int,
     val counts: GuideCountTotals,
 )
 
 data class GuideRoomTotals(
-    val roomCode: String,
-    val roomLabel: String,
+    val areaPublicId: UUID,
+    val roomPublicId: UUID,
+    val roomName: String,
+    val label: String,
+    val displayOrder: Int,
     val counts: GuideCountTotals,
 )
 

@@ -22,43 +22,77 @@ contains the same public UUID, date, notes, version and three canonical counts
 used by history/statistics. `reportMode` is returned in **all** parent/list/detail
 responses: `SUMMARY_ONLY` or `DETAILED`. Do not infer it from dates or counts.
 
-## Stable matrix
+## Configurable areas backed by room master data
 
-| Code / display order | Label |
+The existing `room` table is the physical-room source of truth. Guide counting
+areas reference rooms by foreign key and expose UUIDs. Multiple areas may
+reference one room, so 본당1층A and 본당1층B use the same 1F sanctuary.
+There is no room enum or fixed four-area/twelve-row limit in application code.
+
+| Method | Route under `/api/v1/guide/counting-areas` | Purpose |
+|---|---|---|
+| GET | (root) | Current configuration, including inactive areas and versions |
+| GET | `/rooms` | Existing active rooms on active floors, with room/floor UUIDs |
+| POST | (root) | Add area for future reports; roomPublicId, label, displayOrder, active |
+| PUT | `/{publicId}` | Replace those settings with expected version; 409 stale, 404 absent |
+
+Existing Guide read/write roles apply. A label has 1–200 characters; displayOrder
+is a nonnegative JSON integer. Room/floor must be active. Deactivating an existing
+area without changing its room is also allowed after that room is deleted.
+No physical rooms are created and no application deployment is needed to add an
+area using the API. The configuration management UI belongs to subsequent web work.
+
+Initial configuration:
+
+| Label | Existing room |
 |---|---|
-| `MAIN_1F_A` | 본당1층A |
-| `MAIN_1F_B` | 본당1층B |
-| `MAIN_2F_C` | 본당2층C |
-| `PRESCHOOL` | 유아유치부 |
+| 본당1층A | 1-1 대예배실, floor 1 |
+| 본당1층B | 1-1 대예배실, floor 1 |
+| 본당2층C | 대예배실 2층, floor 2 |
+| 유아유치부 | 1-3 유아유치부실, floor 1 |
 
-Each room has serviceNumber 1, 2 and 3: twelve unique rows and **28** active
-numeric fields. Each row accepts adultCount and schoolCount. Only service 3
-accepts youthCount; explicit zero for youth in service 1/2 is also rejected.
-비전홀 and 소예배실 are not room codes.
+비전홀 and 소예배실 are initially not configured for counting; they remain ordinary
+room master records and may be intentionally selected later. No rooms are matched
+by display name at runtime; the initial migration requires unambiguous existing
+rooms rather than inventing or guessing physical locations.
 
-POST permits an omitted/empty `entries` array for a draft. A submitted subset
-is normalized to all twelve rows with omitted counts/rows **NULL**, never zero.
-PUT is a full replacement: `entries`, `notes` and the expected `version` are
-required; omitted rows become unknown. Explicit `notes: null` clears notes.
-Unknown/read-only JSON properties are rejected, including reportMode,
-totalCount and response-shaped `counts` objects. This prevents silent loss of
-base counts if a read DTO is accidentally sent as a write request.
+At detail creation or explicit SUMMARY_ONLY conversion, the server snapshots the
+currently active eligible areas: membership, room identity/name, area label and
+order. Each contributes three service rows and seven numeric inputs. The initial
+four areas therefore produce twelve rows / 28 inputs; five produce fifteen / 35.
+No active eligible areas returns 409. A later activation, reassignment, room rename,
+deactivation or reordering applies to new reports only. Existing reports always
+read and edit their original snapshot, including archived rooms/areas. New areas
+cannot be injected into an existing report by sending their UUIDs.
 
-Example POST (only one populated row; every other base count remains unknown):
+`rooms` in the detail response lists these counting-area snapshots (one item per
+area, even when areas share a room) with areaPublicId, roomPublicId, roomName,
+label, displayOrder and derived counts. Detail entries use **areaPublicId +
+serviceNumber**, never a room enum or internal database ID.
+
+POST permits omitted/empty `entries` for a draft. Subsets normalize to three
+rows per snapshot area; omitted counts are NULL, never implicit zero. Each row
+accepts adultCount/schoolCount; only service 3 accepts youthCount (explicit youth
+zero on service 1/2 is rejected). PUT fully replaces the counts and requires
+entries, explicit notes (null clears) and expected version. Unknown/read-only
+properties, including old roomCode, reportMode, totals and response-shaped counts,
+are rejected. A concurrent configuration addition can make a new report incomplete;
+the returned snapshot is authoritative for completing that draft.
+
+Synthetic example POST, using an area UUID returned by configuration:
 
 ```json
 {
   "serviceDate": "2026-10-25",
   "notes": "synthetic example",
   "entries": [
-    {"roomCode": "MAIN_1F_A", "serviceNumber": 3, "adultCount": 40, "youthCount": 25, "schoolCount": 5}
+    {"areaPublicId": "e3310000-0000-4000-8000-000000000001", "serviceNumber": 3, "adultCount": 40, "youthCount": 25, "schoolCount": 5}
   ]
 }
 ```
 
-This row's compatible adult count is 65, and its total is 70. Its service/day
-total is still NULL until all other required base counts are explicitly entered.
-Enter real zero for a counted empty cell; an unused/unknown cell stays NULL.
+This row's compatible adult count is 65, and its total is 70. Service/day totals
+remain NULL until all required snapshot counts are explicitly entered.
 
 ## Arithmetic and numeric contract
 
@@ -125,12 +159,14 @@ date collisions, missing/mismatched conversion confirmation and direct summary
 writes to detailed reports return 409 ProblemDetail. Missing/soft-deleted
 reports return 404; read/load failures are not converted into empty responses.
 
-Three additive Flyway migrations add the mode, detail rows and conversion audit.
+Additive Flyway migrations add the mode, detail rows, conversion audit, room-backed
+configuration and report snapshots. A forward migration backfills the original
+four-area detail matrices without changing their counts, notes or parent version.
 Existing reports default to SUMMARY_ONLY. Apply schema separately from any
 historical import. Soft-deleted parents remain hidden; their detail/audit rows
 are retained, with cascade cleanup only for a physical parent deletion.
 
 The generated ops contract is the client handoff. Web entry/edit UI is tracked
-in web#237/#235. Tests cover room/service totals, NULL/0, bounds/overflow, mode
+in web#237/#235. Tests cover area/service totals, NULL/0, bounds/overflow, mode
 protection, explicit conversion audit and real concurrent legacy/detail writers.
 No deployment, live import or UI implementation is part of this server PR.

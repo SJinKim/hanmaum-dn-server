@@ -16,7 +16,7 @@ import tools.jackson.core.JacksonException
 
 /** Never log malformed payloads: they can contain the free-text notes. */
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@RestControllerAdvice(assignableTypes = [GuideDetailsController::class])
+@RestControllerAdvice(assignableTypes = [GuideDetailsController::class, GuideAreaController::class])
 class GuideDetailValidationHandler {
     @ExceptionHandler(MethodArgumentTypeMismatchException::class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)

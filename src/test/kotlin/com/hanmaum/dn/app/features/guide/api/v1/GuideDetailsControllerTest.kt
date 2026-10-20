@@ -5,6 +5,7 @@ import com.hanmaum.dn.app.common.config.SecurityConfig
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideDetailsCreateRequest
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideDetailsResponse
 import com.hanmaum.dn.app.features.guide.api.v1.dto.WorshipCountResponse
+import com.hanmaum.dn.app.features.guide.guideAreas
 import com.hanmaum.dn.app.features.guide.guideYouthExample
 import com.hanmaum.dn.app.features.guide.service.GuideDetailValidationException
 import com.hanmaum.dn.app.features.guide.service.GuideDetailsCalculator
@@ -51,8 +52,9 @@ class GuideDetailsControllerTest {
 
     @MockitoBean private lateinit var decoder: JwtDecoder
     private val id = UUID.randomUUID()
+    private val areaId = guideAreas.first().areaPublicId
     private val url = "/api/v1/guide/worship-counts"
-    private val calculated = GuideDetailsCalculator().calculate(guideYouthExample())
+    private val calculated = GuideDetailsCalculator().calculate(guideYouthExample(), guideAreas)
     private val response =
         GuideDetailsResponse(
             WorshipCountResponse(id, LocalDate.of(2026, 10, 25), 0, 0, 70, 70, null, null, 0, "DETAILED", true),
@@ -115,7 +117,7 @@ class GuideDetailsControllerTest {
         val invalid = listOf("-1", "1.5", "1.0", "1e3", "2147483648", "\"12\"", "\"abc\"", "true", "[]", "{}")
         for (field in listOf("adultCount", "schoolCount", "youthCount")) {
             for (value in invalid) {
-                val body = """{"serviceDate":"2026-10-25","entries":[{"roomCode":"MAIN_1F_A","serviceNumber":3,"$field":$value}]}"""
+                val body = """{"serviceDate":"2026-10-25","entries":[{"areaPublicId":"$areaId","serviceNumber":3,"$field":$value}]}"""
                 mvc
                     .perform(post("$url/details").with(actor("GUIDE_EDITOR")).contentType(MediaType.APPLICATION_JSON).content(body))
                     .andExpect(status().isBadRequest)
@@ -134,7 +136,7 @@ class GuideDetailsControllerTest {
     @Test fun `integer bounds zero and null survive json deserialization without coercion`() {
         whenever(service.create(any(), any())).thenReturn(response)
         for (value in listOf("0", "2147483647", "null")) {
-            val body = """{"serviceDate":"2026-10-25","entries":[{"roomCode":"MAIN_1F_A","serviceNumber":3,"adultCount":$value}]}"""
+            val body = """{"serviceDate":"2026-10-25","entries":[{"areaPublicId":"$areaId","serviceNumber":3,"adultCount":$value}]}"""
             mvc
                 .perform(post("$url/details").with(actor("GUIDE_EDITOR")).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated)
@@ -149,7 +151,10 @@ class GuideDetailsControllerTest {
             listOf(
                 create.replace("\"entries\":[]", "\"entries\":[],\"totalCount\":999"),
                 create.replace("\"entries\":[]", "\"entries\":[],\"reportMode\":\"SUMMARY_ONLY\""),
-                create.replace("[]", """[{"roomCode":"MAIN_1F_A","serviceNumber":3,"counts":{"adultCount":40}}]"""),
+                create.replace(
+                    "[]",
+                    """[{"areaPublicId":"$areaId","serviceNumber":3,"counts":{"adultCount":40}}]""",
+                ),
             )
         cases.forEach { body ->
             mvc
@@ -203,11 +208,11 @@ class GuideDetailsControllerTest {
     @Test fun `service validation and stale mode errors preserve distinct 400 and 409 responses`() {
         whenever(
             service.create(any(), any()),
-        ).thenThrow(GuideDetailValidationException(mapOf("entries[0].roomCode" to "Unknown room code.")))
+        ).thenThrow(GuideDetailValidationException(mapOf("entries[0].areaPublicId" to "Unknown room code.")))
         mvc
             .perform(post("$url/details").with(actor("GUIDE_EDITOR")).contentType(MediaType.APPLICATION_JSON).content(create))
             .andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.data.fieldErrors['entries[0].roomCode']").exists())
+            .andExpect(jsonPath("$.data.fieldErrors['entries[0].areaPublicId']").exists())
         whenever(
             service.update(any(), any(), any()),
         ).thenThrow(GuideException(HttpStatus.CONFLICT, "Report changed; reload before saving."))

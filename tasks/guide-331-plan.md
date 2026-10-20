@@ -1,18 +1,13 @@
-# HDN-331 implementation plan
+# HDN-331 — configurable Guide details
 
-## Implementation contract for #331
+## Approved scope update: configurable counting areas backed by room master data
 
-1. Add POST `/api/v1/guide/worship-counts/details`, GET/PUT `/api/v1/guide/worship-counts/{publicId}/details`. Reuse the existing UUID/date/notes/version and Guide permissions. `reportMode` stays the existing string field, with explicit `SUMMARY_ONLY` / `DETAILED` values in list/get/detail responses.
-2. Stable room codes in display order: `MAIN_1F_A`, `MAIN_1F_B`, `MAIN_2F_C`, `PRESCHOOL` (본당1층A, 본당1층B, 본당2층C, 유아유치부). Entry keys are roomCode + serviceNumber (1–3). Omitted entries/counts become unknown, never zero; a full detail save replaces the matrix and normalizes it to 12 rows. Youth is permitted only for service 3, including rejecting explicit zero elsewhere.
-3. Single values are JSON integer tokens or null, 0…2,147,483,647; strings, fractions, exponent tokens, booleans, arrays/objects and overflow are rejected with 400 and field errors in an ApiResponse payload. Known subtotals for each service must stay within int32 even in drafts. Canonical service sums remain int32; all other derived totals use int64, maximum 6,442,450,941 across the three services. Any missing required count makes that sum null. Compatible adult = adult + youth at service 3; youth is added exactly once.
-4. PUT requires the expected report version and explicit notes (null clears). Converting SUMMARY_ONLY requires an `expectedSummary` object matching the three existing canonical counts, alongside the version; preserve the original date/counts/notes/version/actor in a conversion audit. Plain GET never changes a summary or invents detail rows. Detail reports reject the original direct-summary PATCH, and cannot be silently converted back. Every detail save advances the parent version, including same-total room redistribution.
-5. Add forward-only schema migrations, meaningful aggregation/controller/PostgreSQL concurrency tests, generated OpenAPI sync + linked ops PR. Historical import remains unchanged. No deployment, live import or automatic merge.
+Supersedes the fixed room enum/12-row contract above, as explicitly requested by the user on 20 October 2026. Continue server #331 / PR337 and generated ops PR65; no new unrelated feature, UI, deployment or merge.
 
-Progress: implementation and pre-PR review complete; PR delivery pending.
+1. Add Guide counting-area configuration referencing existing `room`: UUID identity, label, display order, active flag and expected-version edits. GET/POST `/api/v1/guide/counting-areas`, PUT `/{publicId}`, GET `/rooms` for eligible room selection. Existing GUIDE_VIEWER reads, GUIDE_EDITOR writes; ADMIN/PASTOR hierarchy preserved. Missing/deleted room/floor rejected, version conflicts 409, invalid data 400 field errors.
+2. Seed the four approved initial areas from the existing room table (A/B reference the same 1F sanctuary; C the 2F sanctuary; preschool its existing room). No new physical rooms or enum; 비전홀/소예배실 stay excluded initially but remain selectable existing rooms for intentional future additions.
+3. At detail create or explicit summary conversion, persist a report-specific snapshot of active area membership, room identity/name, label and order. Later configuration changes affect new reports only. Existing detailed edits always retain their snapshot, including deactivated/renamed rooms/areas. An empty active configuration cannot create/convert a detail report (409).
+4. Detail inputs use `areaPublicId` + serviceNumber, never internal IDs or enum codes. Normalize three services per snapshot area, any number of areas; omitted counts remain NULL. Preserve existing numeric/auth/conversion/parent-version/concurrency rules and canonical summary totals. Foreign keys + uniqueness enforce report/area/service ownership.
+5. Forward-only migrations preserve any pre-revision detail reports and original totals/versions. Test dynamic fifth area, room reuse, activation/order/rename isolation, deleted-room handling, snapshot edits and old migration upgrade. Regenerate API contract, update both open PRs, run focused tests then full gates and exact-head CI. No merge/deploy/live import.
 
-Validation:
-- Full default test suite, ktlintCheck and bootJar passed.
-- All 52 focused Guide/Worship tests passed against disposable PostgreSQL, including persistence, concurrent summary/detail writes and existing historical-import regressions.
-- Existing summary migration upgrade retained counts, date, notes and version; no detail rows were invented.
-- OpenAPI regenerated from this checkout against disposable PostgreSQL. Existing paths are unchanged; operation IDs, references, nullable objects and success/error responses were checked.
-- Backend-only change: frontend checks are not applicable. No secrets, PII, TODO/FIXME additions, deployment, live import or merge.
+Progress: implementation and focused tests passed; migration upgrade preserves old detail counts/notes/version. Full default suite (1,179 tests), focused Guide suite (61 tests), lint, bootJar, 87-migration startup and generated contract checks passed. PR337 / ops65 updated for review; no merge or live rollout.

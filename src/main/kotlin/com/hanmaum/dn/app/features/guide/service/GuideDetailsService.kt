@@ -1,14 +1,17 @@
 package com.hanmaum.dn.app.features.guide.service
 
+import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideAreaDefinition
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideDetailEntryRequest
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideDetailsCreateRequest
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideDetailsResponse
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideDetailsUpdateRequest
+import com.hanmaum.dn.app.features.guide.domain.GuideReportArea
 import com.hanmaum.dn.app.features.guide.domain.GuideReportMode
-import com.hanmaum.dn.app.features.guide.domain.GuideRoom
 import com.hanmaum.dn.app.features.guide.domain.GuideSummaryConversion
 import com.hanmaum.dn.app.features.guide.domain.GuideWorshipDetail
 import com.hanmaum.dn.app.features.guide.domain.WorshipCountReport
+import com.hanmaum.dn.app.features.guide.repository.GuideCountingAreaRepository
+import com.hanmaum.dn.app.features.guide.repository.GuideReportAreaRepository
 import com.hanmaum.dn.app.features.guide.repository.GuideSummaryConversionRepository
 import com.hanmaum.dn.app.features.guide.repository.GuideWorshipDetailRepository
 import com.hanmaum.dn.app.features.guide.repository.WorshipCountRepository
@@ -28,6 +31,8 @@ class GuideDetailsService(
     private val conversions: GuideSummaryConversionRepository,
     private val calculator: GuideDetailsCalculator,
     private val summaries: WorshipCountService,
+    private val configuredAreas: GuideCountingAreaRepository,
+    private val reportAreas: GuideReportAreaRepository,
 ) {
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     fun get(publicId: UUID): GuideDetailsResponse {
@@ -36,12 +41,14 @@ class GuideDetailsService(
             return GuideDetailsResponse(summaries.get(publicId), emptyList(), emptyList(), emptyList(), null)
         }
         val rows = details.findAllByReportPublicId(publicId)
-        check(rows.size == 12) { "Stored Guide detail matrix is incomplete." }
+        val areas = reportAreas.findAllByReportPublicId(publicId)
+        check(areas.isNotEmpty() && rows.size == areas.size * 3) { "Stored Guide detail matrix is incomplete." }
         val calculated =
             calculator.calculate(
                 rows.map {
-                    GuideDetailEntryRequest(it.room.name, it.serviceNumber, it.adultCount, it.schoolCount, it.youthCount)
+                    GuideDetailEntryRequest(it.reportArea.area.publicId, it.serviceNumber, it.adultCount, it.schoolCount, it.youthCount)
                 },
+                areas.map(::definition),
             )
         return response(report, calculated)
     }
@@ -52,13 +59,15 @@ class GuideDetailsService(
         actor: String,
     ): GuideDetailsResponse {
         validateDate(request.serviceDate)
-        val calculated = calculator.calculate(request.entries)
         available(request.serviceDate, null)
         val report = WorshipCountReport(request.serviceDate, null, null, null, request.notes, actor)
+        val areas = currentAreas(report)
+        val calculated = calculator.calculate(request.entries, areas.map(::definition))
         report.reportMode = GuideReportMode.DETAILED
         applyCounts(report, calculated)
         reports.saveAndFlush(report)
-        replaceMatrix(report, calculated)
+        reportAreas.saveAllAndFlush(areas)
+        replaceMatrix(report, calculated, areas)
         return response(report, calculated)
     }
 
@@ -70,11 +79,13 @@ class GuideDetailsService(
     ): GuideDetailsResponse {
         validateDate(request.serviceDate)
         if (request.version < 0) invalid("version", "Expected version must be nonnegative.")
-        val calculated = calculator.calculate(request.entries)
         val report = reports.lockActive(publicId) ?: missing()
         if (request.version != report.version) conflict("Report changed; reload before saving.")
         available(request.serviceDate, publicId)
-        if (report.reportMode == GuideReportMode.SUMMARY_ONLY) {
+        val converting = report.reportMode == GuideReportMode.SUMMARY_ONLY
+        val areas = if (converting) currentAreas(report) else reportAreas.findAllByReportPublicId(publicId)
+        val calculated = calculator.calculate(request.entries, areas.map(::definition))
+        if (converting) {
             val confirmation = request.expectedSummary ?: conflict("Explicit summary comparison is required to convert this report.")
             if (listOf(confirmation.service1Count, confirmation.service2Count, confirmation.service3Count) !=
                 listOf(report.service1Count, report.service2Count, report.service3Count)
@@ -104,7 +115,8 @@ class GuideDetailsService(
         val now = Instant.now()
         report.updatedAt = if (now == report.updatedAt) now.plusNanos(1) else now
         applyCounts(report, calculated)
-        replaceMatrix(report, calculated)
+        if (converting) reportAreas.saveAllAndFlush(areas)
+        replaceMatrix(report, calculated, areas)
         reports.saveAndFlush(report)
         return response(report, calculated)
     }
@@ -112,14 +124,25 @@ class GuideDetailsService(
     private fun replaceMatrix(
         report: WorshipCountReport,
         calculated: GuideDetailCalculation,
+        areas: List<GuideReportArea>,
     ) {
+        val byId = areas.associateBy { it.area.publicId }
         details.deleteMatrix(report.publicId)
         details.saveAllAndFlush(
             calculated.rows.map {
-                GuideWorshipDetail(report, GuideRoom.valueOf(it.roomCode), it.serviceNumber, it.adultCount, it.schoolCount, it.youthCount)
+                GuideWorshipDetail(report, byId.getValue(it.areaPublicId), it.serviceNumber, it.adultCount, it.schoolCount, it.youthCount)
             },
         )
     }
+
+    private fun currentAreas(report: WorshipCountReport): List<GuideReportArea> {
+        val areas = configuredAreas.lockUsable()
+        if (areas.isEmpty()) conflict("At least one active counting area on an active room/floor is required.")
+        return areas.map { GuideReportArea(report, it, it.room, it.room.name, it.label, it.displayOrder) }
+    }
+
+    private fun definition(area: GuideReportArea) =
+        GuideAreaDefinition(area.area.publicId, area.room.publicId, area.roomName, area.label, area.displayOrder)
 
     private fun applyCounts(
         report: WorshipCountReport,
