@@ -5,7 +5,9 @@ import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberDto
 import com.hanmaum.dn.app.features.members.api.v1.dto.MemberResponse
 import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberTrainingsRequest
+import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMyProfileRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UserTrainingDto
+import com.hanmaum.dn.app.features.members.domain.IdentityStatus
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.members.service.MemberPurgeService
 import com.hanmaum.dn.app.features.members.service.MemberService
@@ -27,12 +29,14 @@ import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.time.LocalDate
 import java.util.UUID
 import kotlin.test.Test
+import kotlin.test.assertEquals
 
 /**
  * GET /members/me over the wire.
@@ -204,6 +208,64 @@ class MemberProfileControllerTest {
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.data.activeMinistries").isArray)
             .andExpect(jsonPath("$.data.activeMinistries.length()").value(0))
+    }
+
+    @Test
+    fun `PATCH members-me passes identityStatus and a trimmed workOrSchool to the service`() {
+        `when`(
+            memberService.updateMyProfile(
+                eq("kc-001"),
+                anyOrNull(),
+                any(),
+                anyOrNull(),
+                anyOrNull(),
+                anyOrNull(),
+                any(),
+            ),
+        ).thenReturn(profile())
+
+        mockMvc
+            .perform(
+                patch("/api/v1/members/me")
+                    .with(memberToken())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"identityStatus":"EMPLOYEE","workOrSchool":"  Siemens  "}"""),
+            ).andExpect(status().isOk)
+
+        val captor = argumentCaptor<UpdateMyProfileRequest>()
+        verify(memberService).updateMyProfile(
+            eq("kc-001"),
+            anyOrNull(),
+            any(),
+            anyOrNull(),
+            anyOrNull(),
+            anyOrNull(),
+            captor.capture(),
+        )
+        assertEquals(IdentityStatus.EMPLOYEE, captor.firstValue.identityStatus)
+        assertEquals("Siemens", captor.firstValue.workOrSchool)
+    }
+
+    @Test
+    fun `PATCH members-me rejects an unknown identityStatus with 400`() {
+        mockMvc
+            .perform(
+                patch("/api/v1/members/me")
+                    .with(memberToken())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"identityStatus":"ASTRONAUT"}"""),
+            ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `PATCH members-me rejects a workOrSchool over 100 characters with 400`() {
+        mockMvc
+            .perform(
+                patch("/api/v1/members/me")
+                    .with(memberToken())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"workOrSchool":"${"가".repeat(101)}"}"""),
+            ).andExpect(status().isBadRequest)
     }
 
     @Test

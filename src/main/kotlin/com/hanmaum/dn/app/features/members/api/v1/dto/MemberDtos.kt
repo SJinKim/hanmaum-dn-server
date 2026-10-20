@@ -328,7 +328,12 @@ data class RegisterMemberRequest(
     val zipCode: String? = null,
 )
 
-/** PATCH /me — member can update their own contact, profile image, and address. */
+/**
+ * PATCH /me — member can update their own contact, profile image, address, 신분 and 소속.
+ *
+ * `null` leaves a field unchanged, so birthDate and identityStatus, both required at registration,
+ * cannot be cleared here. workOrSchool is optional: a blank value clears it.
+ */
 @Redacted
 data class UpdateMyProfileRequest(
     @field:Size(max = 50)
@@ -340,6 +345,11 @@ data class UpdateMyProfileRequest(
     val houseNumber: String? = null,
     val zipCode: String? = null,
     val city: String? = null,
+    @Unredacted val identityStatus: IdentityStatus? = null,
+    /** 소속: 학교명 / 직장명. */
+    @field:JsonDeserialize(converter = TrimmingStringConverter::class)
+    @field:Size(max = 100)
+    val workOrSchool: String? = null,
 )
 
 /**

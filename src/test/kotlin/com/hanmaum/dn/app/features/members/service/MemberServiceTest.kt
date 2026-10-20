@@ -16,6 +16,7 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberMinistriesReq
 import com.hanmaum.dn.app.features.members.api.v1.dto.ReplaceMemberTrainingsRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMemberRequest
 import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMyProfileRequest
+import com.hanmaum.dn.app.features.members.domain.IdentityStatus
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.domain.MemberOrigin
 import com.hanmaum.dn.app.features.members.repository.MemberGraduationRepository
@@ -1726,6 +1727,68 @@ class MemberServiceTest {
                 request = UpdateMyProfileRequest(phoneNumber = "+49 123"),
             )
         assertEquals(LocalDate.of(1992, 12, 7), preserved.birthDate)
+    }
+
+    @Test
+    fun `updateMyProfile sets identityStatus and a trimmed workOrSchool`() {
+        val keycloakSub = UUID.randomUUID().toString()
+        val member = memberWithId(1L)
+        member.keycloakId = keycloakSub
+        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(member)
+        `when`(memberRepository.save(member)).thenReturn(member)
+
+        memberService.updateMyProfile(
+            keycloakSubject = keycloakSub,
+            email = null,
+            request =
+                UpdateMyProfileRequest(
+                    identityStatus = IdentityStatus.EMPLOYEE,
+                    workOrSchool = "  Siemens  ",
+                ),
+        )
+
+        assertEquals(IdentityStatus.EMPLOYEE, member.identityStatus)
+        assertEquals("Siemens", member.workOrSchool)
+    }
+
+    @Test
+    fun `updateMyProfile clears workOrSchool on a blank value`() {
+        val keycloakSub = UUID.randomUUID().toString()
+        val member = memberWithId(1L)
+        member.keycloakId = keycloakSub
+        member.workOrSchool = "TU Berlin"
+        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(member)
+        `when`(memberRepository.save(member)).thenReturn(member)
+
+        memberService.updateMyProfile(
+            keycloakSubject = keycloakSub,
+            email = null,
+            request = UpdateMyProfileRequest(workOrSchool = "   "),
+        )
+
+        assertNull(member.workOrSchool)
+    }
+
+    @Test
+    fun `updateMyProfile leaves identityStatus and workOrSchool alone when omitted`() {
+        val keycloakSub = UUID.randomUUID().toString()
+        val member = memberWithId(1L)
+        member.keycloakId = keycloakSub
+        member.identityStatus = IdentityStatus.UNIVERSITY_STUDENT
+        member.workOrSchool = "TU Berlin"
+        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(member)
+        `when`(memberRepository.save(member)).thenReturn(member)
+
+        memberService.updateMyProfile(
+            keycloakSubject = keycloakSub,
+            email = null,
+            request = UpdateMyProfileRequest(phoneNumber = "+49 123"),
+        )
+
+        // identityStatus is required at registration, and null means "unchanged", so a member
+        // can never clear it through PATCH /me.
+        assertEquals(IdentityStatus.UNIVERSITY_STUDENT, member.identityStatus)
+        assertEquals("TU Berlin", member.workOrSchool)
     }
 
     @Test
