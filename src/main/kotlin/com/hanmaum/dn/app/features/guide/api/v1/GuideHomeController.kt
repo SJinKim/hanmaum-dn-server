@@ -4,7 +4,10 @@ import com.hanmaum.dn.app.common.dto.ApiResponse
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideHomeResponse
 import com.hanmaum.dn.app.features.guide.service.GuideHomeService
 import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.media.Content
+import io.swagger.v3.oas.annotations.media.Schema
 import org.springframework.http.CacheControl
+import org.springframework.http.ProblemDetail
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.GetMapping
@@ -20,7 +23,12 @@ class GuideHomeController(
 ) {
     /** Read one fresh transaction snapshot; clients must use each report/metric date rather than the wall-clock week. */
     @GetMapping("/home")
-    @ApiDocResponse(responseCode = "403", description = "Guide read permission required.")
+    @ApiDocResponse(responseCode = "200", description = "Consistent Guide Home snapshot.")
+    @ApiDocResponse(
+        responseCode = "403",
+        description = "Guide read permission required.",
+        content = [Content(mediaType = "application/problem+json", schema = Schema(implementation = ProblemDetail::class))],
+    )
     @Operation(
         operationId = "getGuideHome",
         summary = "Consistent Guide Home snapshot through the current Sunday in the configured church timezone.",
