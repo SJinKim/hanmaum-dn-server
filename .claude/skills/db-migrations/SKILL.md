@@ -11,6 +11,23 @@ description: Use when creating, modifying, or reviewing Flyway database migratio
   Example: `V202604151030__add_keycloak_id_to_members.sql`
 - Repeatable (views, functions): `R__<snake_case_description>.sql`
 
+### Kotlin migrations (only when SQL cannot do it)
+Encrypted PII columns use the column name as AES-GCM associated data, so moving a
+value between columns means decrypt + re-encrypt, which SQL cannot do. For that,
+and only that, write a Flyway Java migration in Kotlin:
+- Location: `src/main/kotlin/db/migration/` (package `db.migration`, picked up
+  from the classpath like the SQL files; one version sequence across both).
+- Name: `V<YYYYMMDDHHMMSS>__<PascalCaseDescription>` extending
+  `BaseJavaMigration`, with `@Suppress("ClassName")`. The ticket ID goes in the
+  KDoc instead of a `--` header.
+- Use `PiiCryptoContext`. `PiiCryptoJpaBootstrapDependency` makes every Flyway
+  bean depend on `PiiCryptoConfiguration`, so the keyring is ready; keep it that
+  way. Do not register the migration as a Spring bean — test slices would not
+  see it and Flyway validation would fail on the applied-but-missing version.
+- Do not let one bad row fail startup: catch decryption failures per row, log
+  the row id, and count them.
+- Example: `V20261021100000__CopyNewcomerWorkOrSchoolToMembers` (HDN-339).
+
 ## Versioning rules
 - Never edit a migration that has been applied to any shared environment.
 - If a deployed migration is buggy, fix forward with a new migration.

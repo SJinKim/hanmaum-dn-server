@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.common.pii
 
 import jakarta.annotation.PostConstruct
+import org.flywaydb.core.Flyway
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor
@@ -101,12 +102,15 @@ internal object PiiLocalPlaintextPolicy {
 /**
  * JPA evaluates enum converters while building Hibernate metadata. Make that
  * bootstrap explicitly depend on the keyring initialization instead of relying
- * on incidental Spring bean ordering. Flyway gets the same dependency because
- * V20261021100000 re-encrypts 소속 while migrating.
+ * on incidental Spring bean ordering. Every Flyway bean gets the same dependency
+ * because V20261021100000 re-encrypts 소속 while migrating; it is found by type
+ * so a renamed or custom Flyway bean cannot slip past.
  */
 class PiiCryptoJpaBootstrapDependency : BeanFactoryPostProcessor {
     override fun postProcessBeanFactory(beanFactory: ConfigurableListableBeanFactory) {
-        val dependents = DEPENDENT_BEANS.filter { beanFactory.containsBeanDefinition(it) }
+        val dependents =
+            listOf(ENTITY_MANAGER_FACTORY).filter { beanFactory.containsBeanDefinition(it) } +
+                beanFactory.getBeanNamesForType(Flyway::class.java, true, false)
         if (dependents.isEmpty()) {
             return
         }
@@ -128,6 +132,6 @@ class PiiCryptoJpaBootstrapDependency : BeanFactoryPostProcessor {
     }
 
     private companion object {
-        val DEPENDENT_BEANS = listOf("entityManagerFactory", "flyway")
+        const val ENTITY_MANAGER_FACTORY = "entityManagerFactory"
     }
 }
