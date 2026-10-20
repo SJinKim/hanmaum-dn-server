@@ -27,6 +27,10 @@ class WorshipCountReport(
 ) : BaseEntity() {
     @Version var version: Long = 0
 
+    /** Every detail save dirties the parent, including same-total/no-op matrix writes. */
+    @Column(name = "detail_revision", nullable = false)
+    var detailRevision: Long = 0
+
     @Enumerated(EnumType.STRING)
     @Column(name = "report_mode", nullable = false, length = 16)
     var reportMode: GuideReportMode = GuideReportMode.SUMMARY_ONLY

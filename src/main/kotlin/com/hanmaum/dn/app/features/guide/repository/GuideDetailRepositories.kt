@@ -13,6 +13,7 @@ import org.springframework.data.jpa.repository.Query
 import java.util.UUID
 
 interface GuideWorshipDetailRepository : JpaRepository<GuideWorshipDetail, Long> {
+    @Query("select d from GuideWorshipDetail d join fetch d.reportArea s join fetch s.area where d.report.publicId = :publicId")
     fun findAllByReportPublicId(publicId: UUID): List<GuideWorshipDetail>
 
     @Modifying(flushAutomatically = true)
@@ -40,6 +41,7 @@ interface GuideCountingAreaRepository : JpaRepository<GuideCountingArea, Long> {
 }
 
 interface GuideReportAreaRepository : JpaRepository<GuideReportArea, Long> {
+    @Query("select s from GuideReportArea s join fetch s.area join fetch s.room where s.report.publicId = :publicId")
     fun findAllByReportPublicId(publicId: UUID): List<GuideReportArea>
 }
 

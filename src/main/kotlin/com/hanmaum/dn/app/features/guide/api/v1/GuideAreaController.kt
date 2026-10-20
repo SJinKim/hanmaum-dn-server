@@ -33,13 +33,13 @@ class GuideAreaController(
 ) {
     /** Current configuration including inactive areas; reports retain their own immutable membership. */
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN') or hasRole('GUIDE_VIEWER')")
+    @PreAuthorize("hasAnyRole('ADMIN','GUIDE_VIEWER','GUIDE_EDITOR')")
     @Operation(operationId = "listGuideCountingAreas", summary = "List configured Guide counting areas, including inactive areas.")
     fun list(): ApiResponse<List<GuideAreaResponse>> = ApiResponse.success(service.list())
 
     /** Select from existing active rooms on active floors; never create duplicate physical rooms. */
     @GetMapping("/rooms")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('GUIDE_VIEWER')")
+    @PreAuthorize("hasAnyRole('ADMIN','GUIDE_VIEWER','GUIDE_EDITOR')")
     @Operation(operationId = "listGuideEligibleRooms", summary = "List existing church rooms eligible for Guide counting areas.")
     fun rooms(): ApiResponse<List<GuideEligibleRoomResponse>> = ApiResponse.success(service.rooms())
 

@@ -97,6 +97,7 @@ class GuideAreaControllerTest {
                 .perform(put("$url/$id").with(actor("GUIDE_EDITOR")).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest)
                 .andExpect(jsonPath("$.data.fieldErrors").isNotEmpty())
+                .andExpect(jsonPath("$.message").value("Invalid counting-area settings."))
         }
     }
 

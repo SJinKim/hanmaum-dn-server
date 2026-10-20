@@ -27,7 +27,9 @@ class WorshipCountServiceTest {
         whenever(repository.findByPublicIdAndDeletedAtIsNull(report.publicId)).thenReturn(report)
         whenever(repository.lockActive(report.publicId)).thenReturn(report)
         assertEquals("DETAILED", service.get(report.publicId).reportMode)
-        assertFailsWith<GuideException> { service.update(report.publicId, WorshipCountRequest(date, 1, 2, 3, version = 0), "editor") }
+        assertFailsWith<GuideException> {
+            service.update(report.publicId, WorshipCountRequest(date, 1, 2, 3, version = 999), "editor")
+        }.also { assertEquals("Detail reports must be edited through the detail endpoint.", it.safeDetail) }
         assertEquals(186, report.service1Count)
     }
 

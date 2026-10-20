@@ -191,4 +191,40 @@ class GuideAreaPersistenceIT {
             configuration.create(GuideAreaCreateRequest(configuration.rooms().first().publicId, " ", -1, true))
         }
     }
+
+    @Test fun `detail read query count stays constant when adding another area and room`() {
+        val sessionFactory = em.entityManagerFactory.unwrap(org.hibernate.SessionFactory::class.java)
+        val statistics = sessionFactory.statistics
+        statistics.isStatisticsEnabled = true
+        try {
+            val initial = reports.create(GuideDetailsCreateRequest(date, entries = guideYouthExample()), "editor")
+            em.clear()
+            statistics.clear()
+            reports.get(initial.report.publicId)
+            val before = statistics.prepareStatementCount
+            val room = configuration.rooms().first { it.name.contains("카페테리아") }
+            configuration.create(GuideAreaCreateRequest(room.publicId, "Additional", 4, true))
+            val larger = reports.create(GuideDetailsCreateRequest(date.plusWeeks(1), entries = emptyList()), "editor")
+            em.clear()
+            statistics.clear()
+            val loaded = reports.get(larger.report.publicId)
+            assertEquals(5, loaded.rooms.size)
+            assertEquals(before, statistics.prepareStatementCount)
+        } finally {
+            statistics.isStatisticsEnabled = false
+        }
+    }
+
+    @Test fun `seed skips a missing room without guessing or blocking migration`() {
+        em.createNativeQuery("delete from guide_counting_areas").executeUpdate()
+        em.createNativeQuery("update room set name = 'renamed sanctuary' where name = '1-1 대예배실'").executeUpdate()
+        val sql =
+            java.nio.file.Files.readString(
+                java.nio.file.Path
+                    .of("src/main/resources/db/migration/V20261020160100__seed_guide_counting_areas.sql"),
+            )
+        em.unwrap(org.hibernate.Session::class.java).doWork { connection -> connection.createStatement().use { it.execute(sql) } }
+        em.clear()
+        assertEquals(listOf("본당2층C", "유아유치부"), configuration.list().map { it.label })
+    }
 }

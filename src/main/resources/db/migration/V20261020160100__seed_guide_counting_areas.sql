@@ -11,7 +11,10 @@ BEGIN
     LOOP
         SELECT count(*), min(r.id) INTO matches, matched_room FROM room r JOIN floor f ON f.id = r.floor_id
         WHERE f.floor_number = area.floor_number AND r.name = area.room_name AND r.deleted_at IS NULL AND f.deleted_at IS NULL;
-        IF matches <> 1 THEN RAISE EXCEPTION 'HDN-331 requires an unambiguous existing room for each initial counting area'; END IF;
+        IF matches <> 1 THEN
+            RAISE NOTICE 'HDN-331 skipped initial counting area %: expected one eligible room, found %. Configure it through the Guide API.', area.public_id, matches;
+            CONTINUE;
+        END IF;
         INSERT INTO guide_counting_areas(public_id, room_id, label, display_order)
         VALUES(area.public_id, matched_room, area.label, area.display_order) ON CONFLICT (public_id) DO NOTHING;
     END LOOP;

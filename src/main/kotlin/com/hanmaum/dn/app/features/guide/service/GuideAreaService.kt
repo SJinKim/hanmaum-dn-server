@@ -1,5 +1,7 @@
 package com.hanmaum.dn.app.features.guide.service
 
+import com.hanmaum.dn.app.features.guide.api.v1.dto.GUIDE_AREA_LABEL_MAX
+import com.hanmaum.dn.app.features.guide.api.v1.dto.GUIDE_AREA_ORDER_MIN
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideAreaCreateRequest
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideAreaResponse
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideAreaUpdateRequest
@@ -56,8 +58,12 @@ class GuideAreaService(
         order: Int,
     ) {
         val errors = linkedMapOf<String, String>()
-        if (label.isBlank() || label.length > 200) errors["label"] = "Label must contain 1 to 200 characters."
-        if (order < 0) errors["displayOrder"] = "Display order must be nonnegative."
+        if (label.isBlank() ||
+            label.length > GUIDE_AREA_LABEL_MAX
+        ) {
+            errors["label"] = "Label must contain 1 to $GUIDE_AREA_LABEL_MAX characters."
+        }
+        if (order < GUIDE_AREA_ORDER_MIN) errors["displayOrder"] = "Display order must be nonnegative."
         if (errors.isNotEmpty()) throw GuideDetailValidationException(errors)
     }
 

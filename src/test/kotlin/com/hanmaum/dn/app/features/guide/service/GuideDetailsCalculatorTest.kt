@@ -122,4 +122,11 @@ class GuideDetailsCalculatorTest {
             },
         )
     }
+
+    @Test fun `empty or duplicate report configuration returns a controlled conflict`() {
+        for (areas in listOf(emptyList(), listOf(guideAreas[0], guideAreas[0]))) {
+            val error = assertFailsWith<GuideException> { calculator.calculate(emptyList(), areas) }
+            assertEquals(org.springframework.http.HttpStatus.CONFLICT, error.status)
+        }
+    }
 }

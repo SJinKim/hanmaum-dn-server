@@ -19,7 +19,6 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Isolation
 import org.springframework.transaction.annotation.Transactional
-import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 
@@ -42,7 +41,11 @@ class GuideDetailsService(
         }
         val rows = details.findAllByReportPublicId(publicId)
         val areas = reportAreas.findAllByReportPublicId(publicId)
-        check(areas.isNotEmpty() && rows.size == areas.size * 3) { "Stored Guide detail matrix is incomplete." }
+        if (areas.isEmpty() ||
+            rows.size != areas.size * 3
+        ) {
+            conflict("Stored Guide detail matrix is incomplete; repair is required before editing.")
+        }
         val calculated =
             calculator.calculate(
                 rows.map {
@@ -111,9 +114,7 @@ class GuideDetailsService(
         report.serviceDate = request.serviceDate
         report.notes = request.notes
         report.updatedBy = actor
-        // Mark the parent dirty for every detail edit, even when actor/date/totals/notes are unchanged.
-        val now = Instant.now()
-        report.updatedAt = if (now == report.updatedAt) now.plusNanos(1) else now
+        report.detailRevision++
         applyCounts(report, calculated)
         if (converting) reportAreas.saveAllAndFlush(areas)
         replaceMatrix(report, calculated, areas)

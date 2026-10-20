@@ -211,4 +211,28 @@ class GuideDetailsPersistenceIT {
         assertEquals(0L, summaries.list(null, null, 0, 20, "serviceDate,desc").totalElements)
         assertEquals(12L, details.count())
     }
+
+    @Test fun `incomplete persisted matrix is a controlled conflict and never invents missing counts`() {
+        val initial = service.create(GuideDetailsCreateRequest(date, entries = guideYouthExample()), "editor")
+        em.createNativeQuery("delete from guide_worship_details where id = (select min(id) from guide_worship_details)").executeUpdate()
+        em.clear()
+        val error = assertFailsWith<GuideException> { service.get(initial.report.publicId) }
+        assertEquals(HttpStatus.CONFLICT, error.status)
+        assertEquals(initial.report, summaries.get(initial.report.publicId))
+        assertEquals(11L, details.count())
+    }
+
+    @Test fun `identical detail save advances version exactly once even when every parent value is unchanged`() {
+        val initial = service.create(GuideDetailsCreateRequest(date, entries = guideYouthExample()), "editor")
+        val saved =
+            service.update(
+                initial.report.publicId,
+                GuideDetailsUpdateRequest(date, null, initial.report.version, guideYouthExample()),
+                "editor",
+            )
+        assertEquals(initial.report.version + 1, saved.report.version)
+        em.clear()
+        assertEquals(saved.report.version, service.get(initial.report.publicId).report.version)
+        assertEquals(initial.report.totalCount, saved.report.totalCount)
+    }
 }

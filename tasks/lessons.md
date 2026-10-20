@@ -239,3 +239,7 @@
 ### Reuse room master data for ministry counting locations
 - **Correction**: Guide counting locations were encoded as a fixed enum despite the existing room master table.
 - **Rule**: Inspect shared location master data before adding feature-specific room identifiers. Reference the existing room by foreign key; model counting areas separately when one room has multiple areas, and retain historical report labels and membership when configuration changes.
+
+### Verify role inheritance before accepting authorization review claims
+- Correction: Guide editors already inherited viewer access in Roles.HIERARCHY; the reported absence was repeated without inspecting that source.
+- Rule: Trace annotations, the actual role hierarchy and a single-role controller test before confirming an authorization defect. Keep controller access explicit when it improves clarity.

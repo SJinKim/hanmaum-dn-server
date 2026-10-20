@@ -8,6 +8,10 @@ import jakarta.validation.constraints.Size
 import tools.jackson.databind.annotation.JsonDeserialize
 import java.util.UUID
 
+/** Shared by bean validation, generated schema and internal service guards. */
+const val GUIDE_AREA_LABEL_MAX = 200
+const val GUIDE_AREA_ORDER_MIN = 0L
+
 data class GuideAreaDefinition(
     val areaPublicId: UUID,
     val roomPublicId: UUID,
@@ -38,10 +42,10 @@ data class GuideAreaCreateRequest(
     @field:Schema(requiredMode = Schema.RequiredMode.REQUIRED) val roomPublicId: UUID,
     @field:Schema(requiredMode = Schema.RequiredMode.REQUIRED)
     @field:NotBlank
-    @field:Size(max = 200) val label: String,
+    @field:Size(max = GUIDE_AREA_LABEL_MAX) val label: String,
     @field:JsonDeserialize(using = GuideCountDeserializer::class)
     @param:JsonProperty(required = true)
-    @field:Min(0)
+    @field:Min(GUIDE_AREA_ORDER_MIN)
     @field:Schema(minimum = "0", requiredMode = Schema.RequiredMode.REQUIRED) val displayOrder: Int,
     @field:Schema(requiredMode = Schema.RequiredMode.REQUIRED)
     @param:JsonProperty(required = true) val active: Boolean,
@@ -52,10 +56,10 @@ data class GuideAreaUpdateRequest(
     @field:Schema(requiredMode = Schema.RequiredMode.REQUIRED) val roomPublicId: UUID,
     @field:Schema(requiredMode = Schema.RequiredMode.REQUIRED)
     @field:NotBlank
-    @field:Size(max = 200) val label: String,
+    @field:Size(max = GUIDE_AREA_LABEL_MAX) val label: String,
     @field:JsonDeserialize(using = GuideCountDeserializer::class)
     @param:JsonProperty(required = true)
-    @field:Min(0)
+    @field:Min(GUIDE_AREA_ORDER_MIN)
     @field:Schema(minimum = "0", requiredMode = Schema.RequiredMode.REQUIRED) val displayOrder: Int,
     @field:Schema(requiredMode = Schema.RequiredMode.REQUIRED)
     @param:JsonProperty(required = true) val active: Boolean,

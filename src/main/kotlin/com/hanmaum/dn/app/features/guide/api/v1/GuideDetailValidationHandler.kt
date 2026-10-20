@@ -3,6 +3,7 @@ package com.hanmaum.dn.app.features.guide.api.v1
 import com.hanmaum.dn.app.common.dto.ApiResponse
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideValidationErrors
 import com.hanmaum.dn.app.features.guide.service.GuideDetailValidationException
+import jakarta.servlet.http.HttpServletRequest
 import org.springframework.core.Ordered
 import org.springframework.core.annotation.Order
 import org.springframework.http.HttpStatus
@@ -18,25 +19,39 @@ import tools.jackson.core.JacksonException
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(assignableTypes = [GuideDetailsController::class, GuideAreaController::class])
 class GuideDetailValidationHandler {
+    private fun isArea(request: HttpServletRequest) = request.requestURI.contains("/guide/counting-areas")
+
     @ExceptionHandler(MethodArgumentTypeMismatchException::class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    fun parameter(exception: MethodArgumentTypeMismatchException): ApiResponse<GuideValidationErrors> =
-        error(mapOf(exception.name to "Invalid parameter format."))
+    fun parameter(
+        exception: MethodArgumentTypeMismatchException,
+        request: HttpServletRequest,
+    ): ApiResponse<GuideValidationErrors> = error(mapOf(exception.name to "Invalid parameter format."), request)
 
     @ExceptionHandler(GuideDetailValidationException::class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    fun fields(exception: GuideDetailValidationException): ApiResponse<GuideValidationErrors> = error(exception.fieldErrors)
+    fun fields(
+        exception: GuideDetailValidationException,
+        request: HttpServletRequest,
+    ): ApiResponse<GuideValidationErrors> = error(exception.fieldErrors, request)
 
     @ExceptionHandler(MethodArgumentNotValidException::class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    fun validation(exception: MethodArgumentNotValidException): ApiResponse<GuideValidationErrors> =
+    fun validation(
+        exception: MethodArgumentNotValidException,
+        request: HttpServletRequest,
+    ): ApiResponse<GuideValidationErrors> =
         error(
             exception.bindingResult.fieldErrors.associate { it.field to "Invalid or missing field." },
+            request,
         )
 
     @ExceptionHandler(HttpMessageNotReadableException::class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    fun json(exception: HttpMessageNotReadableException): ApiResponse<GuideValidationErrors> {
+    fun json(
+        exception: HttpMessageNotReadableException,
+        request: HttpServletRequest,
+    ): ApiResponse<GuideValidationErrors> {
         val jackson = generateSequence<Throwable>(exception) { it.cause }.filterIsInstance<JacksonException>().firstOrNull()
         val field =
             buildString {
@@ -50,8 +65,24 @@ class GuideDetailValidationHandler {
                     }
                 }
             }.ifBlank { "body" }
-        return error(mapOf(field to "Invalid or missing value; counts require nonnegative integer JSON numbers or null."))
+        val hint =
+            if (isArea(
+                    request,
+                )
+            ) {
+                "Invalid or missing counting-area setting."
+            } else {
+                "Invalid or missing value; counts require nonnegative integer JSON numbers or null."
+            }
+        return error(mapOf(field to hint), request)
     }
 
-    private fun error(fields: Map<String, String>) = ApiResponse(false, "Invalid attendance details.", GuideValidationErrors(fields))
+    private fun error(
+        fields: Map<String, String>,
+        request: HttpServletRequest,
+    ) = ApiResponse(
+        false,
+        if (isArea(request)) "Invalid counting-area settings." else "Invalid attendance details.",
+        GuideValidationErrors(fields),
+    )
 }

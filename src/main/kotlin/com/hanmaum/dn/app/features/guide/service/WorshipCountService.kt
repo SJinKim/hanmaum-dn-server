@@ -81,8 +81,8 @@ class WorshipCountService(
         validate(request)
         val entity = locked(publicId)
         if (request.version == null) bad("Expected version is required.")
-        if (request.version != entity.version) conflict("Report changed; reload before saving.")
         if (entity.reportMode != GuideReportMode.SUMMARY_ONLY) conflict("Detail reports must be edited through the detail endpoint.")
+        if (request.version != entity.version) conflict("Report changed; reload before saving.")
         available(request.serviceDate, publicId)
         entity.serviceDate = request.serviceDate
         entity.service1Count = request.service1Count

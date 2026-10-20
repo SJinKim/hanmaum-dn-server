@@ -7,6 +7,7 @@ import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideDetailEntryResponse
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideRoomTotals
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideServiceTotals
 import com.hanmaum.dn.app.features.guide.domain.worshipTotal
+import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import java.util.UUID
 
@@ -28,9 +29,9 @@ class GuideDetailsCalculator {
         entries: List<GuideDetailEntryRequest>,
         areas: List<GuideAreaDefinition>,
     ): GuideDetailCalculation {
-        check(
-            areas.isNotEmpty() && areas.map { it.areaPublicId }.distinct().size == areas.size,
-        ) { "Report requires unique counting areas." }
+        if (areas.isEmpty() || areas.map { it.areaPublicId }.distinct().size != areas.size) {
+            throw GuideException(HttpStatus.CONFLICT, "Report requires unique counting areas; repair its configuration before editing.")
+        }
         val ordered = areas.sortedWith(compareBy({ it.displayOrder }, { it.areaPublicId }))
         val allowed = areas.map { it.areaPublicId }.toSet()
         val errors = linkedMapOf<String, String>()
