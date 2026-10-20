@@ -366,6 +366,9 @@ class MemberServiceTest {
         street = "Hauptstraße",
         houseNumber = "12a",
         city = "서울",
+        birthDate = java.time.LocalDate.of(1995, 3, 14),
+        identityStatus = com.hanmaum.dn.app.features.members.domain.IdentityStatus.UNIVERSITY_STUDENT,
+        workOrSchool = "TU Berlin",
     )
 
     // --- getMemberByPublicId ---
@@ -1322,6 +1325,21 @@ class MemberServiceTest {
         org.mockito.kotlin
             .verify(intake)
             .openForPossibleMatches(any())
+    }
+
+    @Test
+    fun `registerMember stores identity status and work or school on the member`() {
+        val req = registerReq()
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
+        `when`(memberRepository.findSimilarNames(req.firstName, req.lastName)).thenReturn(emptyList())
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+        setupKeycloakMock()
+
+        val member = memberService.registerMember(req, CLIENT_IP)
+
+        assertEquals(com.hanmaum.dn.app.features.members.domain.IdentityStatus.UNIVERSITY_STUDENT, member.identityStatus)
+        assertEquals("TU Berlin", member.workOrSchool)
+        assertEquals(java.time.LocalDate.of(1995, 3, 14), member.birthDate)
     }
 
     @Test

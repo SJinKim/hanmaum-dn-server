@@ -890,6 +890,8 @@ class MemberService(
                     },
                 city = req.city,
                 birthDate = req.birthDate,
+                identityStatus = req.identityStatus,
+                workOrSchool = req.workOrSchool?.ifBlank { null },
                 phoneNumber = req.phoneNumber,
                 street = req.street,
                 houseNumber = req.houseNumber,
