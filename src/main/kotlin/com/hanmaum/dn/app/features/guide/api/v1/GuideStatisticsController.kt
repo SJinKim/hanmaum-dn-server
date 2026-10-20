@@ -25,13 +25,18 @@ class GuideStatisticsController(
 ) {
     /** Read calendar-period statistics, including incomplete-report coverage, without member/check-in access. */
     @GetMapping
+    @ApiDocResponse(responseCode = "200", description = "Statistics from the selected calendar periods.")
     @Operation(operationId = "getGuideWorshipStatistics", summary = "Guide annual statistics and comparable prior-year periods.")
     @ApiDocResponse(
         responseCode = "400",
         description = "Invalid year, cutoff, or default cutoff for a future year.",
         content = [Content(mediaType = "application/problem+json", schema = Schema(implementation = ProblemDetail::class))],
     )
-    @ApiDocResponse(responseCode = "403", description = "Guide read permission required.")
+    @ApiDocResponse(
+        responseCode = "403",
+        description = "Guide read permission required.",
+        content = [Content(mediaType = "application/problem+json", schema = Schema(implementation = ProblemDetail::class))],
+    )
     fun get(
         @Parameter(schema = Schema(minimum = "2", maximum = "9999"))
         @RequestParam year: Int,
