@@ -656,6 +656,8 @@ class MemberService(
         request.houseNumber?.let { member.houseNumber = it }
         request.zipCode?.let { member.zipCode = it }
         request.city?.let { member.city = it }
+        request.identityStatus?.let { member.identityStatus = it }
+        request.workOrSchool?.let { member.workOrSchool = it.trim().ifBlank { null } }
         val saved = memberRepository.save(member)
         return saved.toResponse(activeMinistryNames(saved.id), emailVerified)
     }
