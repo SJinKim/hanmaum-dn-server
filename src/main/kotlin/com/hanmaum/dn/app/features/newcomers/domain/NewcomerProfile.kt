@@ -8,9 +8,9 @@ import com.hanmaum.dn.app.common.pii.EncryptedNewcomerKakaoIdConverter
 import com.hanmaum.dn.app.common.pii.EncryptedNewcomerOverallNotesConverter
 import com.hanmaum.dn.app.common.pii.EncryptedNewcomerPreviousChurchConverter
 import com.hanmaum.dn.app.common.pii.EncryptedNewcomerVisitMotivesConverter
-import com.hanmaum.dn.app.common.pii.EncryptedNewcomerWorkOrSchoolConverter
 import com.hanmaum.dn.app.common.pii.PiiCryptoContext
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
+import com.hanmaum.dn.app.features.members.domain.IdentityStatus
 import com.hanmaum.dn.app.features.members.domain.Member
 import jakarta.persistence.Column
 import jakarta.persistence.Convert
@@ -29,17 +29,6 @@ import java.time.Instant
 import java.time.LocalDate
 
 enum class NewcomerLifecycle { SUBMITTED, IN_CARE, GRADUATED, ARCHIVED }
-
-enum class NewcomerIdentityStatus {
-    EMPLOYEE,
-    UNIVERSITY_STUDENT,
-    EXAM_PREPARATION,
-    WORKING_HOLIDAY,
-    EXCHANGE_STUDENT,
-    SELF_EMPLOYED,
-    EXPATRIATE,
-    JOB_SEEKING,
-}
 
 enum class PostAssignmentAttendance { REGULAR, OCCASIONAL, WORSHIP_ONLY, ABSENT_OVER_MONTH, CHANGED_CHURCH, RETURNED_OR_MOVED }
 
@@ -61,12 +50,6 @@ class NewcomerProfile(
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "caregiver_member_id")
     var caregiver: Member? = null,
-    @Enumerated(EnumType.STRING)
-    @Column(name = "identity_status", length = 30)
-    var identityStatus: NewcomerIdentityStatus? = null,
-    @Convert(converter = EncryptedNewcomerWorkOrSchoolConverter::class)
-    @Column(name = "work_or_school", columnDefinition = "TEXT")
-    var workOrSchool: String? = null,
     @Convert(converter = EncryptedNewcomerFirstVisitDateConverter::class)
     @Column(name = "first_visit_date", columnDefinition = "TEXT")
     var firstVisitDate: LocalDate? = null,
@@ -107,6 +90,20 @@ class NewcomerProfile(
     @Version
     @Column(nullable = false)
     var version: Long = 0
+
+    // Both live on the member since HDN-332 (self-registration sets them before any newcomer
+    // profile exists). Delegated so newcomer code keeps reading them off the profile.
+    var identityStatus: IdentityStatus?
+        get() = member.identityStatus
+        set(value) {
+            member.identityStatus = value
+        }
+
+    var workOrSchool: String?
+        get() = member.workOrSchool
+        set(value) {
+            member.workOrSchool = value
+        }
 
     @PrePersist
     @PreUpdate

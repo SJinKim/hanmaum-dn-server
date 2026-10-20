@@ -4,10 +4,10 @@ import com.hanmaum.dn.app.common.domainvalue.Baptism
 import com.hanmaum.dn.app.common.domainvalue.Gender
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.features.groups.service.NewcomerGroupAssigner
+import com.hanmaum.dn.app.features.members.domain.IdentityStatus
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.domain.MemberOrigin
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
-import com.hanmaum.dn.app.features.newcomers.domain.NewcomerIdentityStatus
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerImportRecord
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerProfile
 import com.hanmaum.dn.app.features.newcomers.domain.PostAssignmentAttendance
@@ -120,7 +120,6 @@ class NewcomerImportService(
                             member = member,
                             intakeRound = candidate.intakeRound,
                             caregiver = caregiver,
-                            identityStatus = candidate.identityStatus,
                             firstVisitDate = candidate.firstVisitDate,
                             postAssignmentAttendance = candidate.attendance,
                         ),
@@ -245,8 +244,8 @@ class NewcomerImportService(
         enumAlias(
             value,
             mapOf(
-                "직장인" to NewcomerIdentityStatus.EMPLOYEE,
-                "대학생" to NewcomerIdentityStatus.UNIVERSITY_STUDENT,
+                "직장인" to IdentityStatus.EMPLOYEE,
+                "대학생" to IdentityStatus.UNIVERSITY_STUDENT,
             ),
         )
 
@@ -282,7 +281,7 @@ class NewcomerImportService(
         val registrationDate: LocalDate?,
         val gender: Gender?,
         val baptism: Baptism?,
-        val identityStatus: NewcomerIdentityStatus?,
+        val identityStatus: IdentityStatus?,
         val attendance: PostAssignmentAttendance?,
         val intakeRound: Int?,
         val caregiver: String?,
@@ -319,6 +318,7 @@ class NewcomerImportService(
             phone?.let { member.phoneNumber = it }
             email?.let { member.email = it }
             baptism?.let { member.baptism = it }
+            identityStatus?.let { member.identityStatus = it }
         }
 
         fun applyTo(
@@ -327,7 +327,6 @@ class NewcomerImportService(
         ) {
             intakeRound?.let { profile.intakeRound = it }
             caregiver?.let { profile.caregiver = resolvedCaregiver }
-            identityStatus?.let { profile.identityStatus = it }
             firstVisitDate?.let { profile.firstVisitDate = it }
             attendance?.let { profile.postAssignmentAttendance = it }
         }

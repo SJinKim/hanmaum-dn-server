@@ -3,11 +3,13 @@ package com.hanmaum.dn.app.features.members.api.v1.dto
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.common.serialization.TrimmingStringConverter
+import com.hanmaum.dn.app.features.members.domain.IdentityStatus
 import dev.zacsweers.redacted.annotations.Redacted
 import dev.zacsweers.redacted.annotations.Unredacted
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
 import tools.jackson.databind.annotation.JsonDeserialize
 import java.time.Instant
@@ -36,6 +38,10 @@ data class MemberDto(
     val city: String? = null,
     /** Occupation (직업); personal data shown only in the member detail. */
     val occupation: String? = null,
+    /** 신분 (HDN-332). */
+    @Unredacted val identityStatus: IdentityStatus? = null,
+    /** 소속: school or employer name (HDN-332). */
+    val workOrSchool: String? = null,
     val registrationDate: LocalDate? = null,
     @Unredacted val memberStatus: String,
     val churchRole: String? = null,
@@ -198,6 +204,8 @@ data class MemberResponse(
     val phoneNumber: String? = null,
     val birthDate: LocalDate? = null,
     val profileImageUrl: String? = null,
+    @Unredacted val identityStatus: IdentityStatus? = null,
+    val workOrSchool: String? = null,
 )
 
 // ─── Request DTOs ─────────────────────────────────────────────────────────────
@@ -223,6 +231,9 @@ data class CreateMemberRequest(
     val city: String? = null,
     /** Occupation (직업). */
     val occupation: String? = null,
+    @Unredacted val identityStatus: IdentityStatus? = null,
+    @field:Size(max = 100)
+    val workOrSchool: String? = null,
     val registrationDate: LocalDate? = null,
     /** Church position/title (직분), not the app access role. */
     val churchRole: String? = null,
@@ -254,6 +265,9 @@ data class UpdateMemberRequest(
     val city: String? = null,
     /** Occupation (직업); omitted or null leaves the saved value unchanged. */
     val occupation: String? = null,
+    @Unredacted val identityStatus: IdentityStatus? = null,
+    @field:Size(max = 100)
+    val workOrSchool: String? = null,
     val registrationDate: LocalDate? = null,
     @Unredacted val memberStatus: String? = null,
     val churchRole: String? = null,
@@ -295,7 +309,15 @@ data class RegisterMemberRequest(
     val baptism: String? = null,
     @field:Size(max = 20)
     val gender: String? = null,
+    // Required since HDN-332; nullable only so a missing value is a 400, not a parse error.
+    @field:NotNull(message = "생년월일은 필수입니다.")
     val birthDate: LocalDate? = null,
+    @field:NotNull(message = "신분은 필수입니다.")
+    @Unredacted val identityStatus: IdentityStatus? = null,
+    /** 소속: 학교명 / 직장명, optional. */
+    @field:JsonDeserialize(converter = TrimmingStringConverter::class)
+    @field:Size(max = 100)
+    val workOrSchool: String? = null,
     @field:Size(max = 50)
     val phoneNumber: String? = null,
     @field:Size(max = 200)

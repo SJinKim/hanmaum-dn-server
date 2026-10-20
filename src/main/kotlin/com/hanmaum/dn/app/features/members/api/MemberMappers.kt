@@ -63,6 +63,8 @@ fun CreateMemberRequest.toEntity(): Member =
         zipCode = this.zipCode,
         city = this.city,
         occupation = this.occupation,
+        identityStatus = this.identityStatus,
+        workOrSchool = this.workOrSchool?.trim()?.ifBlank { null },
         registrationDate = this.registrationDate,
         churchRole = this.churchRole,
         baptism = mapBaptism(this.baptism),
@@ -96,6 +98,9 @@ fun Member.applyPatch(request: UpdateMemberRequest) {
     request.zipCode?.let { this.zipCode = it }
     request.city?.let { this.city = it }
     request.occupation?.let { this.occupation = it }
+    request.identityStatus?.let { this.identityStatus = it }
+    // A blank 소속 clears it; null leaves it unchanged.
+    request.workOrSchool?.let { this.workOrSchool = it.trim().ifBlank { null } }
     request.registrationDate?.let { this.registrationDate = it }
     request.churchRole?.let { this.churchRole = it }
     request.baptism?.let { this.baptism = mapBaptism(it) }
@@ -144,6 +149,8 @@ fun Member.toDto(
         zipCode = this.zipCode,
         city = this.city,
         occupation = this.occupation,
+        identityStatus = this.identityStatus,
+        workOrSchool = this.workOrSchool,
         registrationDate = this.registrationDate,
         memberStatus = this.memberStatus.name,
         churchRole = this.churchRole,
@@ -232,4 +239,6 @@ fun Member.toResponse(
         phoneNumber = this.phoneNumber,
         birthDate = this.birthDate,
         profileImageUrl = this.profileImageUrl,
+        identityStatus = this.identityStatus,
+        workOrSchool = this.workOrSchool,
     )
