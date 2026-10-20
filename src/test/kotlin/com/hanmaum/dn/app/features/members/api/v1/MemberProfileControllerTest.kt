@@ -69,7 +69,6 @@ class MemberProfileControllerTest {
             email = "chulsoo@example.com",
             emailVerified = true,
             status = MemberStatus.ACTIVE,
-            churchRole = "청년부원",
             registrationDate = registrationDate,
             groupName = "다니엘조",
             division = "2교구",

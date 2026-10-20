@@ -78,9 +78,6 @@ class EncryptedOccupationConverter : EncryptedStringConverter("members.occupatio
 class EncryptedRegistrationDateConverter : EncryptedLocalDateConverter("members.registration_date")
 
 @Converter
-class EncryptedChurchRoleConverter : EncryptedStringConverter("members.role")
-
-@Converter
 class EncryptedBaptismFieldConverter : EncryptedBaptismConverter("members.baptism")
 
 @Converter

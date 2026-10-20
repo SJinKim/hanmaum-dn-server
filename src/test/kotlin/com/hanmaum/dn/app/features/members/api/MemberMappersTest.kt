@@ -119,7 +119,6 @@ class MemberMappersTest {
                 zipCode = "12345",
                 city = "서울",
                 occupation = "개발자",
-                churchRole = "청년부원",
             )
         val entity = req.toEntity()
 
@@ -136,7 +135,6 @@ class MemberMappersTest {
         assertEquals("12345", entity.zipCode)
         assertEquals("서울", entity.city)
         assertEquals("개발자", entity.occupation)
-        assertEquals("청년부원", entity.churchRole)
     }
 
     // --- Member.applyPatch() ---
@@ -159,7 +157,6 @@ class MemberMappersTest {
                 city = "부산",
                 occupation = "교사",
                 memberStatus = "ACTIVE",
-                churchRole = "리더",
             )
         member.applyPatch(req)
 
@@ -176,7 +173,6 @@ class MemberMappersTest {
         assertEquals("부산", member.city)
         assertEquals("교사", member.occupation)
         assertEquals(MemberStatus.ACTIVE, member.memberStatus)
-        assertEquals("리더", member.churchRole)
     }
 
     @Test
@@ -256,7 +252,6 @@ class MemberMappersTest {
                 zipCode = "12345",
                 city = "서울",
                 occupation = "개발자",
-                churchRole = "팀장",
             )
         val dto = member.toDto()
 
@@ -269,7 +264,6 @@ class MemberMappersTest {
         assertEquals("12345", dto.zipCode)
         assertEquals("서울", dto.city)
         assertEquals("개발자", dto.occupation)
-        assertEquals("팀장", dto.churchRole)
         assertNull(dto.groupName)
     }
 
@@ -353,7 +347,6 @@ class MemberMappersTest {
         val member = memberWithId(42L, "철수", "김")
         member.email = "test@example.com"
         member.memberStatus = MemberStatus.ACTIVE
-        member.churchRole = "청년부원"
         member.street = "Hauptstraße"
         member.houseNumber = "5"
         member.zipCode = "12345"
@@ -366,7 +359,6 @@ class MemberMappersTest {
         assertEquals("김", response.lastName)
         assertEquals("test@example.com", response.email)
         assertEquals(MemberStatus.ACTIVE, response.status)
-        assertEquals("청년부원", response.churchRole)
         assertEquals("Hauptstraße", response.street)
         assertEquals("5", response.houseNumber)
         assertEquals("12345", response.zipCode)
@@ -379,13 +371,6 @@ class MemberMappersTest {
         val member = memberWithId(1L)
         member.city = null
         assertNull(member.toResponse().city)
-    }
-
-    @Test
-    fun `toResponse maps null churchRole to null`() {
-        val member = memberWithId(1L)
-        member.churchRole = null
-        assertNull(member.toResponse().churchRole)
     }
 
     @Test

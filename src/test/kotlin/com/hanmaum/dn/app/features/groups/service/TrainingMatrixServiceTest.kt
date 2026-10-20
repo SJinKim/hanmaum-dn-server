@@ -46,7 +46,6 @@ class TrainingMatrixServiceTest {
                 memberStatus = "ACTIVE",
                 email = "synthetic@example.org",
                 baptism = "BAPTIZED",
-                churchRole = "private-role",
                 groupPublicId = "group",
                 groupName = "1순",
                 activeMinistries = listOf("private-ministry"),
