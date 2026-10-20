@@ -8,6 +8,9 @@
 
 ## Lessons
 
+### Child-only attendance edits must advance the parent version
+- A room redistribution can leave all parent totals unchanged. Touch the parent audit state in the same locked transaction so its optimistic version still advances; prove both same-total saves and an overlapping legacy summary writer with PostgreSQL tests.
+
 ### Import review: distinguish source formats and application lifecycle
 - Parse German thousands separators only in CSV; an XLSX cached decimal is fractional data and must be rejected.
 - Translate only the named date-uniqueness constraint to 409. Log safe diagnostics for other persistence failures without PostgreSQL row details.
@@ -232,3 +235,11 @@
 ### Reconciliation must surface parser failures and follow configuration growth
 - **Correction**: Review found unchecked jq process substitutions, a fixed group count in the integration test and validation of an unused dashboard URL in access-only mode.
 - **Rule**: Materialize parsed work lists with checked exit codes before any writes. Derive expected managed state from the configuration, and isolate validation to the settings used by the selected mode. Keep failed integration diagnostics visible after temporary resources are removed.
+
+### Reuse room master data for ministry counting locations
+- **Correction**: Guide counting locations were encoded as a fixed enum despite the existing room master table.
+- **Rule**: Inspect shared location master data before adding feature-specific room identifiers. Reference the existing room by foreign key; model counting areas separately when one room has multiple areas, and retain historical report labels and membership when configuration changes.
+
+### Verify role inheritance before accepting authorization review claims
+- Correction: Guide editors already inherited viewer access in Roles.HIERARCHY; the reported absence was repeated without inspecting that source.
+- Rule: Trace annotations, the actual role hierarchy and a single-role controller test before confirming an authorization defect. Keep controller access explicit when it improves clarity.

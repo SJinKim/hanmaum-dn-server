@@ -2,6 +2,7 @@ package com.hanmaum.dn.app.features.guide.service
 
 import com.hanmaum.dn.app.features.guide.api.v1.dto.WorshipCountRequest
 import com.hanmaum.dn.app.features.guide.api.v1.dto.WorshipCountResponse
+import com.hanmaum.dn.app.features.guide.domain.GuideReportMode
 import com.hanmaum.dn.app.features.guide.domain.WorshipCountReport
 import com.hanmaum.dn.app.features.guide.repository.WorshipCountRepository
 import org.springframework.data.domain.Page
@@ -80,6 +81,7 @@ class WorshipCountService(
         validate(request)
         val entity = locked(publicId)
         if (request.version == null) bad("Expected version is required.")
+        if (entity.reportMode != GuideReportMode.SUMMARY_ONLY) conflict("Detail reports must be edited through the detail endpoint.")
         if (request.version != entity.version) conflict("Report changed; reload before saving.")
         available(request.serviceDate, publicId)
         entity.serviceDate = request.serviceDate
@@ -141,6 +143,7 @@ class WorshipCountService(
             if (total != null && previous != null) total - previous else null,
             r.notes,
             r.version,
+            reportMode = r.reportMode.name,
             complete = total != null,
         )
     }

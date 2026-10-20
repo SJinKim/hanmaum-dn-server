@@ -50,18 +50,29 @@ data class WorshipCountRequest(
 data class WorshipCountResponse(
     val publicId: UUID,
     val serviceDate: LocalDate,
-    @field:Schema(types = ["integer", "null"], minimum = "0") val service1Count: Int?,
-    @field:Schema(types = ["integer", "null"], minimum = "0") val service2Count: Int?,
-    @field:Schema(types = ["integer", "null"], minimum = "0") val service3Count: Int?,
-    @field:Schema(types = ["integer", "null"], description = "Derived sum as int64; null if any service is unrecorded.")
+    @field:Schema(types = ["integer", "null"], minimum = "0", maximum = "2147483647") val service1Count: Int?,
+    @field:Schema(types = ["integer", "null"], minimum = "0", maximum = "2147483647") val service2Count: Int?,
+    @field:Schema(types = ["integer", "null"], minimum = "0", maximum = "2147483647") val service3Count: Int?,
+    @field:Schema(
+        types = ["integer", "null"],
+        minimum = "0",
+        maximum = "6442450941",
+        description = "Derived sum as int64; null if any service is unrecorded.",
+    )
     val totalCount: Long?,
     @field:Schema(
         types = ["integer", "null"],
+        minimum = "-6442450941",
+        maximum = "6442450941",
         description = "Difference to exactly seven days earlier; null if either report is incomplete or missing.",
     )
     val previousWeekDelta: Long?,
     @field:Schema(types = ["string", "null"]) val notes: String?,
     val version: Long,
+    @field:Schema(
+        allowableValues = ["SUMMARY_ONLY", "DETAILED"],
+        description = "Explicit edit mode; detailed totals may only be changed via the detail endpoint.",
+    )
     val reportMode: String = "SUMMARY_ONLY",
     val complete: Boolean,
 )

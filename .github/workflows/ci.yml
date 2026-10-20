@@ -71,6 +71,9 @@ jobs:
             --tests "com.hanmaum.dn.app.features.members.repository.MemberPiiRepositoryIT" \
             --tests "com.hanmaum.dn.app.common.pii.MemberWorkOrSchoolBackfillRunnerIT" \
             --tests "com.hanmaum.dn.app.features.guide.service.GuidePersistenceIT" \
+            --tests "com.hanmaum.dn.app.features.guide.service.GuideDetailsPersistenceIT" \
+            --tests "com.hanmaum.dn.app.features.guide.service.GuideAreaPersistenceIT" \
+            --tests "com.hanmaum.dn.app.features.guide.service.GuideDetailsConcurrencyIT" \
             --no-daemon
         env:
           SPRING_PROFILES_ACTIVE: test

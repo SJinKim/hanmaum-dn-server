@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.guide.service
 
 import com.hanmaum.dn.app.features.guide.api.v1.dto.WorshipCountRequest
+import com.hanmaum.dn.app.features.guide.domain.GuideReportMode
 import com.hanmaum.dn.app.features.guide.domain.WorshipCountReport
 import com.hanmaum.dn.app.features.guide.repository.WorshipCountRepository
 import org.junit.jupiter.api.Test
@@ -20,6 +21,17 @@ class WorshipCountServiceTest {
     private val repository = mock<WorshipCountRepository>()
     private val service = WorshipCountService(repository)
     private val date = LocalDate.of(2026, 10, 18)
+
+    @Test fun `explicit detailed mode is returned and summary writes cannot overwrite its totals`() {
+        val report = report().apply { reportMode = GuideReportMode.DETAILED }
+        whenever(repository.findByPublicIdAndDeletedAtIsNull(report.publicId)).thenReturn(report)
+        whenever(repository.lockActive(report.publicId)).thenReturn(report)
+        assertEquals("DETAILED", service.get(report.publicId).reportMode)
+        assertFailsWith<GuideException> {
+            service.update(report.publicId, WorshipCountRequest(date, 1, 2, 3, version = 999), "editor")
+        }.also { assertEquals("Detail reports must be edited through the detail endpoint.", it.safeDetail) }
+        assertEquals(186, report.service1Count)
+    }
 
     private fun report(
         date: LocalDate = this.date,
