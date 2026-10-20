@@ -6,7 +6,6 @@ import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.common.jpa.BaseEntity
 import com.hanmaum.dn.app.common.pii.EncryptedBaptismFieldConverter
 import com.hanmaum.dn.app.common.pii.EncryptedBirthDateConverter
-import com.hanmaum.dn.app.common.pii.EncryptedChurchRoleConverter
 import com.hanmaum.dn.app.common.pii.EncryptedCityConverter
 import com.hanmaum.dn.app.common.pii.EncryptedDiscriminatorConverter
 import com.hanmaum.dn.app.common.pii.EncryptedEmailConverter
@@ -98,10 +97,6 @@ class Member(
     @Enumerated(EnumType.STRING)
     @Column(name = "member_status", nullable = false)
     var memberStatus: MemberStatus = MemberStatus.PENDING,
-    /** Church position / title (직분). Not the app access role (that lives in Keycloak). */
-    @Convert(converter = EncryptedChurchRoleConverter::class)
-    @Column(name = "role", columnDefinition = "TEXT")
-    var churchRole: String? = null,
     // --- BEZIEHUNG ZUR GRUPPE ---
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "group_id")
