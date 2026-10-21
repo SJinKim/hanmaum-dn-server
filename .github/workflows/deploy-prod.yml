@@ -164,7 +164,7 @@ jobs:
               echo "  attempt $i/12: $STATUS"
               sleep 10
             done
-            docker inspect --format='{{.State.Health.Status}}' hanmaumApp-backend | grep -q 'healthy' \
+            docker inspect --format='{{.State.Health.Status}}' hanmaumApp-backend | grep -Fx 'healthy' > /dev/null \
               || { echo "Backend health check failed"; exit 1; }
 
             # External smoke test — validates Caddy routing + TLS end-to-end

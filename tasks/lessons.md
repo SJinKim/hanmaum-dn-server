@@ -243,3 +243,7 @@
 ### Verify role inheritance before accepting authorization review claims
 - Correction: Guide editors already inherited viewer access in Roles.HIERARCHY; the reported absence was repeated without inspecting that source.
 - Rule: Trace annotations, the actual role hierarchy and a single-role controller test before confirming an authorization defect. Keep controller access explicit when it improves clarity.
+
+### Match deployment health states exactly
+- Correction: A substring check for healthy also accepted unhealthy in the final deployment gate.
+- Rule: Match enum-like health output as an entire fixed string; test unhealthy, starting, missing output and upstream command failures alongside the positive case.
