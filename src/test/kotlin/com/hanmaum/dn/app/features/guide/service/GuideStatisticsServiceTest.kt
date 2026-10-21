@@ -148,6 +148,23 @@ class GuideStatisticsServiceTest {
         assertNull(empty.current.firstReportDate)
     }
 
+    @Test fun `past year uses December 31 even when its last report is earlier`() {
+        source(row("2024-12-29", 7), row("2025-12-21", 8))
+        val result = service.statistics(2025, null)
+        assertEquals(LocalDate.parse("2025-12-31"), result.asOf)
+        assertEquals(LocalDate.parse("2024-12-31"), result.previousSamePeriod.to)
+        assertEquals(LocalDate.parse("2024-12-29"), result.previousSamePeriod.lastReportDate)
+    }
+
+    @Test fun `Sunday cutoff deliberately compares calendar dates and exposes coverage`() {
+        source(row("2025-10-12", 7), row("2025-10-19", 9), row("2026-10-18", 8))
+        val result = service.statistics(2026, null)
+        assertEquals(LocalDate.parse("2025-10-18"), result.previousSamePeriod.to)
+        assertEquals(LocalDate.parse("2025-10-12"), result.previousSamePeriod.lastReportDate)
+        assertEquals(1, result.previousSamePeriod.completeCount)
+        assertEquals(2, result.previousFullYear.completeCount)
+    }
+
     @Test fun `default year boundary follows the injected church time zone`() {
         source()
         val berlin = Clock.fixed(Instant.parse("2026-12-31T23:30:00Z"), ZoneId.of("Europe/Berlin"))

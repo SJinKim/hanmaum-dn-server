@@ -23,7 +23,7 @@ data class GuideStatisticMetric(
     )
     val average: BigDecimal?,
     @field:Schema(
-        implementation = String::class,
+        implementation = GuideStatisticNullReason::class,
         types = ["string", "null"],
         description = GUIDE_REASON_DESCRIPTION,
     )
@@ -34,7 +34,7 @@ data class GuideStatisticMetric(
     )
     val sharePercent: BigDecimal?,
     @field:Schema(
-        implementation = String::class,
+        implementation = GuideStatisticNullReason::class,
         types = ["string", "null"],
         description = GUIDE_REASON_DESCRIPTION,
     )
@@ -63,7 +63,7 @@ data class GuideStatisticChange(
     @field:Schema(types = ["number", "null"], description = "Difference of current and baseline means, DECIMAL128.")
     val absoluteChange: BigDecimal?,
     @field:Schema(
-        implementation = String::class,
+        implementation = GuideStatisticNullReason::class,
         types = ["string", "null"],
         description = GUIDE_REASON_DESCRIPTION,
     )
@@ -74,7 +74,7 @@ data class GuideStatisticChange(
     )
     val percentChange: BigDecimal?,
     @field:Schema(
-        implementation = String::class,
+        implementation = GuideStatisticNullReason::class,
         types = ["string", "null"],
         description = GUIDE_REASON_DESCRIPTION,
     )

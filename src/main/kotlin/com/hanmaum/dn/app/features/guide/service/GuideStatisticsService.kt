@@ -41,8 +41,9 @@ class GuideStatisticsService(
         // One database read gives every table/chart metric the same report snapshot.
         val rows = reports.findAllByServiceDateBetweenAndDeletedAtIsNullOrderByServiceDateAsc(start.minusYears(1), upper)
         val selected = rows.filter { it.serviceDate >= start }
-        val cutoff = asOf ?: selected.lastOrNull()?.serviceDate ?: upper
+        val cutoff = asOf ?: if (year == today.year) selected.lastOrNull()?.serviceDate ?: upper else upper
         val current = period(start, cutoff, selected)
+        // Compare calendar dates, not Sunday ordinals; coverage counts expose unequal cohorts.
         val previousSame = period(start.minusYears(1), cutoff.minusYears(1), rows)
         val previousFull = period(start.minusYears(1), start.minusDays(1), rows)
         return GuideStatisticsResponse(

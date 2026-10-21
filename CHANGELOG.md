@@ -7,7 +7,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased] — 2026-03-30
 
 ### Fixed
-- HDN-330: Provide Guide calendar-period statistics with complete-report cohorts, nullable comparisons and a shared table/chart snapshot.
 - HDN-331: Harden Guide review flows with explicit editor reads, safe room seeding, bounded detail queries, controlled matrix conflicts, explicit detail revisions and settings-specific validation errors; remove the legacy room code after snapshot backfill.
 - HDN-311: Reject attendance check-ins from members that are not ACTIVE with 403 before any window, geofence or log is touched.
 - HDN-135: Notify members once per course when an existing application is accepted as ENROLLED, after the replacement commits.
@@ -21,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - HDN-202: Align newcomer import fingerprint column types with Hibernate's VARCHAR(64) mapping so schema validation can start the app.
 
 ### Added
+- HDN-330: Provide Guide calendar-period statistics with complete-report cohorts, nullable comparisons and a shared table/chart snapshot.
 - HDN-331: Add configurable room-backed Guide counting areas with per-report snapshots and versioned service entry, separate service-3 youth counts, NULL-aware canonical totals, explicit audited summary conversion and protection against direct summary overwrites.
 - HDN-329: Add Guide summary reports with UUID CRUD, strict nullable integer counts, derived totals/week deltas, version conflicts, scoped Guide roles and an explicit audited historical import with dry-run, idempotent retry and guarded rollback. The one-shot importer requires a maintenance profile; list deltas use a bulk lookup and XLSX fractions are rejected.
 - HDN-312: Count the day's 빠른 등록 visits in the 새가족 row of the 순별 attendance counts, once per day, without counting a linked newcomer who also checked in; expose `quickRecordCount` and `totalQuickRecordCount`.
