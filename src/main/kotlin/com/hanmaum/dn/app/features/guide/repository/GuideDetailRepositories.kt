@@ -16,6 +16,12 @@ interface GuideWorshipDetailRepository : JpaRepository<GuideWorshipDetail, Long>
     @Query("select d from GuideWorshipDetail d join fetch d.reportArea s join fetch s.area where d.report.publicId = :publicId")
     fun findAllByReportPublicId(publicId: UUID): List<GuideWorshipDetail>
 
+    @Query(
+        "select distinct d.report.publicId from GuideWorshipDetail d where d.report.publicId in :publicIds " +
+            "and (d.adultCount is not null or d.schoolCount is not null or d.youthCount is not null)",
+    )
+    fun findConfirmedReportIds(publicIds: Collection<UUID>): List<UUID>
+
     @Modifying(flushAutomatically = true)
     @Query("delete from GuideWorshipDetail d where d.report.publicId = :publicId")
     fun deleteMatrix(publicId: UUID): Int

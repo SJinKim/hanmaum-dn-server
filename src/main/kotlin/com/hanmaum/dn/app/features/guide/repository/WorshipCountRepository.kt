@@ -17,6 +17,34 @@ interface WorshipCountRepository : JpaRepository<WorshipCountReport, Long> {
 
     fun findByServiceDateInAndDeletedAtIsNull(serviceDates: Collection<LocalDate>): List<WorshipCountReport>
 
+    fun findAllByServiceDateLessThanEqualAndDeletedAtIsNullOrderByServiceDateDesc(
+        to: LocalDate,
+        pageable: Pageable,
+    ): List<WorshipCountReport>
+
+    @Query(
+        "select r from WorshipCountReport r where r.deletedAt is null and r.serviceDate <= :to and " +
+            "(r.service1Count is not null or r.service2Count is not null or r.service3Count is not null or " +
+            "exists (select d.id from GuideWorshipDetail d where d.report = r and " +
+            "(d.adultCount is not null or d.schoolCount is not null or d.youthCount is not null))) order by r.serviceDate desc",
+    )
+    fun findHomeConfirmed(
+        to: LocalDate,
+        pageable: Pageable,
+    ): List<WorshipCountReport>
+
+    @Query(
+        value =
+            "select * from guide_worship_reports where deleted_at is null and service_date <= :to " +
+                "and extract(isodow from service_date) = 7 and service1_count is not null " +
+                "and service2_count is not null and service3_count is not null order by service_date desc",
+        nativeQuery = true,
+    )
+    fun findHomeCompleteSundays(
+        to: LocalDate,
+        pageable: Pageable,
+    ): List<WorshipCountReport>
+
     fun findAllByServiceDateBetweenAndDeletedAtIsNullOrderByServiceDateAsc(
         from: LocalDate,
         to: LocalDate,

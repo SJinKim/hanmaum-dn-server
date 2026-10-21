@@ -19,6 +19,7 @@ import java.sql.SQLException
         WorshipCountController::class,
         GuideDetailsController::class,
         GuideAreaController::class,
+        GuideHomeController::class,
         GuideStatisticsController::class,
     ],
 )

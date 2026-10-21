@@ -34,7 +34,16 @@ class GuideDetailsService(
     private val reportAreas: GuideReportAreaRepository,
 ) {
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    fun get(publicId: UUID): GuideDetailsResponse {
+    fun get(publicId: UUID): GuideDetailsResponse = read(publicId, false)
+
+    /** Home keeps canonical counts available when stored room detail needs repair. Editing remains strict. */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    fun getForHome(publicId: UUID): GuideDetailsResponse = read(publicId, true)
+
+    private fun read(
+        publicId: UUID,
+        summaryFallback: Boolean,
+    ): GuideDetailsResponse {
         val report = reports.findByPublicIdAndDeletedAtIsNull(publicId) ?: missing()
         if (report.reportMode == GuideReportMode.SUMMARY_ONLY) {
             return GuideDetailsResponse(summaries.get(publicId), emptyList(), emptyList(), emptyList(), null)
@@ -44,6 +53,7 @@ class GuideDetailsService(
         if (areas.isEmpty() ||
             rows.size != areas.size * 3
         ) {
+            if (summaryFallback) return GuideDetailsResponse(summaries.get(publicId), emptyList(), emptyList(), emptyList(), null)
             conflict("Stored Guide detail matrix is incomplete; repair is required before editing.")
         }
         val calculated =
