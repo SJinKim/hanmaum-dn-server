@@ -8,6 +8,7 @@ import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.training.api.v1.dto.ApplicantPrefillDto
 import com.hanmaum.dn.app.features.training.api.v1.dto.MyTrainingApplicationDto
 import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingApplicationRequest
+import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingCatalogDto
 import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingCourseDto
 import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingDetailDto
 import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingDto
@@ -380,14 +381,57 @@ class TrainingControllerTest {
         verify(courseApplicationService, never()).cancel(any(), any())
     }
 
-    // ─── Admin-only endpoints stay admin-only ─────────────────────────────────
+    // ─── Catalog: training read roles ─────────────────────────────────────────
+
+    private val catalogEntry =
+        TrainingCatalogDto(
+            publicId = "t-001",
+            code = "YOUTH_POWER_DISCIPLESHIP",
+            name = "Power Discipleship",
+            nameKo = "파워제자반",
+            category = null,
+            sortOrder = 1,
+            hasCohorts = true,
+            isActive = true,
+            prerequisiteCode = null,
+        )
+
+    @Test
+    fun `GET catalog returns the catalog to a training viewer`() {
+        `when`(trainingService.getCatalog(false)).thenReturn(listOf(catalogEntry))
+
+        mockMvc
+            .perform(
+                get("/api/v1/trainings/catalog")
+                    .param("activeOnly", "false")
+                    .with(jwt().authorities(SimpleGrantedAuthority("ROLE_TRAINING_VIEWER"))),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data[0].code").value("YOUTH_POWER_DISCIPLESHIP"))
+    }
+
+    @Test
+    fun `GET catalog returns the catalog to a training editor through the role hierarchy`() {
+        `when`(trainingService.getCatalog(false)).thenReturn(listOf(catalogEntry))
+
+        mockMvc
+            .perform(
+                get("/api/v1/trainings/catalog")
+                    .param("activeOnly", "false")
+                    .with(jwt().authorities(SimpleGrantedAuthority("ROLE_TRAINING_EDITOR"))),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data[0].code").value("YOUTH_POWER_DISCIPLESHIP"))
+    }
 
     @Test
     fun `GET catalog returns 403 for a plain member`() {
         mockMvc
             .perform(get("/api/v1/trainings/catalog").with(jwt().authorities(SimpleGrantedAuthority("ROLE_MEMBER"))))
             .andExpect(status().isForbidden)
+
+        verify(trainingService, never()).getCatalog(any())
     }
+
+    // ─── Admin-only endpoints stay admin-only ─────────────────────────────────
 
     @Test
     fun `GET cohorts returns 403 for a plain member`() {

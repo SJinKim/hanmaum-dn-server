@@ -2,6 +2,7 @@ package com.hanmaum.dn.app.features.training.api.v1
 
 import com.hanmaum.dn.app.common.api.ErrorResponse
 import com.hanmaum.dn.app.common.dto.ApiResponse
+import com.hanmaum.dn.app.common.security.Authz
 import com.hanmaum.dn.app.features.courseapplication.service.CourseApplicationService
 import com.hanmaum.dn.app.features.training.api.v1.dto.MyTrainingApplicationDto
 import com.hanmaum.dn.app.features.training.api.v1.dto.TrainingApplicationRequest
@@ -199,9 +200,12 @@ class TrainingController(
      *
      * activeOnly defaults to true so selection lists never offer the discontinued Kairos
      * courses; the grid passes false to render archived data.
+     *
+     * Role: TRAINING_READ — the 양육 table sorts members into stages by catalog code, so
+     * training viewers and editors need it as much as admins do.
      */
     @GetMapping("/catalog")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize(Authz.TRAINING_READ)
     fun catalog(
         @RequestParam(defaultValue = "true") activeOnly: Boolean,
     ): ResponseEntity<ApiResponse<List<TrainingCatalogDto>>> =
