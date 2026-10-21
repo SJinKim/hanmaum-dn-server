@@ -14,7 +14,14 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 import java.sql.SQLException
 
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@RestControllerAdvice(assignableTypes = [WorshipCountController::class, GuideDetailsController::class, GuideAreaController::class])
+@RestControllerAdvice(
+    assignableTypes = [
+        WorshipCountController::class,
+        GuideDetailsController::class,
+        GuideAreaController::class,
+        GuideStatisticsController::class,
+    ],
+)
 class GuideExceptionHandler {
     @ExceptionHandler(GuideException::class)
     fun domain(exception: GuideException): ProblemDetail = ProblemDetail.forStatusAndDetail(exception.status, exception.safeDetail)
