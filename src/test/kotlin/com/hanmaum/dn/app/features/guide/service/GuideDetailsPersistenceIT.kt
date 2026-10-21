@@ -28,6 +28,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @DataJpaTest(properties = ["spring.jpa.show-sql=false"])
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -56,7 +57,7 @@ class GuideDetailsPersistenceIT {
         summaries.delete(deleted.publicId, deleted.version, "editor")
         em.clear()
         val clock = Clock.fixed(Instant.parse("2026-10-25T09:00:00Z"), ZoneId.of("Europe/Berlin"))
-        val home = GuideHomeService(reports, details, service, clock)
+        val home = GuideHomeService(reports, service, clock)
         val before = home.get()
         assertEquals(date.minusWeeks(1), before.attendance?.report?.serviceDate)
         assertEquals(blank.report.publicId, before.currentSundayReport?.publicId)
@@ -78,7 +79,7 @@ class GuideDetailsPersistenceIT {
         val created = service.create(GuideDetailsCreateRequest(date, null, guideYouthExample()), "editor")
         em.clear()
         val clock = Clock.fixed(Instant.parse("2026-10-25T09:00:00Z"), ZoneId.of("Europe/Berlin"))
-        val home = GuideHomeService(reports, details, service, clock).get()
+        val home = GuideHomeService(reports, service, clock).get()
         assertEquals(created.report.publicId, home.attendance?.report?.publicId)
         assertEquals("COMPLETE", home.status.name)
         assertEquals(70L, home.attendance?.report?.totalCount)
@@ -86,6 +87,32 @@ class GuideDetailsPersistenceIT {
         assertEquals(25L, home.attendance?.totals?.youthCount)
         assertEquals(70L, home.metrics.totalCount)
         assertEquals(70, home.shares[2].count)
+    }
+
+    @Test fun `home finds confirmed and complete reports beyond recent blank drafts`() {
+        val old = summaries.create(WorshipCountRequest(date.minusWeeks(20), 5, 10, 15), "legacy")
+        repeat(6) { offset -> service.create(GuideDetailsCreateRequest(date.minusWeeks(offset.toLong())), "editor") }
+        em.clear()
+        val clock = Clock.fixed(Instant.parse("2026-10-25T09:00:00Z"), ZoneId.of("Europe/Berlin"))
+        val home = GuideHomeService(reports, service, clock).get()
+        assertEquals(old.publicId, home.attendance?.report?.publicId)
+        assertEquals(30L, home.metrics.totalCount)
+        assertEquals(4, home.lastFourReports.size)
+        assertTrue(home.lastFourReports.all { it.totalCount == null })
+        assertEquals(8, home.timeline.size)
+        assertTrue(home.timeline.all { it.totalCount == null })
+    }
+
+    @Test fun `damaged detail keeps home canonical summary readable while editing is blocked`() {
+        val created = service.create(GuideDetailsCreateRequest(date, null, guideYouthExample()), "editor")
+        details.deleteMatrix(created.report.publicId)
+        em.clear()
+        val fallback = service.getForHome(created.report.publicId)
+        assertEquals(70L, fallback.report.totalCount)
+        assertEquals("DETAILED", fallback.report.reportMode)
+        assertTrue(fallback.entries.isEmpty())
+        assertNull(fallback.totals)
+        assertEquals(HttpStatus.CONFLICT, assertFailsWith<GuideException> { service.get(created.report.publicId) }.status)
     }
 
     @Test fun `detail create persists one parent and twelve unique rows consumed by summary history`() {

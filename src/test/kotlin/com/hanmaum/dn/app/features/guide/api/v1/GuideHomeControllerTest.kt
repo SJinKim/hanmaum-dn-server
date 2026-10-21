@@ -2,7 +2,6 @@ package com.hanmaum.dn.app.features.guide.api.v1
 
 import com.hanmaum.dn.app.common.config.ApiPrefixConfig
 import com.hanmaum.dn.app.common.config.SecurityConfig
-import com.hanmaum.dn.app.features.guide.repository.GuideWorshipDetailRepository
 import com.hanmaum.dn.app.features.guide.repository.WorshipCountRepository
 import com.hanmaum.dn.app.features.guide.service.GuideDetailsService
 import com.hanmaum.dn.app.features.guide.service.GuideHomeService
@@ -43,11 +42,17 @@ class GuideHomeControllerTest {
 
     @Test fun `guide readers and inherited super roles read fresh snapshots but members and anonymous cannot`() {
         val reports = mock<WorshipCountRepository>()
-        whenever(reports.findAllByServiceDateLessThanEqualAndDeletedAtIsNullOrderByServiceDateDesc(any())).thenReturn(emptyList())
+        whenever(reports.findAllByServiceDateLessThanEqualAndDeletedAtIsNullOrderByServiceDateDesc(any(), any())).thenReturn(emptyList())
+        whenever(reports.findHomeConfirmed(any(), any())).thenReturn(emptyList())
+        whenever(reports.findHomeCompleteSundays(any(), any())).thenReturn(emptyList())
+        whenever(reports.findRange(any(), any(), any())).thenReturn(
+            org.springframework.data.domain
+                .PageImpl(emptyList()),
+        )
+        whenever(reports.findByServiceDateInAndDeletedAtIsNull(any())).thenReturn(emptyList())
         val empty =
             GuideHomeService(
                 reports,
-                mock<GuideWorshipDetailRepository>(),
                 mock<GuideDetailsService>(),
                 Clock.fixed(Instant.parse("2026-10-18T08:00:00Z"), ZoneId.of("Europe/Berlin")),
             ).get()

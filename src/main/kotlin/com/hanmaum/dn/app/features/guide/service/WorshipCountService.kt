@@ -131,26 +131,28 @@ class WorshipCountService(
     private fun dto(
         r: WorshipCountReport,
         previous: Long? = reports.findByServiceDateAndDeletedAtIsNull(r.serviceDate.minusWeeks(1))?.total(),
-    ): WorshipCountResponse {
-        val total = r.total()
-        return WorshipCountResponse(
-            r.publicId,
-            r.serviceDate,
-            r.service1Count,
-            r.service2Count,
-            r.service3Count,
-            total,
-            if (total != null && previous != null) total - previous else null,
-            r.notes,
-            r.version,
-            reportMode = r.reportMode.name,
-            complete = total != null,
-        )
-    }
+    ): WorshipCountResponse = r.toGuideResponse(previous)
 
     private fun bad(message: String): Nothing = throw GuideException(HttpStatus.BAD_REQUEST, message)
 
     private fun conflict(message: String): Nothing = throw GuideException(HttpStatus.CONFLICT, message)
 
     private fun missing(): Nothing = throw GuideException(HttpStatus.NOT_FOUND, "Report not found.")
+}
+
+internal fun WorshipCountReport.toGuideResponse(previous: Long?): WorshipCountResponse {
+    val total = this.total()
+    return WorshipCountResponse(
+        this.publicId,
+        this.serviceDate,
+        this.service1Count,
+        this.service2Count,
+        this.service3Count,
+        total,
+        if (total != null && previous != null) total - previous else null,
+        this.notes,
+        this.version,
+        reportMode = this.reportMode.name,
+        complete = total != null,
+    )
 }

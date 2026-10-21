@@ -11,8 +11,10 @@ import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
+import org.springframework.data.domain.PageImpl
 import java.math.BigDecimal
 import java.time.Clock
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -27,7 +29,7 @@ class GuideHomeServiceTest {
     private val rows = mock<GuideWorshipDetailRepository>()
     private val details = mock<GuideDetailsService>()
     private val clock = Clock.fixed(Instant.parse("2026-10-18T08:00:00Z"), ZoneId.of("Europe/Berlin"))
-    private val service = GuideHomeService(reports, rows, details, clock)
+    private val service = GuideHomeService(reports, details, clock)
     private val sunday = LocalDate.of(2026, 10, 18)
 
     private fun report(
@@ -49,7 +51,24 @@ class GuideHomeServiceTest {
     )
 
     private fun source(vararg source: WorshipCountReport) {
-        whenever(reports.findAllByServiceDateLessThanEqualAndDeletedAtIsNullOrderByServiceDateDesc(any())).thenReturn(source.toList())
+        whenever(reports.findAllByServiceDateLessThanEqualAndDeletedAtIsNullOrderByServiceDateDesc(any(), any())).thenReturn(source.take(4))
+        whenever(reports.findHomeConfirmed(any(), any())).thenAnswer {
+            source
+                .filter {
+                    it.total() != null ||
+                        listOf(it.service1Count, it.service2Count, it.service3Count).any { count -> count != null } ||
+                        it.publicId in rows.findConfirmedReportIds(listOf(it.publicId))
+                }.take(1)
+        }
+        whenever(reports.findHomeCompleteSundays(any(), any())).thenReturn(
+            source
+                .filter {
+                    it.serviceDate.dayOfWeek == DayOfWeek.SUNDAY &&
+                        it.total() != null
+                }.take(4),
+        )
+        whenever(reports.findRange(any(), any(), any())).thenReturn(PageImpl(source.filter { it.serviceDate >= sunday.minusWeeks(7) }))
+        whenever(reports.findByServiceDateInAndDeletedAtIsNull(any())).thenReturn(source.toList())
     }
 
     @Test fun `empty Sunday retains eight unknown slots without inventing zero or detail`() {
@@ -108,7 +127,7 @@ class GuideHomeServiceTest {
         val partial = report(total = null).also { it.reportMode = GuideReportMode.DETAILED }
         source(partial, report(1, 7))
         whenever(rows.findConfirmedReportIds(listOf(partial.publicId))).thenReturn(listOf(partial.publicId))
-        whenever(details.get(partial.publicId)).thenReturn(
+        whenever(details.getForHome(partial.publicId)).thenReturn(
             GuideDetailsResponse(
                 WorshipCountResponse(partial.publicId, sunday, null, null, null, null, null, null, 0, "DETAILED", false),
                 emptyList(),
@@ -172,11 +191,11 @@ class GuideHomeServiceTest {
     @Test fun `church timezone determines Sunday even when UTC is still Saturday`() {
         val churchClock = Clock.fixed(Instant.parse("2026-10-17T22:30:00Z"), ZoneId.of("Europe/Berlin"))
         source()
-        val home = GuideHomeService(reports, rows, details, churchClock).get()
+        val home = GuideHomeService(reports, details, churchClock).get()
         assertEquals(sunday, home.currentSunday)
         assertEquals(churchClock.instant(), home.asOf)
         assertEquals("Europe/Berlin", home.timeZone)
-        val utc = GuideHomeService(reports, rows, details, churchClock.withZone(ZoneId.of("UTC"))).get()
+        val utc = GuideHomeService(reports, details, churchClock.withZone(ZoneId.of("UTC"))).get()
         assertEquals(sunday.minusWeeks(1), utc.currentSunday)
     }
 }

@@ -9,8 +9,8 @@ import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideHomeStatus
 import com.hanmaum.dn.app.features.guide.api.v1.dto.WorshipCountResponse
 import com.hanmaum.dn.app.features.guide.domain.GuideReportMode
 import com.hanmaum.dn.app.features.guide.domain.WorshipCountReport
-import com.hanmaum.dn.app.features.guide.repository.GuideWorshipDetailRepository
 import com.hanmaum.dn.app.features.guide.repository.WorshipCountRepository
+import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Isolation
 import org.springframework.transaction.annotation.Transactional
@@ -25,7 +25,6 @@ import java.util.UUID
 @Service
 class GuideHomeService(
     private val reports: WorshipCountRepository,
-    private val detailRows: GuideWorshipDetailRepository,
     private val details: GuideDetailsService,
     private val clock: Clock,
 ) {
@@ -33,28 +32,22 @@ class GuideHomeService(
     fun get(): GuideHomeResponse {
         val asOf = clock.instant()
         val sunday = LocalDate.ofInstant(asOf, clock.zone).with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
-        val rows = reports.findAllByServiceDateLessThanEqualAndDeletedAtIsNullOrderByServiceDateDesc(sunday)
+        val recent = reports.findAllByServiceDateLessThanEqualAndDeletedAtIsNullOrderByServiceDateDesc(sunday, PageRequest.of(0, 4))
+        val selected = reports.findHomeConfirmed(sunday, PageRequest.of(0, 1)).firstOrNull()
+        val complete = reports.findHomeCompleteSundays(sunday, PageRequest.of(0, 4))
+        val timeline = reports.findRange(sunday.minusWeeks(7), sunday, PageRequest.of(0, 50)).content
+        val displayed = (recent + listOfNotNull(selected) + complete + timeline).distinctBy { it.publicId }
+        val previous = reports.findByServiceDateInAndDeletedAtIsNull(displayed.map { it.serviceDate.minusWeeks(1) })
+        val rows = (displayed + previous).distinctBy { it.publicId }.sortedByDescending { it.serviceDate }
         val byDate = rows.associateBy { it.serviceDate }
-        val unconfirmedDetails = rows.filter { it.reportMode == GuideReportMode.DETAILED && counts(it).all { count -> count == null } }
-        val confirmedDetails =
-            if (unconfirmedDetails.isEmpty()) {
-                emptySet()
-            } else {
-                detailRows
-                    .findConfirmedReportIds(
-                        unconfirmedDetails.map { it.publicId },
-                    ).toSet()
-            }
-        val selected = rows.firstOrNull { counts(it).any { count -> count != null } || it.publicId in confirmedDetails }
         val attendance =
             selected?.let {
                 if (it.reportMode == GuideReportMode.DETAILED) {
-                    details.get(it.publicId)
+                    details.getForHome(it.publicId)
                 } else {
                     GuideDetailsResponse(dto(it, byDate), emptyList(), emptyList(), emptyList(), null)
                 }
             }
-        val complete = rows.filter { it.serviceDate.dayOfWeek == DayOfWeek.SUNDAY && it.total() != null }
         val selectedTotal = selected?.total()
         val sharesReason =
             when {
@@ -76,7 +69,7 @@ class GuideHomeService(
             selected?.serviceDate != sunday,
             attendance,
             byDate[sunday]?.let { dto(it, byDate) },
-            rows.take(4).map { dto(it, byDate) },
+            recent.map { dto(it, byDate) },
             metrics(complete),
             (7L downTo 0L).map { offset ->
                 val date = sunday.minusWeeks(offset)
@@ -139,21 +132,5 @@ class GuideHomeService(
     private fun dto(
         report: WorshipCountReport,
         byDate: Map<LocalDate, WorshipCountReport>,
-    ): WorshipCountResponse {
-        val total = report.total()
-        val previous = byDate[report.serviceDate.minusWeeks(1)]?.total()
-        return WorshipCountResponse(
-            report.publicId,
-            report.serviceDate,
-            report.service1Count,
-            report.service2Count,
-            report.service3Count,
-            total,
-            if (total != null && previous != null) total - previous else null,
-            report.notes,
-            report.version,
-            report.reportMode.name,
-            total != null,
-        )
-    }
+    ): WorshipCountResponse = report.toGuideResponse(byDate[report.serviceDate.minusWeeks(1)]?.total())
 }
