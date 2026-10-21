@@ -16,7 +16,11 @@ import java.sql.SQLException
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(
     assignableTypes = [
-        WorshipCountController::class, GuideDetailsController::class, GuideAreaController::class, GuideHomeController::class,
+        WorshipCountController::class,
+        GuideDetailsController::class,
+        GuideAreaController::class,
+        GuideHomeController::class,
+        GuideStatisticsController::class,
     ],
 )
 class GuideExceptionHandler {

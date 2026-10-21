@@ -27,7 +27,10 @@ import tools.jackson.databind.json.JsonMapper
 import java.nio.file.Files
 import java.nio.file.Path
 import java.text.Normalizer
+import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
@@ -68,6 +71,50 @@ class GuidePersistenceIT {
                 GuideImportRow(6, date, listOf(186, 384, 146), null, mapOf("B" to "10/18"), 63),
             )
         return GuideImportSource("synthetic-source-hash", rows, emptyList()).also { whenever(reader.read(path)).thenReturn(it) }
+    }
+
+    @Test fun `statistics query reflects committed counts soft deletes and inclusive cutoff`() {
+        val statistics = GuideStatisticsService(reports, Clock.fixed(Instant.parse("2026-10-20T12:00:00Z"), ZoneId.of("Europe/Berlin")))
+        service.create(WorshipCountRequest(LocalDate.parse("2025-01-05"), 10, 20, 30), "test")
+        val current = service.create(WorshipCountRequest(LocalDate.parse("2026-01-04"), 20, 40, 60), "test")
+        service.create(WorshipCountRequest(LocalDate.parse("2026-01-11"), 1, null, 0), "test")
+        service.create(WorshipCountRequest(LocalDate.parse("2026-11-01"), 100, 0, 0), "test")
+        val removed = service.create(WorshipCountRequest(LocalDate.parse("2026-01-18"), 10, 20, 30), "test")
+        service.delete(removed.publicId, removed.version, "test")
+        em.flush()
+        em.clear()
+        val first = statistics.statistics(2026, LocalDate.parse("2026-01-31"))
+        assertEquals(2, first.current.reportCount)
+        assertEquals(1, first.current.completeCount)
+        assertEquals(
+            120L,
+            first.current.metrics
+                .last()
+                .sum,
+        )
+        assertEquals(2, first.timeline.size)
+        val updated =
+            service.update(
+                current.publicId,
+                WorshipCountRequest(current.serviceDate, 21, 40, 60, version = current.version),
+                "test",
+            )
+        assertEquals(
+            121L,
+            statistics
+                .statistics(2026, LocalDate.parse("2026-01-31"))
+                .current.metrics
+                .last()
+                .sum,
+        )
+        service.delete(updated.publicId, updated.version, "test")
+        val after = statistics.statistics(2026, LocalDate.parse("2026-01-31"))
+        assertEquals(1, after.current.incompleteCount)
+        assertNull(
+            after.current.metrics
+                .last()
+                .sum,
+        )
     }
 
     @Test fun `actual persistence update version pagination soft delete and exact previous week`() {
