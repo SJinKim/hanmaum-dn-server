@@ -230,9 +230,10 @@ jobs:
             docker inspect --format='{{.State.Health.Status}}' hanmaumApp-backend-staging | grep -q 'healthy' \
               || { echo "Staging backend health check failed"; exit 1; }
 
+            # Consume the full stream; grep -q can cause upstream SIGPIPE under pipefail.
             docker exec hanmaumApp-backend-staging \
               curl -fsS http://hanmaum-postgres-exporter-staging:9187/metrics \
-              | grep -Eq '^pg_up 1(\.0)?$' \
+              | grep -E '^pg_up 1(\.0)?$' > /dev/null \
               || { echo "Staging postgres_exporter cannot monitor PostgreSQL"; exit 1; }
 
             # External smoke test — validates Caddy routing + TLS end-to-end
