@@ -166,10 +166,11 @@ class NewcomerService(
         request.gender?.let { member.gender = it }
         request.birthDate?.let { member.birthDate = it }
         request.phoneNumber?.let { member.phoneNumber = it.trim() }
-        request.street?.let { member.street = it }
-        request.houseNumber?.let { member.houseNumber = it }
-        request.zipCode?.let { member.zipCode = it }
-        request.city?.let { member.city = it }
+        // Address fields: "" clears, an omitted field stays unchanged (same rule as workOrSchool).
+        request.street?.let { member.street = it.trim().ifBlank { null } }
+        request.houseNumber?.let { member.houseNumber = it.trim().ifBlank { null } }
+        request.zipCode?.let { member.zipCode = it.trim().ifBlank { null } }
+        request.city?.let { member.city = it.trim().ifBlank { null } }
         request.baptism?.let { member.baptism = it }
         request.profileImageUrl?.let { member.profileImageUrl = it }
         request.registrationDate?.let { member.registrationDate = it }
