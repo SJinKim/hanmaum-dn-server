@@ -109,6 +109,39 @@ class NewcomerServiceTest {
     }
 
     @Test
+    fun `update clears an address field the request sends as blank`() {
+        val profile = NewcomerProfile(addressedMember())
+        whenever(profiles.findForUpdate(profile.publicId)).thenReturn(profile)
+        whenever(profiles.saveAndFlush(any<NewcomerProfile>())).thenAnswer { it.arguments[0] as NewcomerProfile }
+
+        service.update(
+            profile.publicId,
+            UpdateNewcomerRequest(version = profile.version, street = "", houseNumber = " ", zipCode = "", city = ""),
+        )
+
+        val member = profile.member
+        assertNull(member.street)
+        assertNull(member.houseNumber)
+        assertNull(member.zipCode)
+        assertNull(member.city)
+    }
+
+    @Test
+    fun `update keeps an address field the request omits`() {
+        val profile = NewcomerProfile(addressedMember())
+        whenever(profiles.findForUpdate(profile.publicId)).thenReturn(profile)
+        whenever(profiles.saveAndFlush(any<NewcomerProfile>())).thenAnswer { it.arguments[0] as NewcomerProfile }
+
+        service.update(profile.publicId, UpdateNewcomerRequest(version = profile.version, city = "Berlin"))
+
+        val member = profile.member
+        assertEquals("Hauptstraße", member.street)
+        assertEquals("7a", member.houseNumber)
+        assertEquals("80331", member.zipCode)
+        assertEquals("Berlin", member.city)
+    }
+
+    @Test
     fun `update rejects a stale optimistic locking version`() {
         val profile = NewcomerProfile(Member(lastName = "김", firstName = "새봄"))
         whenever(profiles.findForUpdate(profile.publicId)).thenReturn(profile)
@@ -117,4 +150,14 @@ class NewcomerServiceTest {
 
         assertEquals(HttpStatus.CONFLICT, error.status)
     }
+
+    private fun addressedMember() =
+        Member(
+            lastName = "김",
+            firstName = "새봄",
+            street = "Hauptstraße",
+            houseNumber = "7a",
+            zipCode = "80331",
+            city = "München",
+        )
 }

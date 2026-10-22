@@ -53,10 +53,10 @@ class NewcomerService(
                     birthDate = request.birthDate,
                     phoneNumber = request.phoneNumber?.trim(),
                     email = request.email?.trim()?.lowercase(),
-                    street = request.street,
-                    houseNumber = request.houseNumber,
-                    zipCode = request.zipCode,
-                    city = request.city,
+                    street = request.street?.trim()?.ifBlank { null },
+                    houseNumber = request.houseNumber?.trim()?.ifBlank { null },
+                    zipCode = request.zipCode?.trim()?.ifBlank { null },
+                    city = request.city?.trim()?.ifBlank { null },
                     registrationDate = request.registrationDate ?: LocalDate.now(),
                     // No account, so nothing to approve: PENDING is the app-approval queue (#275).
                     memberStatus = MemberStatus.ACTIVE,
@@ -166,10 +166,10 @@ class NewcomerService(
         request.gender?.let { member.gender = it }
         request.birthDate?.let { member.birthDate = it }
         request.phoneNumber?.let { member.phoneNumber = it.trim() }
-        request.street?.let { member.street = it }
-        request.houseNumber?.let { member.houseNumber = it }
-        request.zipCode?.let { member.zipCode = it }
-        request.city?.let { member.city = it }
+        request.street?.let { member.street = it.trim().ifBlank { null } }
+        request.houseNumber?.let { member.houseNumber = it.trim().ifBlank { null } }
+        request.zipCode?.let { member.zipCode = it.trim().ifBlank { null } }
+        request.city?.let { member.city = it.trim().ifBlank { null } }
         request.baptism?.let { member.baptism = it }
         request.profileImageUrl?.let { member.profileImageUrl = it }
         request.registrationDate?.let { member.registrationDate = it }
