@@ -117,4 +117,34 @@ class NewcomerServiceTest {
 
         assertEquals(HttpStatus.CONFLICT, error.status)
     }
+
+    @Test
+    fun `update clears an address field sent as blank`() {
+        val member =
+            Member(lastName = "김", firstName = "새봄", street = "Hauptstr.", houseNumber = "1", zipCode = "60311", city = "Frankfurt")
+        val profile = NewcomerProfile(member)
+        whenever(profiles.findForUpdate(profile.publicId)).thenReturn(profile)
+        whenever(profiles.saveAndFlush(any<NewcomerProfile>())).thenAnswer { it.arguments[0] }
+
+        service.update(profile.publicId, UpdateNewcomerRequest(version = 0, street = "", houseNumber = " ", zipCode = "", city = ""))
+
+        assertNull(member.street)
+        assertNull(member.houseNumber)
+        assertNull(member.zipCode)
+        assertNull(member.city)
+    }
+
+    @Test
+    fun `update keeps an address field the request omits`() {
+        val member = Member(lastName = "김", firstName = "새봄", street = "Hauptstr.", zipCode = "60311", city = "Frankfurt")
+        val profile = NewcomerProfile(member)
+        whenever(profiles.findForUpdate(profile.publicId)).thenReturn(profile)
+        whenever(profiles.saveAndFlush(any<NewcomerProfile>())).thenAnswer { it.arguments[0] }
+
+        service.update(profile.publicId, UpdateNewcomerRequest(version = 0, city = " Offenbach "))
+
+        assertEquals("Hauptstr.", member.street)
+        assertEquals("60311", member.zipCode)
+        assertEquals("Offenbach", member.city)
+    }
 }
