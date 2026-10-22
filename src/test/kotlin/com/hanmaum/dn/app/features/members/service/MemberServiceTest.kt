@@ -1,8 +1,14 @@
 package com.hanmaum.dn.app.features.members.service
 
+import com.hanmaum.dn.app.common.api.ApiErrorCode
+import com.hanmaum.dn.app.common.domainvalue.ConsentPurpose
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.common.observability.ExternalCallOutcome
 import com.hanmaum.dn.app.common.observability.OperationalMetrics
+import com.hanmaum.dn.app.features.consents.api.v1.dto.ConsentGrant
+import com.hanmaum.dn.app.features.consents.domain.ConsentSource
+import com.hanmaum.dn.app.features.consents.service.ConsentException
+import com.hanmaum.dn.app.features.consents.service.ConsentService
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.groups.domain.GroupLeader
 import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
@@ -1326,6 +1332,58 @@ class MemberServiceTest {
         org.mockito.kotlin
             .verify(intake)
             .openForPossibleMatches(any())
+    }
+
+    private fun serviceWithConsents(consentService: ConsentService) =
+        MemberService(
+            memberRepository,
+            churchGroupRepository,
+            groupLeaderRepository,
+            memberGraduationRepository,
+            userTrainingRepository,
+            trainingRepository,
+            ministryAssignmentRepository,
+            ministryRepository,
+            newcomerProfileRepository,
+            keycloak,
+            CurrentMemberResolver(memberRepository, org.mockito.kotlin.mock()),
+            operationalMetrics,
+            eventPublisher,
+            "test-realm",
+            consentService = consentService,
+        )
+
+    @Test
+    fun `registerMember records the privacy consent on the saved member`() {
+        val consentService = org.mockito.kotlin.mock<ConsentService>()
+        val grant = ConsentGrant(accepted = true, version = "v1")
+        val req = registerReq().copy(consent = grant)
+        `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
+        `when`(memberRepository.findSimilarNames(req.firstName, req.lastName)).thenReturn(emptyList())
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+        setupKeycloakMock()
+
+        val member = serviceWithConsents(consentService).registerMember(req, CLIENT_IP)
+
+        org.mockito.kotlin
+            .verify(consentService)
+            .require(member, ConsentPurpose.APP_PRIVACY, grant, ConsentSource.REGISTRATION)
+    }
+
+    @Test
+    fun `registerMember with a refused consent creates neither a member nor a Keycloak user`() {
+        val consentService = org.mockito.kotlin.mock<ConsentService>()
+        val grant = ConsentGrant(accepted = true, version = "v0")
+        `when`(consentService.check(ConsentPurpose.APP_PRIVACY, grant)).thenThrow(
+            ConsentException(HttpStatus.CONFLICT, ApiErrorCode.CONSENT_VERSION_OUTDATED, "outdated"),
+        )
+
+        assertThrows<ConsentException> {
+            serviceWithConsents(consentService).registerMember(registerReq().copy(consent = grant), CLIENT_IP)
+        }
+
+        verify(memberRepository, never()).save(any<Member>())
+        org.mockito.kotlin.verifyNoInteractions(keycloak)
     }
 
     @Test

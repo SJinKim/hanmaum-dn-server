@@ -3,6 +3,7 @@ package com.hanmaum.dn.app.features.members.api.v1.dto
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.common.serialization.TrimmingStringConverter
+import com.hanmaum.dn.app.features.consents.api.v1.dto.ConsentGrant
 import com.hanmaum.dn.app.features.members.domain.IdentityStatus
 import dev.zacsweers.redacted.annotations.Redacted
 import dev.zacsweers.redacted.annotations.Unredacted
@@ -320,6 +321,12 @@ data class RegisterMemberRequest(
     val houseNumber: String? = null,
     @field:Size(max = 20)
     val zipCode: String? = null,
+    /**
+     * Agreement to the APP_PRIVACY policy shown on the form (HDN-358). Optional until
+     * `app.consents.enforced` lists APP_PRIVACY, so older app builds keep registering.
+     */
+    @field:Valid
+    @Unredacted val consent: ConsentGrant? = null,
 )
 
 /**

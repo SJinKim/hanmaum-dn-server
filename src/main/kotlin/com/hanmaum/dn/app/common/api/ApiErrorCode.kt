@@ -74,4 +74,16 @@ enum class ApiErrorCode {
      * INACTIVE members may still be without a 순.
      */
     MEMBER_GROUP_REQUIRED,
+
+    /**
+     * The request needs the member's consent to a data processing purpose and carried none,
+     * or carried one not accepted. The app shows the consent text and asks again.
+     */
+    CONSENT_REQUIRED,
+
+    /**
+     * The consent names a policy version that is no longer in force. The app refetches
+     * GET /consents/policies, shows the new text and asks again.
+     */
+    CONSENT_VERSION_OUTDATED,
 }

@@ -17,10 +17,11 @@ run the same image and the same rules. Only Caddy sits in front of them.
 | `GET /api/v1/newcomer-forms/{token}` | yes | the token is the capability |
 | `POST /api/v1/newcomer-forms/{token}/submissions` | yes | token, 10 per minute per token and address |
 | `POST /api/v1/members/register` | yes | 10 per 10 minutes per address, size limits on every field |
+| `GET /api/v1/consents/policies` | yes | read-only; returns the policy versions in force, no member data |
 | everything else | no | bearer token (`KEYCLOAK_ENVIRONMENTS.md`), roles via `@PreAuthorize` |
 
 The neighbours of the anonymous rows stay protected, for example `GET /api/v1/newcomer-forms`
-and `GET /api/v1/members/register`.
+`GET /api/v1/members/register` and `GET /api/v1/members/me/consents`.
 
 Announcements and albums need a token too, list and detail alike. Only the dashboard and the app
 read them, and both call them after login. CORS does not keep other callers out (it binds only
@@ -50,7 +51,7 @@ network). Without it, every caller would share Caddy's address and one limit.
 ## Swagger UI with a token (local dev)
 
 Swagger UI runs only with the dev profile. Every operation in the spec carries the `bearerAuth`
-requirement (HTTP bearer, JWT) except the three anonymous rows above, which have `security: []`.
+requirement (HTTP bearer, JWT) except the four anonymous API rows above, which have `security: []`.
 
 1. Open `http://localhost:8080/swagger-ui.html`.
 2. Get an access token for the local realm `hanmaum`, for example from the dashboard's network tab.

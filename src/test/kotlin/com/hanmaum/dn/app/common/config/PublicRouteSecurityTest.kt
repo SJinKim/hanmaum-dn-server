@@ -56,6 +56,7 @@ class PublicRouteSecurityTest {
                 HttpMethod.GET to "/api/v1/newcomer-forms/some-token",
                 HttpMethod.POST to "/api/v1/newcomer-forms/some-token/submissions",
                 HttpMethod.POST to "/api/v1/members/register",
+                HttpMethod.GET to "/api/v1/consents/policies",
             )
         public.forEach { (method, path) -> assertEquals(200, anonymousStatus(method, path), "$method $path") }
     }
@@ -75,6 +76,8 @@ class PublicRouteSecurityTest {
                 HttpMethod.POST to "/api/v1/newcomer-forms",
                 HttpMethod.GET to "/api/v1/members/register",
                 HttpMethod.POST to "/api/v1/members",
+                HttpMethod.GET to "/api/v1/members/me/consents",
+                HttpMethod.POST to "/api/v1/members/me/consents",
             )
         protected.forEach { (method, path) -> assertEquals(401, anonymousStatus(method, path), "$method $path") }
     }
@@ -119,6 +122,8 @@ private class PublicRouteProbeController {
         "/api/v1/newcomer-forms",
         "/api/v1/newcomer-forms/{token}",
         "/api/v1/members/register",
+        "/api/v1/consents/policies",
+        "/api/v1/members/me/consents",
     )
     fun read(): String = "ok"
 
@@ -129,6 +134,7 @@ private class PublicRouteProbeController {
         "/api/v1/newcomer-forms/{token}/submissions",
         "/api/v1/members/register",
         "/api/v1/members",
+        "/api/v1/members/me/consents",
     )
     fun write(): String = "ok"
 }

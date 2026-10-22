@@ -83,6 +83,14 @@ app:
     backfill-enabled: ${PII_BACKFILL_ENABLED:true}
     backfill-batch-size: ${PII_BACKFILL_BATCH_SIZE:200}
     max-in-memory-members: ${PII_MAX_IN_MEMORY_MEMBERS:5000}
+  # Consent to data processing (HDN-358). Bump a version when its policy text changes: every
+  # standing grant of the old one turns OUTDATED and the app asks again. A purpose listed in
+  # `enforced` is refused without consent; add it only once the app release that sends it is out.
+  consents:
+    versions:
+      APP_PRIVACY: ${APP_CONSENTS_VERSION_APP_PRIVACY:v1}
+      COURSE_APPLICATION: ${APP_CONSENTS_VERSION_COURSE_APPLICATION:v1}
+    enforced: ${APP_CONSENTS_ENFORCED:}
   cors:
     allowed-origins: "http://localhost:4200,http://localhost"
   cleanup:
