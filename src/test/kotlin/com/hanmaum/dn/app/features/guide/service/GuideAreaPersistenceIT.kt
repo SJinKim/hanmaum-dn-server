@@ -4,6 +4,8 @@ import com.hanmaum.dn.app.common.pii.PiiCryptoConfiguration
 import com.hanmaum.dn.app.features.floorplan.domain.Room
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideAreaCreateRequest
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideAreaDefinition
+import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideAreaOrderItem
+import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideAreaOrderRequest
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideAreaUpdateRequest
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideDetailsCreateRequest
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideDetailsUpdateRequest
@@ -23,9 +25,17 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.context.annotation.Import
 import org.springframework.http.HttpStatus
 import org.springframework.test.context.ActiveProfiles
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.annotation.Propagation
+import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -55,6 +65,9 @@ class GuideAreaPersistenceIT {
     @Autowired private lateinit var snapshots: GuideReportAreaRepository
 
     @Autowired private lateinit var em: EntityManager
+
+    @Autowired private lateinit var transactionManager: PlatformTransactionManager
+
     private val date = LocalDate.of(2026, 10, 25)
 
     @Test fun `initial areas reference existing rooms with A and B sharing one physical sanctuary`() {
@@ -226,5 +239,155 @@ class GuideAreaPersistenceIT {
         em.unwrap(org.hibernate.Session::class.java).doWork { connection -> connection.createStatement().use { it.execute(sql) } }
         em.clear()
         assertEquals(listOf("본당2층C", "유아유치부"), configuration.list().map { it.label })
+    }
+
+    @Test fun `append repairs legacy duplicates and reorder conflicts never partially save`() {
+        areas.findConfigured().forEach { it.displayOrder = 0 }
+        em.flush()
+        val added = configuration.create(GuideAreaCreateRequest(configuration.rooms().first().publicId, "Appended", 0, true))
+        assertEquals(4, added.displayOrder)
+        val initial = configuration.list()
+        assertEquals((0..4).toList(), initial.map { it.displayOrder })
+        assertEquals(added.areaPublicId, initial.last().areaPublicId)
+        val order = GuideAreaOrderRequest(initial.reversed().map { GuideAreaOrderItem(it.areaPublicId, it.version) })
+        val changed = configuration.reorder(order)
+        assertEquals(initial.reversed().map { it.areaPublicId }, changed.map { it.areaPublicId })
+        assertEquals((0..4).toList(), changed.map { it.displayOrder })
+        assertEquals(HttpStatus.CONFLICT, assertFailsWith<GuideException> { configuration.reorder(order) }.status)
+        assertEquals(changed, configuration.list())
+        assertFailsWith<GuideDetailValidationException> {
+            configuration.reorder(GuideAreaOrderRequest(listOf(order.areas.first(), order.areas.first())))
+        }
+        assertEquals(changed, configuration.list())
+    }
+
+    @Test fun `membership changes invalidate order and removal preserves historic snapshots and rooms`() {
+        val report = reports.create(GuideDetailsCreateRequest(date, entries = guideYouthExample()), "editor")
+        val before = configuration.list()
+        val stale = GuideAreaOrderRequest(before.map { GuideAreaOrderItem(it.areaPublicId, it.version) })
+        configuration.create(GuideAreaCreateRequest(before.first().roomPublicId, "New", active = true))
+        assertEquals(HttpStatus.CONFLICT, assertFailsWith<GuideException> { configuration.reorder(stale) }.status)
+        val original = configuration.list().first()
+        assertEquals(
+            HttpStatus.CONFLICT,
+            assertFailsWith<GuideException> {
+                configuration.remove(original.areaPublicId, original.version)
+            }.status,
+        )
+        val disabled =
+            configuration.update(
+                original.areaPublicId,
+                GuideAreaUpdateRequest(original.roomPublicId, original.label, active = false, version = original.version),
+            )
+        assertEquals(
+            HttpStatus.CONFLICT,
+            assertFailsWith<GuideException> {
+                configuration.remove(disabled.areaPublicId, original.version)
+            }.status,
+        )
+        val remaining = configuration.remove(disabled.areaPublicId, disabled.version)
+        em.clear()
+        assertEquals((remaining.indices).toList(), remaining.map { it.displayOrder })
+        assertFalse(configuration.list().any { it.areaPublicId == original.areaPublicId })
+        assertTrue(configuration.rooms().any { it.publicId == original.roomPublicId })
+        assertEquals(report, reports.get(report.report.publicId))
+        assertTrue(areas.findAll().single { it.publicId == original.areaPublicId }.deletedAt != null)
+        assertEquals(
+            HttpStatus.NOT_FOUND,
+            assertFailsWith<GuideException> {
+                configuration.remove(original.areaPublicId, disabled.version)
+            }.status,
+        )
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    fun `simultaneous appends serialize before reading the next position`() {
+        val before = configuration.list()
+        try {
+            val second =
+                blockedUntilCommit(
+                    first = {
+                        configuration.create(
+                            GuideAreaCreateRequest(before.first().roomPublicId, "Concurrent first", active = true),
+                        )
+                    },
+                    second = {
+                        configuration.create(
+                            GuideAreaCreateRequest(before.first().roomPublicId, "Concurrent second", active = true),
+                        )
+                    },
+                )
+            assertEquals(before.size + 1, second.displayOrder)
+            assertEquals((0 until before.size + 2).toList(), configuration.list().map { it.displayOrder })
+        } finally {
+            TransactionTemplate(transactionManager).executeWithoutResult {
+                areas.findConfigured().filter { it.publicId !in before.map { row -> row.areaPublicId } }.forEach(areas::delete)
+                areas.flush()
+            }
+        }
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    fun `concurrent reorder waits then rejects the stale complete snapshot`() {
+        val before = configuration.list()
+        val order = GuideAreaOrderRequest(before.reversed().map { GuideAreaOrderItem(it.areaPublicId, it.version) })
+        try {
+            val failure =
+                blockedUntilCommit(
+                    first = { configuration.reorder(order) },
+                    second = {
+                        try {
+                            configuration.reorder(order)
+                            null
+                        } catch (exception: GuideException) {
+                            exception
+                        }
+                    },
+                )
+            assertEquals(HttpStatus.CONFLICT, failure?.status)
+            assertEquals(before.reversed().map { it.areaPublicId }, configuration.list().map { it.areaPublicId })
+        } finally {
+            val versions = configuration.list().associate { it.areaPublicId to it.version }
+            configuration.reorder(
+                GuideAreaOrderRequest(before.map { GuideAreaOrderItem(it.areaPublicId, versions.getValue(it.areaPublicId)) }),
+            )
+        }
+    }
+
+    private fun <T> blockedUntilCommit(
+        first: () -> Unit,
+        second: () -> T,
+    ): T {
+        val written = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val started = CountDownLatch(1)
+        val pool = Executors.newFixedThreadPool(2)
+        try {
+            val writer =
+                pool.submit {
+                    TransactionTemplate(transactionManager).executeWithoutResult {
+                        first()
+                        written.countDown()
+                        check(release.await(10, TimeUnit.SECONDS))
+                    }
+                }
+            assertTrue(written.await(10, TimeUnit.SECONDS))
+            val waiting =
+                pool.submit<T> {
+                    started.countDown()
+                    second()
+                }
+            assertTrue(started.await(5, TimeUnit.SECONDS))
+            assertFailsWith<TimeoutException> { waiting.get(200, TimeUnit.MILLISECONDS) }
+            release.countDown()
+            writer.get(10, TimeUnit.SECONDS)
+            return waiting.get(10, TimeUnit.SECONDS)
+        } finally {
+            release.countDown()
+            pool.shutdownNow()
+            assertTrue(pool.awaitTermination(10, TimeUnit.SECONDS))
+        }
     }
 }
