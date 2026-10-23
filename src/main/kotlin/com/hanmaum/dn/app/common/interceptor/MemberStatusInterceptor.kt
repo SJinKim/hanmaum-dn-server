@@ -15,6 +15,8 @@ import org.springframework.web.servlet.HandlerInterceptor
  * Blocks PENDING and INACTIVE members from accessing any endpoint except:
  * - GET /api/v1/members/me  (so the mobile app can read status and show the correct screen)
  * - POST /api/v1/members/register (public via permitAll, the caller has no member yet)
+ * - /api/v1/members/me/consents and GET /api/v1/consents/policies, so a PENDING member can
+ *   read and withdraw consent (HDN-358, GDPR Art. 7(3): withdrawing must not wait for approval)
  *
  * ADMIN-role users bypass this check entirely.
  */
@@ -28,8 +30,12 @@ class MemberStatusInterceptor(
         handler: Any,
     ): Boolean {
         val path = request.requestURI
-        // Always allow /me and /register through
-        if (path.endsWith("/members/me") || path.contains("/members/register")) {
+        // Always allow /me, /register and the consent routes through
+        if (path.endsWith("/members/me") ||
+            path.contains("/members/register") ||
+            path.contains("/members/me/consents") ||
+            path.endsWith("/consents/policies")
+        ) {
             return true
         }
         val auth =
