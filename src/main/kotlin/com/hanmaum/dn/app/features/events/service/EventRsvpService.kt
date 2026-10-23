@@ -11,6 +11,8 @@ import com.hanmaum.dn.app.features.events.api.v1.dto.ActiveEventRsvpDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.CreateEventRsvpRequest
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventAttendeesResponse
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventCheckInResponse
+import com.hanmaum.dn.app.features.events.api.v1.dto.EventMemberResponseDto
+import com.hanmaum.dn.app.features.events.api.v1.dto.EventResponsesDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpResponseDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.PendingEventRsvpDto
@@ -32,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 import java.time.Clock
 import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import java.util.UUID
 
 @Service
@@ -264,6 +267,42 @@ class EventRsvpService(
             notGoingCount = logs.count { it.status == RsvpStatus.NOT_GOING },
             maybeCount = logs.count { it.status == RsvpStatus.MAYBE },
             attendees = logs.map { it.toAttendeeDto() },
+        )
+    }
+
+    @Transactional(readOnly = true)
+    fun getResponses(publicId: UUID): EventResponsesDto {
+        val rsvp =
+            eventRsvpRepo
+                .findByPublicIdAndDeletedAtIsNull(publicId)
+                .orElseThrow { EntityNotFoundException("EventRsvp not found: $publicId") }
+        val logs = eventRsvpLogRepo.findAttendeesWithDetails(rsvp.id!!).associateBy { it.member.id }
+        val responses =
+            eventRsvpLogRepo
+                .findResponseMembers()
+                .map { member ->
+                    val log = logs[member.id]
+                    val group = if (log != null) log.groupAtRsvp else member.group
+                    EventMemberResponseDto(
+                        memberPublicId = member.publicId,
+                        memberName = member.getFullName(),
+                        groupName = group?.name,
+                        groupDivision = group?.division,
+                        status = log?.status,
+                        respondedAt = log?.checkedInAt?.atOffset(ZoneOffset.UTC),
+                    )
+                }.sortedWith(compareBy({ it.memberName }, { it.memberPublicId }))
+        val pending = responses.count { it.status == null }
+        return EventResponsesDto(
+            eventPublicId = rsvp.publicId,
+            eventTitle = rsvp.title,
+            expectedCount = responses.size,
+            respondedCount = responses.size - pending,
+            goingCount = responses.count { it.status == RsvpStatus.GOING },
+            notGoingCount = responses.count { it.status == RsvpStatus.NOT_GOING },
+            maybeCount = responses.count { it.status == RsvpStatus.MAYBE },
+            pendingCount = pending,
+            responses = responses,
         )
     }
 
