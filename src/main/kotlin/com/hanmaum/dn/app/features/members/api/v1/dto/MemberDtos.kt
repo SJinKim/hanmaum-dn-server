@@ -322,8 +322,9 @@ data class RegisterMemberRequest(
     @field:Size(max = 20)
     val zipCode: String? = null,
     /**
-     * Agreement to the APP_PRIVACY policy shown on the form (HDN-358). Optional until
-     * `app.consents.enforced` lists APP_PRIVACY, so older app builds keep registering.
+     * Agreement to the APP_PRIVACY policy shown on the form (HDN-358). Mandatory: without it
+     * registration fails with CONSENT_REQUIRED. Nullable only so that a missing consent gets
+     * that error code rather than a generic validation error.
      */
     @field:Valid
     @Unredacted val consent: ConsentGrant? = null,

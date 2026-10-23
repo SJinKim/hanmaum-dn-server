@@ -31,7 +31,6 @@ import java.time.Instant
 import java.time.ZoneId
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -53,15 +52,13 @@ class ConsentServiceTest {
         lenient().`when`(consentRepository.saveAndFlush(any<MemberConsent>())).thenAnswer { it.arguments[0] }
     }
 
-    private fun service(
-        versions: Map<ConsentPurpose, String> = mapOf(ConsentPurpose.APP_PRIVACY to "v2"),
-        enforced: Set<ConsentPurpose> = emptySet(),
-    ) = ConsentService(
-        consentRepository,
-        CurrentMemberResolver(memberRepository, org.mockito.kotlin.mock()),
-        ConsentProperties(versions = versions, enforced = enforced),
-        Clock.fixed(now, ZoneId.of("Europe/Berlin")),
-    )
+    private fun service(versions: Map<ConsentPurpose, String> = mapOf(ConsentPurpose.APP_PRIVACY to "v2")) =
+        ConsentService(
+            consentRepository,
+            CurrentMemberResolver(memberRepository, org.mockito.kotlin.mock()),
+            ConsentProperties(versions = versions),
+            Clock.fixed(now, ZoneId.of("Europe/Berlin")),
+        )
 
     private fun standing(version: String) =
         MemberConsent(
@@ -97,13 +94,9 @@ class ConsentServiceTest {
     }
 
     @Test
-    fun `no grant passes while the purpose is not enforced and fails once it is`() {
-        service().check(ConsentPurpose.APP_PRIVACY, null)
+    fun `check refuses a missing grant`() {
+        val e = assertThrows<ConsentException> { service().check(ConsentPurpose.APP_PRIVACY, null) }
 
-        val e =
-            assertThrows<ConsentException> {
-                service(enforced = setOf(ConsentPurpose.APP_PRIVACY)).check(ConsentPurpose.APP_PRIVACY, null)
-            }
         assertEquals(HttpStatus.BAD_REQUEST, e.status)
         assertEquals(ApiErrorCode.CONSENT_REQUIRED, e.code)
     }
@@ -111,7 +104,7 @@ class ConsentServiceTest {
     @Test
     fun `require records the grant with the version sent and the server's time`() {
         val recorded =
-            service().require(member, ConsentPurpose.APP_PRIVACY, ConsentGrant(true, "v2"), ConsentSource.REGISTRATION)!!
+            service().require(member, ConsentPurpose.APP_PRIVACY, ConsentGrant(true, "v2"), ConsentSource.REGISTRATION)
 
         assertEquals("v2", recorded.policyVersion)
         assertEquals(now, recorded.grantedAt)
@@ -120,31 +113,34 @@ class ConsentServiceTest {
     }
 
     @Test
-    fun `require without a grant accepts a standing grant of the current version, even when enforced`() {
+    fun `require without a grant accepts a standing grant of the current version`() {
         val current = standing("v2")
         `when`(consentRepository.findStanding(1L, ConsentPurpose.APP_PRIVACY)).thenReturn(current)
 
-        val result =
-            service(enforced = setOf(ConsentPurpose.APP_PRIVACY))
-                .require(member, ConsentPurpose.APP_PRIVACY, null, ConsentSource.IN_APP)
+        val result = service().require(member, ConsentPurpose.APP_PRIVACY, null, ConsentSource.IN_APP)
 
         assertSame(current, result)
         verify(consentRepository, never()).save(any<MemberConsent>())
     }
 
     @Test
-    fun `require without a grant does not accept a standing grant of an outdated version when enforced`() {
+    fun `require without a grant does not accept a standing grant of an outdated version`() {
         `when`(consentRepository.findStanding(1L, ConsentPurpose.APP_PRIVACY)).thenReturn(standing("v1"))
 
-        assertThrows<ConsentException> {
-            service(enforced = setOf(ConsentPurpose.APP_PRIVACY))
-                .require(member, ConsentPurpose.APP_PRIVACY, null, ConsentSource.IN_APP)
-        }
+        val e =
+            assertThrows<ConsentException> {
+                service().require(member, ConsentPurpose.APP_PRIVACY, null, ConsentSource.IN_APP)
+            }
+        assertEquals(ApiErrorCode.CONSENT_REQUIRED, e.code)
     }
 
     @Test
-    fun `require without a grant records nothing while the purpose is not enforced`() {
-        assertNull(service().require(member, ConsentPurpose.APP_PRIVACY, null, ConsentSource.REGISTRATION))
+    fun `require without any grant fails and records nothing`() {
+        val e =
+            assertThrows<ConsentException> {
+                service().require(member, ConsentPurpose.APP_PRIVACY, null, ConsentSource.REGISTRATION)
+            }
+        assertEquals(ApiErrorCode.CONSENT_REQUIRED, e.code)
         verify(consentRepository, never()).save(any<MemberConsent>())
     }
 

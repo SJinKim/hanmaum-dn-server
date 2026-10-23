@@ -46,18 +46,15 @@ class ConsentService(
     /**
      * Rejects a grant that cannot be recorded, before the caller does anything costly.
      *
-     * Registration calls this ahead of creating the Keycloak user: a stale version must fail
-     * the request, not leave an account behind whose consent was never written.
+     * Consent is mandatory wherever it is asked for: a missing or refused grant fails with
+     * CONSENT_REQUIRED. Registration calls this ahead of creating the Keycloak user, so no
+     * account is ever created without one.
      */
     fun check(
         purpose: ConsentPurpose,
         grant: ConsentGrant?,
     ) {
-        if (grant == null) {
-            if (properties.isEnforced(purpose)) throw required()
-            return
-        }
-        if (!grant.accepted) throw required()
+        if (grant == null || !grant.accepted) throw required()
         if (grant.version != properties.versionOf(purpose)) {
             throw ConsentException(
                 HttpStatus.CONFLICT,
@@ -71,8 +68,8 @@ class ConsentService(
      * Makes sure [member] has consented to [purpose] for this action, recording [grant] if given.
      *
      * With no grant in the request, a standing grant of the version in force is enough, so a
-     * member who agreed once is not asked on every 양육 application. Without either, an
-     * enforced purpose fails with CONSENT_REQUIRED and an unenforced one passes unrecorded.
+     * member who agreed once is not asked on every 양육 application. Without either, it fails
+     * with CONSENT_REQUIRED.
      */
     @Transactional
     fun require(
@@ -80,13 +77,13 @@ class ConsentService(
         purpose: ConsentPurpose,
         grant: ConsentGrant?,
         source: ConsentSource,
-    ): MemberConsent? {
+    ): MemberConsent {
         if (grant == null) {
             val standing = member.id?.let { consentRepository.findStanding(it, purpose) }
             if (standing != null && standing.policyVersion == properties.versionOf(purpose)) return standing
         }
         check(purpose, grant)
-        return grant?.let { record(member, purpose, it.version, source) }
+        return record(member, purpose, grant!!.version, source)
     }
 
     /** GET /members/me/consents: every purpose, so the app can ask for what is missing. */

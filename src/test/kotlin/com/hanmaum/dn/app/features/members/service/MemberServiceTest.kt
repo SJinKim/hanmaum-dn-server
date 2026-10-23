@@ -112,6 +112,8 @@ class MemberServiceTest {
 
     @Mock private lateinit var eventPublisher: ApplicationEventPublisher
 
+    @Mock private lateinit var consentService: ConsentService
+
     @Mock private lateinit var realmResource: RealmResource
 
     @Mock private lateinit var usersResource: UsersResource
@@ -140,6 +142,7 @@ class MemberServiceTest {
                 operationalMetrics,
                 eventPublisher,
                 "test-realm",
+                consentService = consentService,
             )
     }
 
@@ -1284,6 +1287,7 @@ class MemberServiceTest {
                 eventPublisher,
                 "test-realm",
                 registrationRateLimit = 1,
+                consentService = consentService,
             )
         val req = registerReq()
         `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
@@ -1320,6 +1324,7 @@ class MemberServiceTest {
                 eventPublisher,
                 "test-realm",
                 reconciliationIntake = intake,
+                consentService = consentService,
             )
         val req = registerReq()
         `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
@@ -1334,28 +1339,8 @@ class MemberServiceTest {
             .openForPossibleMatches(any())
     }
 
-    private fun serviceWithConsents(consentService: ConsentService) =
-        MemberService(
-            memberRepository,
-            churchGroupRepository,
-            groupLeaderRepository,
-            memberGraduationRepository,
-            userTrainingRepository,
-            trainingRepository,
-            ministryAssignmentRepository,
-            ministryRepository,
-            newcomerProfileRepository,
-            keycloak,
-            CurrentMemberResolver(memberRepository, org.mockito.kotlin.mock()),
-            operationalMetrics,
-            eventPublisher,
-            "test-realm",
-            consentService = consentService,
-        )
-
     @Test
     fun `registerMember records the privacy consent on the saved member`() {
-        val consentService = org.mockito.kotlin.mock<ConsentService>()
         val grant = ConsentGrant(accepted = true, version = "v1")
         val req = registerReq().copy(consent = grant)
         `when`(memberRepository.findByEmailAndDeletedAtIsNull(req.email)).thenReturn(null)
@@ -1363,7 +1348,7 @@ class MemberServiceTest {
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
         setupKeycloakMock()
 
-        val member = serviceWithConsents(consentService).registerMember(req, CLIENT_IP)
+        val member = memberService.registerMember(req, CLIENT_IP)
 
         org.mockito.kotlin
             .verify(consentService)
@@ -1372,16 +1357,31 @@ class MemberServiceTest {
 
     @Test
     fun `registerMember with a refused consent creates neither a member nor a Keycloak user`() {
-        val consentService = org.mockito.kotlin.mock<ConsentService>()
         val grant = ConsentGrant(accepted = true, version = "v0")
         `when`(consentService.check(ConsentPurpose.APP_PRIVACY, grant)).thenThrow(
             ConsentException(HttpStatus.CONFLICT, ApiErrorCode.CONSENT_VERSION_OUTDATED, "outdated"),
         )
 
         assertThrows<ConsentException> {
-            serviceWithConsents(consentService).registerMember(registerReq().copy(consent = grant), CLIENT_IP)
+            memberService.registerMember(registerReq().copy(consent = grant), CLIENT_IP)
         }
 
+        verify(memberRepository, never()).save(any<Member>())
+        org.mockito.kotlin.verifyNoInteractions(keycloak)
+    }
+
+    @Test
+    fun `registerMember without a consent creates neither a member nor a Keycloak user`() {
+        `when`(consentService.check(ConsentPurpose.APP_PRIVACY, null)).thenThrow(
+            ConsentException(HttpStatus.BAD_REQUEST, ApiErrorCode.CONSENT_REQUIRED, "required"),
+        )
+
+        val e =
+            assertThrows<ConsentException> {
+                memberService.registerMember(registerReq().copy(consent = null), CLIENT_IP)
+            }
+
+        assertEquals(ApiErrorCode.CONSENT_REQUIRED, e.code)
         verify(memberRepository, never()).save(any<Member>())
         org.mockito.kotlin.verifyNoInteractions(keycloak)
     }

@@ -93,7 +93,7 @@ class MemberService(
     // Self-registration is anonymous and creates a Keycloak user per call (#237).
     @Value("\${app.registration.rate-limit-per-ten-minutes:10}") registrationRateLimit: Int = 10,
     private val reconciliationIntake: MemberReconciliationIntake? = null,
-    private val consentService: ConsentService? = null,
+    private val consentService: ConsentService,
 ) {
     private val log = LoggerFactory.getLogger(MemberService::class.java)
     private val registrationLimiter = SlidingWindowRateLimiter(registrationRateLimit, Duration.ofMinutes(10))
@@ -857,7 +857,7 @@ class MemberService(
             throw ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Too many registrations. Try again later.")
         }
         // Before anything is written: a missing or stale consent must not leave an account behind.
-        consentService?.check(ConsentPurpose.APP_PRIVACY, req.consent)
+        consentService.check(ConsentPurpose.APP_PRIVACY, req.consent)
         // A dashboard/newcomer record with this email is not an error. The account is
         // created as a separate pending registration and is linked only after Keycloak has
         // verified the email and the identity checks run on first authenticated access.
@@ -911,7 +911,7 @@ class MemberService(
 
         val savedMember = memberRepository.save(newMember)
         // Same transaction as the member row: if Keycloak fails below, the grant rolls back too.
-        consentService?.require(savedMember, ConsentPurpose.APP_PRIVACY, req.consent, ConsentSource.REGISTRATION)
+        consentService.require(savedMember, ConsentPurpose.APP_PRIVACY, req.consent, ConsentSource.REGISTRATION)
         // Create Keycloak user and store keycloakId back on the member record
         val keycloakUser =
             UserRepresentation().apply {
