@@ -21,6 +21,7 @@ import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequ
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
@@ -112,5 +113,49 @@ class GuideAreaControllerTest {
         mvc
             .perform(put("$url/$id").with(actor("GUIDE_EDITOR")).contentType(MediaType.APPLICATION_JSON).content(update))
             .andExpect(status().isNotFound)
+    }
+
+    @Test fun `reorder and removal use Guide write roles and return canonical configuration`() {
+        whenever(service.reorder(any())).thenReturn(listOf(response))
+        whenever(service.remove(any(), any())).thenReturn(emptyList())
+        val order = """{"areas":[{"areaPublicId":"$id","version":0}]}"""
+        for (role in listOf("GUIDE_EDITOR", "ADMIN", "PASTOR")) {
+            mvc
+                .perform(put("$url/order").with(actor(role)).contentType(MediaType.APPLICATION_JSON).content(order))
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.data[0].areaPublicId").value(id.toString()))
+            mvc.perform(delete("$url/$id?version=0").with(actor(role))).andExpect(status().isOk)
+        }
+        for (role in listOf("GUIDE_VIEWER", "MEMBER")) {
+            mvc
+                .perform(put("$url/order").with(actor(role)).contentType(MediaType.APPLICATION_JSON).content(order))
+                .andExpect(status().isForbidden)
+            mvc.perform(delete("$url/$id?version=0").with(actor(role))).andExpect(status().isForbidden)
+        }
+        mvc.perform(delete("$url/$id?version=0")).andExpect(status().isUnauthorized)
+        mvc.perform(delete("$url/$id").with(actor("GUIDE_EDITOR"))).andExpect(status().isBadRequest)
+        mvc
+            .perform(
+                put("$url/order")
+                    .with(actor("GUIDE_EDITOR"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(order.replace("\"version\":0", "\"version\":-1")),
+            ).andExpect(status().isBadRequest)
+    }
+
+    @Test fun `new clients can omit position while legacy positions remain accepted`() {
+        whenever(service.create(any())).thenReturn(response)
+        whenever(service.update(any(), any())).thenReturn(response)
+        val noPosition = create.replace("\"displayOrder\":4,", "")
+        mvc
+            .perform(post(url).with(actor("GUIDE_EDITOR")).contentType(MediaType.APPLICATION_JSON).content(noPosition))
+            .andExpect(status().isCreated)
+        mvc
+            .perform(
+                put("$url/$id")
+                    .with(actor("GUIDE_EDITOR"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(noPosition.dropLast(1) + """, "version":0}"""),
+            ).andExpect(status().isOk)
     }
 }

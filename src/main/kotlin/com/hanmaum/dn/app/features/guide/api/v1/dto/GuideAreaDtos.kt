@@ -2,6 +2,7 @@ package com.hanmaum.dn.app.features.guide.api.v1.dto
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import io.swagger.v3.oas.annotations.media.Schema
+import jakarta.validation.Valid
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
@@ -44,9 +45,9 @@ data class GuideAreaCreateRequest(
     @field:NotBlank
     @field:Size(max = GUIDE_AREA_LABEL_MAX) val label: String,
     @field:JsonDeserialize(using = GuideCountDeserializer::class)
-    @param:JsonProperty(required = true)
     @field:Min(GUIDE_AREA_ORDER_MIN)
-    @field:Schema(minimum = "0", requiredMode = Schema.RequiredMode.REQUIRED) val displayOrder: Int,
+    @field:Schema(minimum = "0", description = "Legacy position hint; creation always appends.")
+    val displayOrder: Int? = null,
     @field:Schema(requiredMode = Schema.RequiredMode.REQUIRED)
     @param:JsonProperty(required = true) val active: Boolean,
 ) : GuideStrictRequest()
@@ -58,12 +59,28 @@ data class GuideAreaUpdateRequest(
     @field:NotBlank
     @field:Size(max = GUIDE_AREA_LABEL_MAX) val label: String,
     @field:JsonDeserialize(using = GuideCountDeserializer::class)
-    @param:JsonProperty(required = true)
     @field:Min(GUIDE_AREA_ORDER_MIN)
-    @field:Schema(minimum = "0", requiredMode = Schema.RequiredMode.REQUIRED) val displayOrder: Int,
+    @field:Schema(minimum = "0", description = "Legacy position hint; omit to preserve the current position.")
+    val displayOrder: Int? = null,
     @field:Schema(requiredMode = Schema.RequiredMode.REQUIRED)
     @param:JsonProperty(required = true) val active: Boolean,
     @field:JsonDeserialize(using = GuideVersionDeserializer::class)
     @param:JsonProperty(required = true)
     @field:Schema(minimum = "0", requiredMode = Schema.RequiredMode.REQUIRED) val version: Long,
+) : GuideStrictRequest()
+
+/** Complete ordered configuration snapshot; a changed member or version rejects the whole operation. */
+@Schema(additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
+data class GuideAreaOrderRequest(
+    @field:Valid
+    @field:Schema(requiredMode = Schema.RequiredMode.REQUIRED) val areas: List<GuideAreaOrderItem>,
+) : GuideStrictRequest()
+
+@Schema(additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
+data class GuideAreaOrderItem(
+    @field:Schema(requiredMode = Schema.RequiredMode.REQUIRED) val areaPublicId: UUID,
+    @field:JsonDeserialize(using = GuideVersionDeserializer::class)
+    @param:JsonProperty(required = true)
+    @field:Min(0)
+    @field:Schema(requiredMode = Schema.RequiredMode.REQUIRED) val version: Long,
 ) : GuideStrictRequest()

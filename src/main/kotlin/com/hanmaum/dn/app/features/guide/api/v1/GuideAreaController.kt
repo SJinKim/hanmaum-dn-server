@@ -2,6 +2,7 @@ package com.hanmaum.dn.app.features.guide.api.v1
 
 import com.hanmaum.dn.app.common.dto.ApiResponse
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideAreaCreateRequest
+import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideAreaOrderRequest
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideAreaResponse
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideAreaUpdateRequest
 import com.hanmaum.dn.app.features.guide.api.v1.dto.GuideEligibleRoomResponse
@@ -14,12 +15,14 @@ import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
 import org.springframework.security.access.prepost.PreAuthorize
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
@@ -46,7 +49,7 @@ class GuideAreaController(
     /** Create a counting area for future reports; multiple areas may reference the same room. */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(operationId = "createGuideCountingArea", summary = "Add a room-backed counting area for new reports.")
+    @Operation(operationId = "createGuideCountingArea", summary = "Append a room-backed counting area for new reports.")
     fun create(
         @Valid @RequestBody request: GuideAreaCreateRequest,
     ): ApiResponse<GuideAreaResponse> = ApiResponse.success(service.create(request))
@@ -56,6 +59,7 @@ class GuideAreaController(
     @ResponseStatus(HttpStatus.OK)
     @ApiResponses(
         value = [
+            ApiDocResponse(responseCode = "200", useReturnTypeSchema = true),
             ApiDocResponse(
                 responseCode = "404",
                 description = "Counting area missing.",
@@ -73,4 +77,47 @@ class GuideAreaController(
         @PathVariable publicId: UUID,
         @Valid @RequestBody request: GuideAreaUpdateRequest,
     ): ApiResponse<GuideAreaResponse> = ApiResponse.success(service.update(publicId, request))
+
+    /** Save the complete ordered UUID/version snapshot atomically; 409 on concurrent membership or edits. */
+    @PutMapping("/order")
+    @ApiResponses(
+        value = [
+            ApiDocResponse(responseCode = "200", useReturnTypeSchema = true),
+            ApiDocResponse(
+                responseCode = "409",
+                description = "Configuration changed; reload before retrying.",
+                content = [Content(mediaType = "application/problem+json", schema = Schema(implementation = ProblemDetail::class))],
+            ),
+        ],
+    )
+    @Operation(operationId = "reorderGuideCountingAreas", summary = "Atomically reorder the complete Guide configuration; 409 if stale.")
+    fun reorder(
+        @Valid @RequestBody request: GuideAreaOrderRequest,
+    ): ApiResponse<List<GuideAreaResponse>> = ApiResponse.success(service.reorder(request))
+
+    /** Remove only an inactive area with its expected version; historical snapshots and physical rooms remain intact. */
+    @DeleteMapping("/{publicId}")
+    @ApiResponses(
+        value = [
+            ApiDocResponse(responseCode = "200", useReturnTypeSchema = true),
+            ApiDocResponse(
+                responseCode = "404",
+                description = "Counting area missing.",
+                content = [Content(mediaType = "application/problem+json", schema = Schema(implementation = ProblemDetail::class))],
+            ),
+            ApiDocResponse(
+                responseCode = "409",
+                description = "Counting area is active or its version changed; reload before retrying.",
+                content = [Content(mediaType = "application/problem+json", schema = Schema(implementation = ProblemDetail::class))],
+            ),
+        ],
+    )
+    @Operation(
+        operationId = "removeGuideCountingArea",
+        summary = "Soft-delete an inactive counting area; 404 if missing, 409 if active or stale.",
+    )
+    fun remove(
+        @PathVariable publicId: UUID,
+        @RequestParam version: Long,
+    ): ApiResponse<List<GuideAreaResponse>> = ApiResponse.success(service.remove(publicId, version))
 }
