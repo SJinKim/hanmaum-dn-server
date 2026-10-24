@@ -247,3 +247,7 @@
 ### Match deployment health states exactly
 - Correction: A substring check for healthy also accepted unhealthy in the final deployment gate.
 - Rule: Match enum-like health output as an entire fixed string; test unhealthy, starting, missing output and upstream command failures alongside the positive case.
+
+### Validate nullable enums in the generated OpenAPI contract
+- **Correction**: Kotlin nullable RSVP fields were emitted as non-null strings, and the response enum excluded the actual JSON null used for unanswered members.
+- **Rule**: Compare serialized unanswered DTOs with the generated OpenAPI 3.1 schema. Permit null in both the type union and any enum constraint; verify default and grouped documentation, regenerate the Ops contract, and compare its semantic diff before merge.

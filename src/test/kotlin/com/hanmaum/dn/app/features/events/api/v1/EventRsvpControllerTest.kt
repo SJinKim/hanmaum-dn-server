@@ -4,6 +4,8 @@ import com.hanmaum.dn.app.common.config.SecurityConfig
 import com.hanmaum.dn.app.features.events.api.v1.dto.ActiveEventRsvpDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventAttendeesResponse
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventCheckInResponse
+import com.hanmaum.dn.app.features.events.api.v1.dto.EventMemberResponseDto
+import com.hanmaum.dn.app.features.events.api.v1.dto.EventResponsesDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpResponseDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.PendingEventRsvpDto
@@ -421,6 +423,44 @@ class EventRsvpControllerTest {
                     .content("""{"title":"수정"}"""),
             ).andExpect(status().isForbidden)
         mockMvc.perform(delete("/api/v1/events/rsvps/$rsvpId").with(token)).andExpect(status().isForbidden)
+        verifyNoInteractions(eventRsvpService)
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["ADMIN", "PASTOR", "NOTE_TAKER", "GROUP_LEADER", "GENERAL_OPERATIONS_VIEWER", "GENERAL_OPERATIONS_EDITOR"])
+    fun `event readers can read response overview including unanswered members`(role: String) {
+        val memberId = UUID.randomUUID()
+        `when`(eventRsvpService.getResponses(rsvpId)).thenReturn(
+            EventResponsesDto(
+                rsvpId,
+                "수련회",
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                listOf(
+                    EventMemberResponseDto(memberId, "김철수", null, null, null, null),
+                ),
+            ),
+        )
+        mockMvc
+            .perform(
+                get("/api/v1/events/rsvps/$rsvpId/responses")
+                    .with(jwt().authorities(SimpleGrantedAuthority("ROLE_$role"))),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.pendingCount").value(1))
+            .andExpect(jsonPath("$.data.responses[0].memberPublicId").value(memberId.toString()))
+            .andExpect(jsonPath("$.data.responses[0].status").isEmpty)
+    }
+
+    @Test
+    fun `response overview requires event reader access`() {
+        mockMvc.perform(get("/api/v1/events/rsvps/$rsvpId/responses")).andExpect(status().isUnauthorized)
+        mockMvc
+            .perform(get("/api/v1/events/rsvps/$rsvpId/responses").with(jwt()))
+            .andExpect(status().isForbidden)
         verifyNoInteractions(eventRsvpService)
     }
 }

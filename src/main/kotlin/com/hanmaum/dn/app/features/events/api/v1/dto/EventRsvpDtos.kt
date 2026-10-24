@@ -127,3 +127,25 @@ data class UpdateEventRsvpRequest(
     @field:Size(max = 500, message = "설명은 최대 500자입니다.")
     val description: String? = null,
 )
+
+/** Current response for each active, non-deleted member; null means no answer. */
+data class EventMemberResponseDto(
+    val memberPublicId: UUID,
+    val memberName: String,
+    val groupName: String?,
+    val groupDivision: String?,
+    val status: RsvpStatus?,
+    val respondedAt: OffsetDateTime?,
+)
+
+data class EventResponsesDto(
+    val eventPublicId: UUID,
+    val eventTitle: String,
+    val expectedCount: Int,
+    val respondedCount: Int,
+    val goingCount: Int,
+    val notGoingCount: Int,
+    val maybeCount: Int,
+    val pendingCount: Int,
+    val responses: List<EventMemberResponseDto>,
+)

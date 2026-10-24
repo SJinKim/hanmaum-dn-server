@@ -6,6 +6,7 @@ import com.hanmaum.dn.app.features.events.api.v1.dto.ActiveEventRsvpDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.CreateEventRsvpRequest
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventAttendeesResponse
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventCheckInResponse
+import com.hanmaum.dn.app.features.events.api.v1.dto.EventResponsesDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpResponseDto
 import com.hanmaum.dn.app.features.events.api.v1.dto.EventRsvpResponseRequest
@@ -122,4 +123,12 @@ class EventRsvpController(
         @PathVariable publicId: UUID,
     ): ResponseEntity<ApiResponse<EventAttendeesResponse>> =
         ResponseEntity.ok(ApiResponse.success(data = eventRsvpService.getAttendees(publicId)))
+
+    @Operation(summary = "List event RSVP answers and members without an answer")
+    @GetMapping("/{publicId}/responses")
+    @PreAuthorize(Authz.GROUP_OPERATIONS_READ)
+    fun getResponses(
+        @PathVariable publicId: UUID,
+    ): ResponseEntity<ApiResponse<EventResponsesDto>> =
+        ResponseEntity.ok(ApiResponse.success(data = eventRsvpService.getResponses(publicId)))
 }
