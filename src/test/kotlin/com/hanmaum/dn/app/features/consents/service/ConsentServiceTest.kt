@@ -52,13 +52,15 @@ class ConsentServiceTest {
         lenient().`when`(consentRepository.saveAndFlush(any<MemberConsent>())).thenAnswer { it.arguments[0] }
     }
 
-    private fun service(versions: Map<ConsentPurpose, String> = mapOf(ConsentPurpose.APP_PRIVACY to "v2")) =
-        ConsentService(
-            consentRepository,
-            CurrentMemberResolver(memberRepository, org.mockito.kotlin.mock()),
-            ConsentProperties(versions = versions),
-            Clock.fixed(now, ZoneId.of("Europe/Berlin")),
-        )
+    private fun service(
+        versions: Map<ConsentPurpose, String> = mapOf(ConsentPurpose.APP_PRIVACY to "v2"),
+        enforce: Boolean = false,
+    ) = ConsentService(
+        consentRepository,
+        CurrentMemberResolver(memberRepository, org.mockito.kotlin.mock()),
+        ConsentProperties(versions = versions, enforceAccountConsent = enforce),
+        Clock.fixed(now, ZoneId.of("Europe/Berlin")),
+    )
 
     private fun standing(version: String) =
         MemberConsent(
@@ -214,5 +216,38 @@ class ConsentServiceTest {
         `when`(consentRepository.findStanding(1L)).thenReturn(listOf(standing("v2")))
 
         assertFalse(service().status(caller).actionRequired)
+    }
+
+    @Test
+    fun `the account lock rejects a member without a standing account consent with 403`() {
+        `when`(consentRepository.findStanding(1L)).thenReturn(emptyList())
+
+        val e = assertThrows<ConsentException> { service(enforce = true).requireAccountConsent(member) }
+
+        assertEquals(HttpStatus.FORBIDDEN, e.status)
+        assertEquals(ApiErrorCode.CONSENT_REQUIRED, e.code)
+    }
+
+    @Test
+    fun `the account lock rejects an outdated account consent`() {
+        `when`(consentRepository.findStanding(1L)).thenReturn(listOf(standing("v1")))
+
+        val e = assertThrows<ConsentException> { service(enforce = true).requireAccountConsent(member) }
+
+        assertEquals(ApiErrorCode.CONSENT_REQUIRED, e.code)
+    }
+
+    @Test
+    fun `the account lock lets a current account consent through, whatever the optional ones say`() {
+        `when`(consentRepository.findStanding(1L)).thenReturn(listOf(standing("v2")))
+
+        service(enforce = true).requireAccountConsent(member)
+    }
+
+    @Test
+    fun `the account lock does nothing while it is not enforced`() {
+        service(enforce = false).requireAccountConsent(member)
+
+        verify(consentRepository, never()).findStanding(1L)
     }
 }

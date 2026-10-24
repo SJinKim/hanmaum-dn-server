@@ -2,9 +2,11 @@ package com.hanmaum.dn.app.common.interceptor
 
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.common.security.Roles
+import com.hanmaum.dn.app.features.consents.service.ConsentService
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
@@ -18,11 +20,17 @@ import org.springframework.web.servlet.HandlerInterceptor
  * - /api/v1/members/me/consents and GET /api/v1/consents/policies, so a PENDING member can
  *   read and withdraw consent (HDN-358, GDPR Art. 7(3): withdrawing must not wait for approval)
  *
+ * An ACTIVE member must also hold the consents required for an account, else the request
+ * fails with 403 CONSENT_REQUIRED (HDN-358). The same routes are exempt, so the app can still
+ * read the status and ask for the consent. The lock is off until app.consents.enforce-account-consent.
+ *
  * ADMIN-role users bypass this check entirely.
  */
 @Component
 class MemberStatusInterceptor(
     private val memberRepository: MemberRepository,
+    // Resolved only once a member is found, so web slices without a consent bean still start.
+    private val consentService: ObjectProvider<ConsentService>,
 ) : HandlerInterceptor {
     override fun preHandle(
         request: HttpServletRequest,
@@ -59,6 +67,8 @@ class MemberStatusInterceptor(
             )
             return false
         }
+        // Thrown, not sendError: GlobalExceptionHandler then writes the JSON with its code.
+        consentService.getObject().requireAccountConsent(member)
         return true
     }
 }

@@ -86,6 +86,26 @@ class ConsentService(
         return record(member, purpose, grant!!.version, source)
     }
 
+    /**
+     * The API lock (HDN-358): fails with 403 CONSENT_REQUIRED unless [member] holds a standing
+     * grant, of the version in force, for every purpose required for an account.
+     *
+     * An outdated grant fails the same way; GET /members/me/consents tells the app which text
+     * to show. Does nothing while [ConsentProperties.enforceAccountConsent] is off.
+     */
+    @Transactional(readOnly = true)
+    fun requireAccountConsent(member: Member) {
+        if (!properties.enforceAccountConsent) return
+        val standing = consentRepository.findStanding(member.id!!).associateBy { it.purpose }
+        val missing =
+            ConsentPurpose.entries.filter {
+                it.requiredForAccount && standing[it]?.policyVersion != properties.versionOf(it)
+            }
+        if (missing.isNotEmpty()) {
+            throw ConsentException(HttpStatus.FORBIDDEN, ApiErrorCode.CONSENT_REQUIRED, "개인정보 수집·이용에 동의해야 앱을 사용할 수 있습니다.")
+        }
+    }
+
     /** GET /members/me/consents: every purpose, so the app can ask for what is missing. */
     @Transactional
     fun status(caller: MemberPrincipal): MemberConsentsResponse {
