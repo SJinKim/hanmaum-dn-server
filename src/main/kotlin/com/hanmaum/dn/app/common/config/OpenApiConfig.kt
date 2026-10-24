@@ -69,6 +69,22 @@ class OpenApiConfig(
             }
         }
 
+    /** Kotlin nullability is not retained by springdoc for the RSVP response fields. */
+    @Bean
+    fun eventResponseNullabilityCustomizer(): GlobalOpenApiCustomizer =
+        GlobalOpenApiCustomizer { openApi ->
+            openApi.components?.schemas?.get("EventMemberResponseDto")?.properties?.let { properties ->
+                for (field in listOf("groupName", "groupDivision", "status", "respondedAt")) {
+                    properties[field]?.types = linkedSetOf("string", "null")
+                }
+                val status = properties["status"]
+                // In OpenAPI 3.1, a nullable type alone does not override the enum constraint.
+                status?.enum?.let { values ->
+                    if (null !in values) status.addEnumItemObject(null)
+                }
+            }
+        }
+
     companion object {
         const val BEARER_SCHEME = "bearerAuth"
 
