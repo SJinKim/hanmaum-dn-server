@@ -1,0 +1,28 @@
+name: Entscheidung
+description: Frage, die Jin entscheiden muss (Produkt oder wichtige Technik)
+title: "Entscheidung: "
+labels: ["type:decision"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Die vollständige Vorlage erstellt die führende Rolle mit dem Skill `team-decision`
+        (Struktur: `.team/templates/decision.md`). Hier reicht zunächst die Frage.
+  - type: dropdown
+    id: level
+    attributes:
+      label: Stufe
+      options: ["1 – Produkt", "2 – Technik", "1 + 2"]
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: Frage und Kontext
+    validations:
+      required: true
+  - type: input
+    id: blocks
+    attributes:
+      label: Blockiert
+      description: "z. B. #123, #124"
