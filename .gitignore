@@ -89,8 +89,11 @@ assets/demo/
 /infrastructure/architectureLog/*
 /postgres-init/application.old.yml
 
-# Local docs (plans, specs)
-docs/
+# Local docs (plans, specs) – team docs are tracked
+docs/*
+!docs/product/
+!docs/architecture/
+!docs/design/
 DEPLOYMENT.md
 
 # --- Claude Code (per-machine, never commit) ---
