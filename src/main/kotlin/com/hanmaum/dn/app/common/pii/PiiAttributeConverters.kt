@@ -118,14 +118,18 @@ const val MEMBER_WORK_OR_SCHOOL_CONTEXT = "members.work_or_school"
 @Converter
 class EncryptedWorkOrSchoolConverter : EncryptedStringConverter(MEMBER_WORK_OR_SCHOOL_CONTEXT)
 
+// 카카오 아이디. Moved off newcomer_profiles in HDN-360; V20261025120100 re-encrypts the old
+// values under this context, so both share the constant.
+const val MEMBER_KAKAO_ID_CONTEXT = "members.kakao_id"
+
+@Converter
+class EncryptedKakaoIdConverter : EncryptedStringConverter(MEMBER_KAKAO_ID_CONTEXT)
+
 @Converter
 class EncryptedNewcomerAssignmentReasonConverter : EncryptedStringConverter("newcomer_profiles.assignment_reason")
 
 @Converter
 class EncryptedNewcomerOverallNotesConverter : EncryptedStringConverter("newcomer_profiles.overall_notes")
-
-@Converter
-class EncryptedNewcomerKakaoIdConverter : EncryptedStringConverter("newcomer_profiles.kakao_id")
 
 @Converter
 class EncryptedNewcomerPreviousChurchConverter : EncryptedStringConverter("newcomer_profiles.previous_church")

@@ -23,6 +23,12 @@ enum class ReconciliationReason {
     MULTIPLE_CANDIDATES,
     PROFILE_VALUE_CONFLICT,
     FORM_EMAIL_MATCH,
+
+    /**
+     * Linking went through, but 신분, 소속 or 카카오 아이디 differed and one side's value was
+     * dropped (HDN-360). Not a case to decide — a note so the office can see what changed.
+     */
+    VALUE_SUPERSEDED,
 }
 
 @Entity

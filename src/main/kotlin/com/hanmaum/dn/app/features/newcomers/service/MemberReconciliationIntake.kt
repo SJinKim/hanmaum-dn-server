@@ -8,6 +8,7 @@ import com.hanmaum.dn.app.features.newcomers.domain.ReconciliationStatus
 import com.hanmaum.dn.app.features.newcomers.repository.MemberReconciliationRepository
 import org.springframework.stereotype.Component
 import java.text.Normalizer
+import java.time.Instant
 
 /**
  * Opens reconciliation cases for both ways a person enters: the app registration and the
@@ -48,6 +49,40 @@ class MemberReconciliationIntake(
             )
         review.candidateMemberIds += candidates.mapNotNull(Member::id)
         reconciliationRepository.save(review)
+        return true
+    }
+
+    /**
+     * Records that linking dropped one side's 신분, 소속 or 카카오 아이디 (HDN-360).
+     *
+     * None of the three is conflict-worthy: they change over a lifetime, so a difference is an
+     * update rather than a contradiction, and blocking on one would lock a legitimate person out
+     * of the app. The link therefore goes through and this is only a note — it is saved as
+     * [ReconciliationStatus.LINKED] with the claimed member already selected, so 중복 확인 shows
+     * it as history instead of asking anyone to decide. Only field names are stored, never the
+     * values: all three are PII.
+     *
+     * Unlike [open] this is not suppressed by an existing case, because it describes one linking
+     * run rather than a suspicion that may still be pending.
+     */
+    fun noteSuperseded(
+        registration: Member,
+        candidate: Member,
+        fields: Set<String>,
+    ): Boolean {
+        if (fields.isEmpty()) return false
+        val candidateId = candidate.id ?: return false
+        val note =
+            MemberReconciliation(
+                registration,
+                ReconciliationReason.VALUE_SUPERSEDED.name,
+                fields.sorted().joinToString(","),
+                ReconciliationStatus.LINKED,
+            )
+        note.candidateMemberIds += candidateId
+        note.selectedMember = candidate
+        note.resolvedAt = Instant.now()
+        reconciliationRepository.save(note)
         return true
     }
 

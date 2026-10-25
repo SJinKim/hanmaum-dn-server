@@ -42,6 +42,8 @@ data class MemberDto(
     @Unredacted val identityStatus: IdentityStatus? = null,
     /** 소속: school or employer name (HDN-332). */
     val workOrSchool: String? = null,
+    /** 카카오 아이디 (HDN-360); moved off the newcomer profile so it survives archiving. */
+    val kakaoId: String? = null,
     val registrationDate: LocalDate? = null,
     @Unredacted val memberStatus: String,
     /** publicId of the member's church group, or null. Used to pre-select the group on edit. */
@@ -203,6 +205,8 @@ data class MemberResponse(
     val profileImageUrl: String? = null,
     @Unredacted val identityStatus: IdentityStatus? = null,
     val workOrSchool: String? = null,
+    /** 카카오 아이디 (HDN-360). */
+    val kakaoId: String? = null,
 )
 
 // ─── Request DTOs ─────────────────────────────────────────────────────────────
