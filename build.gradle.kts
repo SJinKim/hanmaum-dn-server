@@ -72,6 +72,7 @@ dependencies {
     // Test Container libs
     testImplementation("org.testcontainers:junit-jupiter:1.20.4")
     testImplementation("org.testcontainers:postgresql:1.20.4")
+    testImplementation("org.testcontainers:minio:1.20.4")
 
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.13")
 
@@ -84,6 +85,12 @@ dependencies {
 
     // Firebase Admin SDK for push notifications
     implementation("com.google.firebase:firebase-admin:9.4.3")
+
+    // S3-compatible object storage (Hetzner) for profile images
+    implementation(platform("software.amazon.awssdk:bom:2.29.45"))
+    implementation("software.amazon.awssdk:s3")
+    // ImageIO plugin: lets ImageIO read WebP uploads (output stays JPEG)
+    implementation("com.twelvemonkeys.imageio:imageio-webp:3.12.0")
 }
 
 kotlin {
