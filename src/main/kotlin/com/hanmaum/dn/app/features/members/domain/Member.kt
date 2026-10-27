@@ -116,6 +116,12 @@ class Member(
     @Convert(converter = EncryptedProfileImageUrlConverter::class)
     @Column(name = "profile_image_url", columnDefinition = "TEXT")
     var profileImageUrl: String? = null,
+    /** S3 object key of the uploaded profile picture (HDN-140); null when there is none. */
+    @Column(name = "profile_image_key")
+    var profileImageKey: String? = null,
+    /** Bumped on every upload or delete so clients can tell a new picture from a cached one. */
+    @Column(name = "profile_image_version", nullable = false)
+    var profileImageVersion: Long = 0,
     // --- DASHBOARD FLAGS ---
     @Column(name = "is_next_group_leader", nullable = false)
     var isNextGroupLeader: Boolean = false,
