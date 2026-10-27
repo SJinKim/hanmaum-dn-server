@@ -8,6 +8,10 @@ import com.hanmaum.dn.app.features.bulletin.service.BulletinIncompleteException
 import com.hanmaum.dn.app.features.courseapplication.service.CourseApplicationException
 import com.hanmaum.dn.app.features.members.service.MemberGroupRequiredException
 import com.hanmaum.dn.app.features.members.service.MemberProfileNotFoundException
+import com.hanmaum.dn.app.features.members.service.ProfileImageInvalidException
+import com.hanmaum.dn.app.features.members.service.ProfileImageStorageUnavailableException
+import com.hanmaum.dn.app.features.members.service.ProfileImageTooLargeException
+import com.hanmaum.dn.app.features.members.service.ProfileImageUnsupportedTypeException
 import com.hanmaum.dn.app.features.newcomers.service.NewcomerException
 import jakarta.persistence.EntityNotFoundException
 import org.slf4j.LoggerFactory
@@ -23,6 +27,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
+import org.springframework.web.multipart.MaxUploadSizeExceededException
 import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.servlet.NoHandlerFoundException
 import org.springframework.web.servlet.resource.NoResourceFoundException
@@ -134,6 +139,53 @@ class GlobalExceptionHandler {
                 message = e.message ?: status.reasonPhrase,
                 code = ApiErrorCode.MEMBER_GROUP_REQUIRED,
                 fieldErrors = e.fieldErrors,
+            )
+        return ResponseEntity(response, status)
+    }
+
+    /** 413 – the picture is over 5 MB, caught by the processor or already by Tomcat's multipart limit. */
+    @ExceptionHandler(ProfileImageTooLargeException::class, MaxUploadSizeExceededException::class)
+    fun handleProfileImageTooLarge(e: Exception): ResponseEntity<ErrorResponse> {
+        logger.warn("Profile image rejected: too large")
+        return profileImageError(
+            HttpStatus.CONTENT_TOO_LARGE,
+            ProfileImageTooLargeException().message,
+            ApiErrorCode.PROFILE_IMAGE_TOO_LARGE,
+        )
+    }
+
+    /** 415 – the picture's bytes are not JPEG, PNG or WebP. */
+    @ExceptionHandler(ProfileImageUnsupportedTypeException::class)
+    fun handleProfileImageUnsupportedType(e: ProfileImageUnsupportedTypeException): ResponseEntity<ErrorResponse> {
+        logger.warn("Profile image rejected: unsupported type")
+        return profileImageError(HttpStatus.UNSUPPORTED_MEDIA_TYPE, e.message, ApiErrorCode.PROFILE_IMAGE_UNSUPPORTED_TYPE)
+    }
+
+    /** 422 – the picture cannot be decoded. */
+    @ExceptionHandler(ProfileImageInvalidException::class)
+    fun handleProfileImageInvalid(e: ProfileImageInvalidException): ResponseEntity<ErrorResponse> {
+        logger.warn("Profile image rejected: cannot be decoded")
+        return profileImageError(HttpStatus.UNPROCESSABLE_CONTENT, e.message, ApiErrorCode.PROFILE_IMAGE_INVALID)
+    }
+
+    /** 503 – object storage is down; nothing changed and the client may retry. */
+    @ExceptionHandler(ProfileImageStorageUnavailableException::class)
+    fun handleProfileImageStorageUnavailable(e: ProfileImageStorageUnavailableException): ResponseEntity<ErrorResponse> {
+        logger.error("Profile image upload failed: object storage unavailable", e)
+        return profileImageError(HttpStatus.SERVICE_UNAVAILABLE, e.message, ApiErrorCode.PROFILE_IMAGE_STORAGE_UNAVAILABLE)
+    }
+
+    private fun profileImageError(
+        status: HttpStatus,
+        message: String?,
+        code: ApiErrorCode,
+    ): ResponseEntity<ErrorResponse> {
+        val response =
+            ErrorResponse(
+                status = status.value(),
+                error = status.reasonPhrase,
+                message = message ?: status.reasonPhrase,
+                code = code,
             )
         return ResponseEntity(response, status)
     }

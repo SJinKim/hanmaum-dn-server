@@ -17,6 +17,12 @@ spring:
     baseline-version: 1
   profiles:
     active: dev
+  # Profile pictures are the only upload (HDN-140). Tomcat rejects anything larger before
+  # it reaches the controller; ProfileImageProcessor enforces the same 5 MB on the bytes.
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
 
 management:
   endpoints:
