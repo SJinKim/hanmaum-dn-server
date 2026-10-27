@@ -271,3 +271,7 @@
 ### Collect new decisions at the end and leave PRs open
 - **Correction**: The user wants newly required decisions summarized at the end of the issue queue, with PRs left open.
 - **Rule**: Continue independent authorized work; collect unresolved choices with affected issues/PRs, options and a recommendation in the final report. Leave affected PRs open, do not merge or guess approval, and preserve decisions already explicitly approved by the user.
+
+### An application counter is not concurrency control
+- **Mistake**: The profile image upload read the stored key and version, then wrote the new ones. Two concurrent uploads by one member both read the same state, both bumped the version, and the loser's object was never deleted, leaving it orphaned in S3.
+- **Rule**: For read-modify-write on member-owned fields, load the row with `PESSIMISTIC_WRITE` (`CurrentMemberResolver.requireForUpdate`) or use JPA `@Version`. Prove it with a two-transaction integration test that fails without the lock.

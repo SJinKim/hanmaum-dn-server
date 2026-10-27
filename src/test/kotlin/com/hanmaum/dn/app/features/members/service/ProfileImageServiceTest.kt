@@ -47,7 +47,7 @@ class ProfileImageServiceTest {
     @Test
     fun `upload stores the processed image under the member and bumps the version`() {
         val member = member()
-        `when`(currentMemberResolver.require("sub")).thenReturn(member)
+        `when`(currentMemberResolver.requireForUpdate("sub")).thenReturn(member)
         `when`(processor.process(any())).thenReturn(processed)
 
         service().uploadForMember("sub", byteArrayOf(9))
@@ -64,7 +64,7 @@ class ProfileImageServiceTest {
     @Test
     fun `upload deletes the previous object`() {
         val member = member(key = "profile-images/old.jpg")
-        `when`(currentMemberResolver.require("sub")).thenReturn(member)
+        `when`(currentMemberResolver.requireForUpdate("sub")).thenReturn(member)
         `when`(processor.process(any())).thenReturn(processed)
 
         service().uploadForMember("sub", byteArrayOf(9))
@@ -75,7 +75,7 @@ class ProfileImageServiceTest {
     @Test
     fun `upload keeps the new picture when deleting the old object fails`() {
         val member = member(key = "profile-images/old.jpg")
-        `when`(currentMemberResolver.require("sub")).thenReturn(member)
+        `when`(currentMemberResolver.requireForUpdate("sub")).thenReturn(member)
         `when`(processor.process(any())).thenReturn(processed)
         doThrow(SdkClientException.create("down")).`when`(storage).deleteObjects(any())
 
@@ -87,7 +87,7 @@ class ProfileImageServiceTest {
     @Test
     fun `upload leaves the member untouched when storage is down`() {
         val member = member(key = "profile-images/old.jpg")
-        `when`(currentMemberResolver.require("sub")).thenReturn(member)
+        `when`(currentMemberResolver.requireForUpdate("sub")).thenReturn(member)
         `when`(processor.process(any())).thenReturn(processed)
         doThrow(SdkClientException.create("down")).`when`(storage).putObject(any(), any(), any())
 
@@ -101,7 +101,7 @@ class ProfileImageServiceTest {
 
     @Test
     fun `upload rejects an invalid image before touching storage`() {
-        `when`(currentMemberResolver.require("sub")).thenReturn(member())
+        `when`(currentMemberResolver.requireForUpdate("sub")).thenReturn(member())
         `when`(processor.process(any())).thenThrow(ProfileImageUnsupportedTypeException())
 
         assertThrows<ProfileImageUnsupportedTypeException> { service().uploadForMember("sub", byteArrayOf(9)) }
@@ -112,7 +112,7 @@ class ProfileImageServiceTest {
     @Test
     fun `deleteForMember clears the key bumps the version and removes the object`() {
         val member = member(key = "profile-images/old.jpg")
-        `when`(currentMemberResolver.require("sub")).thenReturn(member)
+        `when`(currentMemberResolver.requireForUpdate("sub")).thenReturn(member)
 
         service().deleteForMember("sub")
 
@@ -124,7 +124,7 @@ class ProfileImageServiceTest {
 
     @Test
     fun `deleteForMember without a picture changes nothing`() {
-        `when`(currentMemberResolver.require("sub")).thenReturn(member())
+        `when`(currentMemberResolver.requireForUpdate("sub")).thenReturn(member())
 
         service().deleteForMember("sub")
 

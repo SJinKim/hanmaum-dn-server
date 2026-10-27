@@ -44,7 +44,7 @@ class ProfileImageService(
         keycloakSubject: String,
         bytes: ByteArray,
     ): Member {
-        val member = currentMemberResolver.require(keycloakSubject)
+        val member = currentMemberResolver.requireForUpdate(keycloakSubject)
         val image = processor.process(bytes)
         val key = "$KEY_PREFIX/${member.publicId}/${UUID.randomUUID()}.jpg"
         try {
@@ -63,7 +63,7 @@ class ProfileImageService(
     /** Removes the caller's own picture; a member without one is left untouched. */
     @Transactional
     fun deleteForMember(keycloakSubject: String) {
-        clear(currentMemberResolver.require(keycloakSubject))
+        clear(currentMemberResolver.requireForUpdate(keycloakSubject))
     }
 
     /** Removes a member's picture for moderation; the member row is locked like every other admin write. */

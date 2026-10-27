@@ -66,7 +66,7 @@ class ProfileImageServiceMinioIT {
 
     private fun service(): ProfileImageService {
         val repository = mock<MemberRepository> { on { save(any<Member>()) } doAnswer { it.getArgument(0) } }
-        val resolver = mock<CurrentMemberResolver> { on { require("kc-1") } doReturn member }
+        val resolver = mock<CurrentMemberResolver> { on { requireForUpdate("kc-1") } doReturn member }
         return ProfileImageService(repository, resolver, ProfileImageProcessor(), storage)
     }
 

@@ -47,6 +47,8 @@ interface MemberRepositorySecureQueries {
 
     fun findByKeycloakIdAndDeletedAtIsNull(keycloakId: String): Member?
 
+    fun findByKeycloakIdAndDeletedAtIsNullForUpdate(keycloakId: String): Member?
+
     fun findActiveMembers(
         search: String?,
         status: MemberStatus?,

@@ -28,6 +28,9 @@ class MemberRepositoryImpl(
     override fun findByKeycloakIdAndDeletedAtIsNull(keycloakId: String): Member? =
         findByLookupHash("keycloakLookupHash", PiiCryptoContext.lookupHash(keycloakId))
 
+    override fun findByKeycloakIdAndDeletedAtIsNullForUpdate(keycloakId: String): Member? =
+        findByLookupHash("keycloakLookupHash", PiiCryptoContext.lookupHash(keycloakId), LockModeType.PESSIMISTIC_WRITE)
+
     override fun findActiveMembers(
         search: String?,
         status: MemberStatus?,
