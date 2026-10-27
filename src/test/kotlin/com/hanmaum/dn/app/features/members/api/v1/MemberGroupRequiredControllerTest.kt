@@ -6,6 +6,7 @@ import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.members.service.MemberGroupRequiredException
 import com.hanmaum.dn.app.features.members.service.MemberPurgeService
 import com.hanmaum.dn.app.features.members.service.MemberService
+import com.hanmaum.dn.app.features.members.service.ProfileImageService
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.`when`
 import org.mockito.kotlin.any
@@ -36,6 +37,8 @@ class MemberGroupRequiredControllerTest {
     @MockitoBean private lateinit var memberService: MemberService
 
     @MockitoBean private lateinit var memberPurgeService: MemberPurgeService
+
+    @MockitoBean private lateinit var profileImageService: ProfileImageService
 
     @MockitoBean private lateinit var memberRepository: MemberRepository
 

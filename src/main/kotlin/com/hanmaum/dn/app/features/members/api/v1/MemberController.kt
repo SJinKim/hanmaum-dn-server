@@ -18,6 +18,8 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMyProfileRequest
 import com.hanmaum.dn.app.features.members.domain.MemberOrigin
 import com.hanmaum.dn.app.features.members.service.MemberPurgeService
 import com.hanmaum.dn.app.features.members.service.MemberService
+import com.hanmaum.dn.app.features.members.service.ProfileImageProcessor
+import com.hanmaum.dn.app.features.members.service.ProfileImageService
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerLifecycle
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.enums.ParameterIn
@@ -27,6 +29,7 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.Valid
 import org.springframework.data.domain.Page
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.annotation.AuthenticationPrincipal
@@ -42,6 +45,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.multipart.MultipartFile
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
 import java.util.UUID
@@ -51,6 +55,7 @@ import java.util.UUID
 class MemberController(
     private val memberService: MemberService,
     private val memberPurgeService: MemberPurgeService,
+    private val profileImageService: ProfileImageService,
 ) {
     /**
      * GET /api/v1/members
@@ -138,22 +143,43 @@ class MemberController(
     @PreAuthorize("isAuthenticated()")
     fun getMyProfile(
         @AuthenticationPrincipal jwt: Jwt,
+    ): ResponseEntity<ApiResponse<*>> = ResponseEntity.ok(ApiResponse.success(data = myProfile(jwt)))
+
+    /**
+     * PUT /api/v1/members/me/profile-image
+     * Role: any authenticated member — replaces the own profile picture (multipart part `file`, JPEG/PNG/WebP,
+     * at most 5 MB). Stored as a 512×512 JPEG in the private bucket; answers with the same profile as GET /me.
+     * 413 too large, 415 not an image, 422 unreadable image, 503 storage unavailable (retryable).
+     */
+    @PutMapping("/me/profile-image", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    @PreAuthorize("isAuthenticated()")
+    fun uploadMyProfileImage(
+        @AuthenticationPrincipal jwt: Jwt,
+        @RequestParam("file") file: MultipartFile,
     ): ResponseEntity<ApiResponse<*>> {
-        val profile =
-            memberService.getMemberProfile(
-                keycloakSubject = jwt.subject,
-                email = jwt.getClaim("email"),
-                emailVerified = jwt.getClaimAsBoolean("email_verified") == true,
-                firstName = jwt.getClaimAsString("given_name"),
-                lastName = jwt.getClaimAsString("family_name"),
-                birthDate = parseBirthDate(jwt.getClaimAsString("birthdate")),
-            )
-        return ResponseEntity.ok(ApiResponse.success(data = profile))
+        // One byte past the limit is enough for the processor to answer 413 without reading the rest.
+        val bytes = file.inputStream.use { it.readNBytes(ProfileImageProcessor.MAX_UPLOAD_BYTES + 1) }
+        profileImageService.uploadForMember(jwt.subject, bytes)
+        return ResponseEntity.ok(ApiResponse.success(data = myProfile(jwt)))
+    }
+
+    /**
+     * DELETE /api/v1/members/me/profile-image
+     * Role: any authenticated member — removes the own profile picture; answers with the same profile as GET /me.
+     */
+    @DeleteMapping("/me/profile-image")
+    @PreAuthorize("isAuthenticated()")
+    fun deleteMyProfileImage(
+        @AuthenticationPrincipal jwt: Jwt,
+    ): ResponseEntity<ApiResponse<*>> {
+        profileImageService.deleteForMember(jwt.subject)
+        return ResponseEntity.ok(ApiResponse.success(data = myProfile(jwt)))
     }
 
     /**
      * PATCH /api/v1/members/me
-     * Role: any authenticated member — partial self-update of contact, profile image, address, 신분 and 소속.
+     * Role: any authenticated member — partial self-update of contact, address, 신분 and 소속.
+     * The profile picture has its own endpoint: PUT /api/v1/members/me/profile-image.
      */
     @PatchMapping("/me")
     @PreAuthorize("isAuthenticated()")
@@ -272,6 +298,19 @@ class MemberController(
     }
 
     /**
+     * DELETE /api/v1/members/{publicId}/profile-image
+     * Role: ADMIN — removes a member's profile picture for moderation. 404 for an unknown or deleted member.
+     */
+    @DeleteMapping("/{publicId}/profile-image")
+    @PreAuthorize("hasRole('ADMIN')")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun deleteMemberProfileImage(
+        @PathVariable publicId: UUID,
+    ) {
+        profileImageService.deleteByAdmin(publicId)
+    }
+
+    /**
      * POST /api/v1/members/{publicId}/restore
      * Role: ADMIN — undoes a soft delete; the member gets its previous status back.
      * 400 if the member is not deleted, 409 if an active member uses the same email.
@@ -314,6 +353,16 @@ class MemberController(
             .status(HttpStatus.CREATED)
             .body(ApiResponse.success(message = "등록이 완료되었습니다."))
     }
+
+    private fun myProfile(jwt: Jwt) =
+        memberService.getMemberProfile(
+            keycloakSubject = jwt.subject,
+            email = jwt.getClaim("email"),
+            emailVerified = jwt.getClaimAsBoolean("email_verified") == true,
+            firstName = jwt.getClaimAsString("given_name"),
+            lastName = jwt.getClaimAsString("family_name"),
+            birthDate = parseBirthDate(jwt.getClaimAsString("birthdate")),
+        )
 
     private fun parseBirthDate(value: String?): LocalDate? =
         if (value.isNullOrBlank()) {

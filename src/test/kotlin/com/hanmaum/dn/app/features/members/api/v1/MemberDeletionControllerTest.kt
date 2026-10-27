@@ -4,6 +4,7 @@ import com.hanmaum.dn.app.common.config.SecurityConfig
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.members.service.MemberPurgeService
 import com.hanmaum.dn.app.features.members.service.MemberService
+import com.hanmaum.dn.app.features.members.service.ProfileImageService
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.kotlin.any
@@ -33,6 +34,8 @@ class MemberDeletionControllerTest {
     @MockitoBean private lateinit var memberService: MemberService
 
     @MockitoBean private lateinit var memberPurgeService: MemberPurgeService
+
+    @MockitoBean private lateinit var profileImageService: ProfileImageService
 
     @MockitoBean private lateinit var memberRepository: MemberRepository
 
