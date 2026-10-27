@@ -654,7 +654,6 @@ class MemberService(
         val member = resolveAndLinkMember(keycloakSubject, email, emailVerified, firstName, lastName, birthDateClaim)
         request.phoneNumber?.let { member.phoneNumber = it }
         request.birthDate?.let { member.birthDate = it }
-        request.profileImageUrl?.let { member.profileImageUrl = it }
         request.street?.let { member.street = it }
         request.houseNumber?.let { member.houseNumber = it }
         request.zipCode?.let { member.zipCode = it }

@@ -67,7 +67,6 @@ fun CreateMemberRequest.toEntity(): Member =
         workOrSchool = this.workOrSchool?.trim()?.ifBlank { null },
         registrationDate = this.registrationDate,
         baptism = mapBaptism(this.baptism),
-        profileImageUrl = this.profileImageUrl,
     )
 
 // ─── PATCH update ─────────────────────────────────────────────────────────────
@@ -102,7 +101,6 @@ fun Member.applyPatch(request: UpdateMemberRequest) {
     request.workOrSchool?.let { this.workOrSchool = it.trim().ifBlank { null } }
     request.registrationDate?.let { this.registrationDate = it }
     request.baptism?.let { this.baptism = mapBaptism(it) }
-    request.profileImageUrl?.let { this.profileImageUrl = it }
     request.isNextGroupLeader?.let { this.isNextGroupLeader = it }
     request.oneOnOneSignupFilled?.let { this.oneOnOneSignupFilled = it }
 

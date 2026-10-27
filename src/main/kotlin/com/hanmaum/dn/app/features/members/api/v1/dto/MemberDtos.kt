@@ -240,7 +240,6 @@ data class CreateMemberRequest(
     val registrationDate: LocalDate? = null,
     /** publicId of the church group to assign; null leaves the member ungrouped. */
     @Unredacted val groupPublicId: String? = null,
-    val profileImageUrl: String? = null,
 )
 
 /**
@@ -278,7 +277,6 @@ data class UpdateMemberRequest(
      * 400 with code MEMBER_GROUP_REQUIRED and fieldErrors.groupPublicId (HDN-314).
      */
     @Unredacted val groupPublicId: String? = null,
-    val profileImageUrl: String? = null,
     @get:JsonProperty("isNextGroupLeader")
     @Unredacted val isNextGroupLeader: Boolean? = null,
     @Unredacted val oneOnOneSignupFilled: Boolean? = null,
@@ -339,7 +337,6 @@ data class UpdateMyProfileRequest(
     @field:Size(max = 50)
     val phoneNumber: String? = null,
     val birthDate: LocalDate? = null,
-    val profileImageUrl: String? = null,
     val street: String? = null,
     @field:Size(max = 50)
     val houseNumber: String? = null,

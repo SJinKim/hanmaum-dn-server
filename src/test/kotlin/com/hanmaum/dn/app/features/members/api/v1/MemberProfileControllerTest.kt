@@ -271,6 +271,41 @@ class MemberProfileControllerTest {
     }
 
     @Test
+    fun `PATCH members-me still accepts an old client sending profileImageUrl and ignores it`() {
+        `when`(
+            memberService.updateMyProfile(
+                eq("kc-001"),
+                anyOrNull(),
+                any(),
+                anyOrNull(),
+                anyOrNull(),
+                anyOrNull(),
+                any(),
+            ),
+        ).thenReturn(profile())
+
+        mockMvc
+            .perform(
+                patch("/api/v1/members/me")
+                    .with(memberToken())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"workOrSchool":"Siemens","profileImageUrl":"https://evil.example/x.jpg"}"""),
+            ).andExpect(status().isOk)
+
+        val captor = argumentCaptor<UpdateMyProfileRequest>()
+        verify(memberService).updateMyProfile(
+            eq("kc-001"),
+            anyOrNull(),
+            any(),
+            anyOrNull(),
+            anyOrNull(),
+            anyOrNull(),
+            captor.capture(),
+        )
+        assertEquals("Siemens", captor.firstValue.workOrSchool)
+    }
+
+    @Test
     fun `GET members-me returns 401 without a token`() {
         mockMvc.perform(get("/api/v1/members/me")).andExpect(status().isUnauthorized)
     }
