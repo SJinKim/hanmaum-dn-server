@@ -493,4 +493,33 @@ class MemberMappersTest {
         assertEquals(true, dto.isNextGroupLeader)
         assertEquals(true, dto.oneOnOneSignupFilled)
     }
+
+    // --- profile image (HDN-140) ---
+
+    @Test
+    fun `toDto exposes the given profile image url and the member version`() {
+        val member = memberWithId(1).apply { profileImageVersion = 3 }
+
+        val dto = member.toDto(profileImageUrl = "https://s3/a.jpg?sig")
+
+        assertEquals("https://s3/a.jpg?sig", dto.profileImageUrl)
+        assertEquals(3L, dto.profileImageVersion)
+    }
+
+    @Test
+    fun `toResponse exposes the given profile image url and the member version`() {
+        val member = memberWithId(1).apply { profileImageVersion = 2 }
+
+        val response = member.toResponse(emptyList(), true, "https://s3/b.jpg?sig")
+
+        assertEquals("https://s3/b.jpg?sig", response.profileImageUrl)
+        assertEquals(2L, response.profileImageVersion)
+    }
+
+    @Test
+    fun `toDto ignores the legacy url column`() {
+        val member = memberWithId(1).apply { profileImageUrl = "https://legacy/old.jpg" }
+
+        assertNull(member.toDto().profileImageUrl)
+    }
 }

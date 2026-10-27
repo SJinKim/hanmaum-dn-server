@@ -47,7 +47,10 @@ data class MemberDto(
     /** publicId of the member's church group, or null. Used to pre-select the group on edit. */
     @Unredacted val groupPublicId: String? = null,
     @Unredacted val groupName: String? = null,
+    /** Presigned, short-lived URL of the profile picture (HDN-140). */
     val profileImageUrl: String? = null,
+    /** Changes on every upload and delete; clients key their image cache on it, not on the URL. */
+    val profileImageVersion: Long = 0,
     /** Full training history, ordered by training sort order. */
     @Unredacted val trainings: List<UserTrainingDto> = emptyList(),
     /** Full ministry history, most recent registration period first. */
@@ -200,7 +203,10 @@ data class MemberResponse(
     val city: String? = null,
     val phoneNumber: String? = null,
     val birthDate: LocalDate? = null,
+    /** Presigned, short-lived URL of the profile picture (HDN-140). */
     val profileImageUrl: String? = null,
+    /** Changes on every upload and delete; clients key their image cache on it, not on the URL. */
+    val profileImageVersion: Long = 0,
     @Unredacted val identityStatus: IdentityStatus? = null,
     val workOrSchool: String? = null,
 )

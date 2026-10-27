@@ -131,6 +131,7 @@ fun Member.toDto(
     ministries: List<MinistryHistoryDto> = emptyList(),
     groupLeaderSince: LocalDate? = null,
     graduatedOn: LocalDate? = null,
+    profileImageUrl: String? = null,
 ): MemberDto =
     MemberDto(
         publicId = this.publicId.toString(),
@@ -153,7 +154,8 @@ fun Member.toDto(
         memberStatus = this.memberStatus.name,
         groupPublicId = this.group?.publicId?.toString(),
         groupName = this.group?.name,
-        profileImageUrl = this.profileImageUrl,
+        profileImageUrl = profileImageUrl,
+        profileImageVersion = this.profileImageVersion,
         trainings = trainings,
         ministries = ministries,
         isNextGroupLeader = this.isNextGroupLeader,
@@ -215,6 +217,7 @@ fun Member.toNameDto(): MemberNameDto =
 fun Member.toResponse(
     activeMinistries: List<String> = emptyList(),
     emailVerified: Boolean = false,
+    profileImageUrl: String? = null,
 ): MemberResponse =
     MemberResponse(
         publicId = this.publicId.toString(),
@@ -233,7 +236,8 @@ fun Member.toResponse(
         city = this.city,
         phoneNumber = this.phoneNumber,
         birthDate = this.birthDate,
-        profileImageUrl = this.profileImageUrl,
+        profileImageUrl = profileImageUrl,
+        profileImageVersion = this.profileImageVersion,
         identityStatus = this.identityStatus,
         workOrSchool = this.workOrSchool,
     )
