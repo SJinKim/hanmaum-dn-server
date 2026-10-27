@@ -159,6 +159,8 @@ openApi {
             mapOf(
                 "spring.profiles.active" to "dev",
                 "server.port" to openApiPort.toString(),
+                // The throwaway compose has no MinIO; the spec does not need storage at boot.
+                "app.storage.s3.create-bucket" to "false",
                 "spring.datasource.url" to
                     "jdbc:postgresql://127.0.0.1:${openApiDbPort.getOrElse("5433")}/${envVars["DB_HANMAUM_DN_NAME"] ?: ""}",
             ),
