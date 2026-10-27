@@ -21,6 +21,7 @@ class MemberPurgeService(
     private val jdbcTemplate: JdbcTemplate,
     private val transactionTemplate: TransactionTemplate,
     private val keycloak: Keycloak,
+    private val profileImageService: ProfileImageService,
     @Value("\${app.keycloak.realm:hanmaum}") private val realm: String,
 ) {
     private val log = LoggerFactory.getLogger(MemberPurgeService::class.java)
@@ -32,14 +33,16 @@ class MemberPurgeService(
             transactionTemplate.executeWithoutResult {
                 purgeMemberRows(member.id!!)
             }
+            member.profileImageKey?.let(profileImageService::deleteStoredObject)
         }
         return expiredMembers.size
     }
 
     /**
      * Admin hard delete of one soft-deleted member, ahead of the retention period. Same steps
-     * as [purgeExpired]: the Keycloak account goes first (404 counts as gone), then the rows.
-     * Afterwards the email can be registered again.
+     * as [purgeExpired]: the Keycloak account goes first (404 counts as gone), then the rows,
+     * then the profile picture in the bucket — last, so a failed row purge never leaves a row
+     * pointing at a missing object. Afterwards the email can be registered again.
      */
     fun purgeMember(publicId: UUID) {
         val member =
@@ -54,6 +57,7 @@ class MemberPurgeService(
         transactionTemplate.executeWithoutResult {
             purgeMemberRows(memberId)
         }
+        member.profileImageKey?.let(profileImageService::deleteStoredObject)
     }
 
     private fun deleteKeycloakUser(

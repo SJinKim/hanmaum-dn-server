@@ -44,6 +44,8 @@ class MemberPurgeServiceTest {
 
     @Mock private lateinit var keycloak: Keycloak
 
+    @Mock private lateinit var profileImageService: ProfileImageService
+
     @Test
     fun `purgeExpired deletes dependent rows and member in one transaction`() {
         val now = Instant.parse("2026-06-15T00:00:00Z")
@@ -66,6 +68,7 @@ class MemberPurgeServiceTest {
                 jdbcTemplate = jdbcTemplate,
                 transactionTemplate = transactionTemplate,
                 keycloak = keycloak,
+                profileImageService = profileImageService,
                 realm = "test-realm",
             )
 
@@ -91,6 +94,7 @@ class MemberPurgeServiceTest {
         )
         verify(memberRepository).deleteById(42L)
         verify(memberRepository).flush()
+        verifyNoInteractions(profileImageService)
     }
 
     private fun service() =
@@ -99,6 +103,7 @@ class MemberPurgeServiceTest {
             jdbcTemplate = jdbcTemplate,
             transactionTemplate = transactionTemplate,
             keycloak = keycloak,
+            profileImageService = profileImageService,
             realm = "test-realm",
         )
 
@@ -111,6 +116,7 @@ class MemberPurgeServiceTest {
                 keycloakId = "kc-42"
                 memberStatus = MemberStatus.DELETED
                 deletedAt = Instant.parse("2026-06-01T00:00:00Z")
+                profileImageKey = "profile-images/pub-42/a.jpg"
             }
         `when`(memberRepository.findByPublicId(publicId)).thenReturn(Optional.of(member))
         val realmResource = mock<RealmResource>()
@@ -131,6 +137,7 @@ class MemberPurgeServiceTest {
         verify(jdbcTemplate).update(eq("DELETE FROM group_leaders WHERE member_id = ?"), eq(42L))
         verify(memberRepository).deleteById(42L)
         verify(memberRepository).flush()
+        verify(profileImageService).deleteStoredObject("profile-images/pub-42/a.jpg")
     }
 
     @Test
@@ -147,7 +154,7 @@ class MemberPurgeServiceTest {
         val exception = assertThrows<ResponseStatusException> { service().purgeMember(publicId) }
 
         assertEquals(HttpStatus.BAD_REQUEST, exception.statusCode)
-        verifyNoInteractions(keycloak, jdbcTemplate, transactionTemplate)
+        verifyNoInteractions(keycloak, jdbcTemplate, transactionTemplate, profileImageService)
         verify(memberRepository, never()).deleteById(any())
     }
 
@@ -158,6 +165,6 @@ class MemberPurgeServiceTest {
 
         assertThrows<EntityNotFoundException> { service().purgeMember(publicId) }
 
-        verifyNoInteractions(keycloak, jdbcTemplate, transactionTemplate)
+        verifyNoInteractions(keycloak, jdbcTemplate, transactionTemplate, profileImageService)
     }
 }
