@@ -125,6 +125,10 @@ data class MemberNameDto(
     val publicId: String,
     val fullName: String,
     val discriminator: String? = null,
+    /** Presigned, short-lived GET URL of the avatar (HDN-140); null without a picture. */
+    val profileImageUrl: String? = null,
+    /** Changes with every upload or delete; clients key their image cache on it, not on the URL. */
+    val profileImageVersion: Long = 0,
 )
 
 /** Number of non-deleted members, optionally narrowed to one status (Home 승인 대기, 현황). */

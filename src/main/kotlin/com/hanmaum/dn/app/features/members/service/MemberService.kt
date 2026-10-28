@@ -405,7 +405,7 @@ class MemberService(
     fun getMemberNames(): List<MemberNameDto> =
         memberRepository
             .findAllByDeletedAtIsNull()
-            .map { it.toNameDto() }
+            .map { it.toNameDto(profileImageUrl(it)) }
             .sortedBy { it.fullName }
 
     /** Non-deleted members, all of them or only those with [status]. */

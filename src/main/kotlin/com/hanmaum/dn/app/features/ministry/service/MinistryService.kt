@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.ministry.service
 
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.members.service.ProfileImageService
 import com.hanmaum.dn.app.features.ministry.api.applyPatch
 import com.hanmaum.dn.app.features.ministry.api.toActiveMemberDto
 import com.hanmaum.dn.app.features.ministry.api.toDto
@@ -36,6 +37,7 @@ class MinistryService(
     private val memberRepository: MemberRepository,
     private val ministryOwnership: MinistryOwnership,
     private val clock: Clock,
+    private val profileImageService: ProfileImageService? = null,
 ) {
     // ─── Ministry CRUD ─────────────────────────────────────────────────────────
 
@@ -64,7 +66,7 @@ class MinistryService(
         val ministries = ministryRepository.findAllActive(active)
         if (ministries.isEmpty()) return emptyList()
         val assignments = ministryAssignmentRepository.findCurrentByMinistryIds(ministries.map { it.id!! }).groupBy { it.ministry.id }
-        return ministries.map { it.toSummaryDto(assignments[it.id].orEmpty()) }
+        return ministries.map { it.toSummaryDto(assignments[it.id].orEmpty()) { member -> profileImageService?.urlFor(member) } }
     }
 
     /**

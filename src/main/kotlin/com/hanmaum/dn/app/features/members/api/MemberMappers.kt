@@ -201,11 +201,13 @@ fun Member.toSummaryDto(
     )
 
 /** Minimal identity projection for name pickers. Decryption happens on entity load. */
-fun Member.toNameDto(): MemberNameDto =
+fun Member.toNameDto(profileImageUrl: String? = null): MemberNameDto =
     MemberNameDto(
         publicId = this.publicId.toString(),
         fullName = this.getFullName(),
         discriminator = this.discriminator,
+        profileImageUrl = profileImageUrl,
+        profileImageVersion = this.profileImageVersion,
     )
 
 /**

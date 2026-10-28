@@ -2,6 +2,7 @@ package com.hanmaum.dn.app.features.ministry.service
 
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
+import com.hanmaum.dn.app.features.members.service.ProfileImageService
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.AddMinistryMemberRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.CreateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryContactRequest
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.Mockito.doThrow
+import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
@@ -225,6 +227,36 @@ class MinistryServiceTest {
         val result = service.getMinistries(null)
 
         assertEquals(0, result.size)
+    }
+
+    @Test
+    fun `getMinistries gives the previewed members their presigned avatar and version`() {
+        val ministry = makeMinistry()
+        val member = makeMember(id = 1L, firstName = "1번").apply { profileImageVersion = 4 }
+        val assignment =
+            MinistryAssignment(
+                ministry = ministry,
+                member = member,
+                startDate = LocalDate.of(2025, 1, 1),
+                role = MinistryAssignmentRole.MEMBER,
+                status = MinistryAssignmentStatus.ACTIVE,
+            )
+        val profileImages = mock(ProfileImageService::class.java)
+        `when`(profileImages.urlFor(member)).thenReturn("https://s3.example/a.jpg?sig")
+        `when`(ministryRepository.findAllActive(null)).thenReturn(listOf(ministry))
+        `when`(ministryAssignmentRepository.findCurrentByMinistryIds(listOf(1L))).thenReturn(listOf(assignment))
+        val withAvatars =
+            MinistryService(ministryRepository, ministryAssignmentRepository, memberRepository, ministryOwnership, clock, profileImages)
+
+        val preview =
+            withAvatars
+                .getMinistries(null)
+                .single()
+                .memberPreview
+                .single()
+
+        assertEquals("https://s3.example/a.jpg?sig", preview.profileImageUrl)
+        assertEquals(4L, preview.profileImageVersion)
     }
 
     @Test

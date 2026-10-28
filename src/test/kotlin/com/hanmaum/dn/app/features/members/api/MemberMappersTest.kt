@@ -307,6 +307,17 @@ class MemberMappersTest {
     }
 
     @Test
+    fun `toNameDto carries the presigned avatar url and the cache version`() {
+        val member = Member(lastName = "Kim", firstName = "Min").apply { profileImageVersion = 3 }
+
+        val dto = member.toNameDto("https://s3.example/a.jpg?sig")
+
+        assertEquals("https://s3.example/a.jpg?sig", dto.profileImageUrl)
+        assertEquals(3L, dto.profileImageVersion)
+        assertNull(member.toNameDto().profileImageUrl)
+    }
+
+    @Test
     fun `toSummaryDto derives isGroupLeader from the tenure start date`() {
         val member = Member(lastName = "박", firstName = "준호", memberStatus = MemberStatus.ACTIVE)
 
