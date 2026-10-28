@@ -42,9 +42,10 @@ class S3ClientConfig(
                 .builder()
                 .region(Region.of(properties.region))
                 .credentialsProvider(credentials)
-        if (properties.endpoint.isNotBlank()) {
+        val endpoint = properties.publicEndpoint.ifBlank { properties.endpoint }
+        if (endpoint.isNotBlank()) {
             builder
-                .endpointOverride(URI.create(properties.endpoint))
+                .endpointOverride(URI.create(endpoint))
                 .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
         }
         return builder.build()

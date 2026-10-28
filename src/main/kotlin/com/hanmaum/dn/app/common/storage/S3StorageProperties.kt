@@ -11,6 +11,8 @@ import java.time.Duration
 @ConfigurationProperties(prefix = "app.storage.s3")
 data class S3StorageProperties(
     val endpoint: String = "",
+    /** Host clients use for presigned URLs; defaults to [endpoint]. Differs when the server reaches the bucket on an internal name. */
+    val publicEndpoint: String = "",
     val region: String = "eu-central-1",
     val bucket: String = "",
     val accessKey: String = "",

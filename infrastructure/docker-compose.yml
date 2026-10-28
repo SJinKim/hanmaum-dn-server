@@ -119,6 +119,9 @@ services:
       SPRING_FLYWAY_ENABLED: "true"
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: ${KEYCLOAK_SERVER_URL_DOCKER}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/certs
       KEYCLOAK_AUTH_SERVER_URL: ${KEYCLOAK_SERVER_URL_DOCKER}
+      # MinIO inside the compose network; presigned URLs keep the host-reachable address.
+      S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:9000}
 
     env_file:
       - .env
@@ -127,6 +130,8 @@ services:
         condition: service_healthy
       hanmaumApp-keycloak:
         condition: service_started
+      minio:
+        condition: service_healthy
 
 volumes:
   hanmaumApp_postgres_data:
