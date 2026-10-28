@@ -275,3 +275,7 @@
 ### An application counter is not concurrency control
 - **Mistake**: The profile image upload read the stored key and version, then wrote the new ones. Two concurrent uploads by one member both read the same state, both bumped the version, and the loser's object was never deleted, leaving it orphaned in S3.
 - **Rule**: For read-modify-write on member-owned fields, load the row with `PESSIMISTIC_WRITE` (`CurrentMemberResolver.requireForUpdate`) or use JPA `@Version`. Prove it with a two-transaction integration test that fails without the lock.
+
+### A stale read must not acknowledge a cleanup order that was renewed meanwhile
+- **Mistake**: The cleanup sweeper checked a key, then deleted its row unconditionally. A producer that re-listed the same key in between (`ON CONFLICT DO NOTHING`) had its retry removed by the sweeper.
+- **Rule**: Release a work-queue row only if it is unchanged since it was read (compare `created_at`), and make re-listing move that timestamp. List the object key in the same transaction that deletes its last reference.
