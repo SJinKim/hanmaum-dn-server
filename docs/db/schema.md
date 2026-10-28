@@ -1,8 +1,8 @@
 <!-- Erzeugt von ./gradlew schemaSnapshot aus den Flyway-Migrationen. Nicht von Hand bearbeiten, siehe docs/db/README.md. -->
 # DB-Schema
 
-- Migrations-SHA-256: `cb49947c62b75ef2fb11890f7719e76b938161f7f1714c4b2560b2e5c94ea83d`
-- Tabellen: 56 · Spalten: 584
+- Migrations-SHA-256: `ddd5e3ac414da41f5e3977d11e37df814e8f479f24880fef0c798ea05d84d779`
+- Tabellen: 57 · Spalten: 596
 - Fachliche Notizen: `docs/db/schema-notes.md`
 - Spalten ohne `NOT NULL` sind nullable. Indizes, die nur einen Primärschlüssel oder Unique-Constraint tragen, stehen beim Constraint.
 
@@ -664,6 +664,31 @@ Constraints:
 
 Indizes:
 - `uq_member_claim_conflicts_open_registration` UNIQUE `btree (registration_member_id) WHERE (deleted_at IS NULL)`
+
+## public.member_consents
+
+- `id` bigint NOT NULL DEFAULT `nextval('member_consents_id_seq'::regclass)`
+- `public_id` uuid NOT NULL
+- `member_id` bigint NOT NULL
+- `purpose` character varying(50) NOT NULL
+- `policy_version` character varying(50) NOT NULL
+- `source` character varying(30) NOT NULL
+- `granted_at` timestamp with time zone NOT NULL
+- `ended_at` timestamp with time zone
+- `end_reason` character varying(20)
+- `created_at` timestamp with time zone NOT NULL DEFAULT `CURRENT_TIMESTAMP`
+- `updated_at` timestamp with time zone
+- `deleted_at` timestamp with time zone
+
+Constraints:
+- `ck_member_consent_end_pair` `CHECK (((ended_at IS NULL) = (end_reason IS NULL)))`
+- `ck_member_consent_end_reason` `CHECK (((end_reason)::text = ANY ((ARRAY['WITHDRAWN'::character varying, 'SUPERSEDED'::character varying])::text[])))`
+- `member_consents_member_id_fkey` `FOREIGN KEY (member_id) REFERENCES members(id)`
+- `member_consents_pkey` `PRIMARY KEY (id)`
+- `member_consents_public_id_key` `UNIQUE (public_id)`
+
+Indizes:
+- `uq_member_consent_standing` UNIQUE `btree (member_id, purpose) WHERE ((ended_at IS NULL) AND (deleted_at IS NULL))`
 
 ## public.member_graduations
 
