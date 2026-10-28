@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 - HDN-361: Expose each active member’s current event RSVP answer and response time, including members without a response, with consistent per-status counts and explicit nullable OpenAPI fields for the web dashboard.
+- HDN-355: Normalize Guide counting-area positions, atomically save complete versioned orders and remove inactive configuration without changing physical rooms or report history.
 - HDN-331: Harden Guide review flows with explicit editor reads, safe room seeding, bounded detail queries, controlled matrix conflicts, explicit detail revisions and settings-specific validation errors; remove the legacy room code after snapshot backfill.
 - HDN-311: Reject attendance check-ins from members that are not ACTIVE with 403 before any window, geofence or log is touched.
 - HDN-135: Notify members once per course when an existing application is accepted as ENROLLED, after the replacement commits.
