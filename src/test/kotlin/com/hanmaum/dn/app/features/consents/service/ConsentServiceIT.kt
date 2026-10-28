@@ -11,6 +11,7 @@ import com.hanmaum.dn.app.features.consents.repository.MemberConsentRepository
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.members.service.CurrentMemberResolver
+import com.hanmaum.dn.app.features.members.service.MemberPrincipal
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -18,7 +19,10 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase
@@ -152,5 +156,26 @@ class ConsentServiceIT {
         assertEquals(2, history.size)
         assertEquals(ConsentEndReason.SUPERSEDED, history.single { it.policyVersion == "v1" }.endReason)
         assertNull(history.single { it.policyVersion == "v2" }.endedAt)
+    }
+
+    @Test
+    fun `a withdrawal that resolved the registration ends the grant of the canonical member after a link`() {
+        val registration = member("registration-withdraw")
+        val canonical = member("canonical-withdraw")
+        standingGrant(registration, "v1", ConsentSource.REGISTRATION, Instant.parse("2026-10-28T10:00:00Z"))
+        tx.executeWithoutResult { carryOver.carryOver(registration, canonical) }
+
+        // The first lookup still sees the registration (token not yet verified), later ones the canonical member.
+        val resolver = mock<CurrentMemberResolver>()
+        whenever(resolver.resolveAndLink(any(), anyOrNull(), any(), anyOrNull(), anyOrNull(), anyOrNull()))
+            .thenReturn(registration, canonical)
+        val racing = ConsentService(consents, resolver, ConsentProperties(), Clock.systemUTC())
+
+        tx.executeWithoutResult { racing.withdraw(MemberPrincipal("sub", null, false), ConsentPurpose.APP_PRIVACY) }
+
+        // Without the re-resolve after the lock the withdrawal succeeds but the grant stays standing.
+        assertNull(consents.findStanding(canonical.id!!, ConsentPurpose.APP_PRIVACY))
+        val history = consents.findAll().filter { it.member.id == canonical.id }
+        assertEquals(ConsentEndReason.WITHDRAWN, history.single().endReason)
     }
 }

@@ -142,7 +142,7 @@ class ConsentService(
         purpose: ConsentPurpose,
         grant: ConsentGrant,
     ): MemberConsentStatus {
-        val member = resolveMember(caller)
+        val member = resolveAndLockMember(caller)
         check(purpose, grant)
         val consent = record(member, purpose, grant.version, ConsentSource.IN_APP)
         return MemberConsentStatus(
@@ -166,8 +166,7 @@ class ConsentService(
         caller: MemberPrincipal,
         purpose: ConsentPurpose,
     ) {
-        val member = resolveMember(caller)
-        consentRepository.lockMember(member.id!!)
+        val member = resolveAndLockMember(caller)
         val standing = consentRepository.findStanding(member.id!!, purpose) ?: return
         standing.end(ConsentEndReason.WITHDRAWN, Instant.now(clock))
         consentRepository.save(standing)
@@ -213,6 +212,27 @@ class ConsentService(
 
     private fun required() = ConsentException(HttpStatus.BAD_REQUEST, ApiErrorCode.CONSENT_REQUIRED, "개인정보 수집·이용에 동의해야 합니다.")
 
+    /**
+     * Resolves the caller and locks that member row, then resolves again: a link running in
+     * parallel may have moved the identity (and the consent) to the canonical member while this
+     * waited for the lock. Repeats until the locked member is the one the subject resolves to.
+     */
+    private fun resolveAndLockMember(caller: MemberPrincipal): Member {
+        var member = resolveMember(caller)
+        repeat(MAX_IDENTITY_RETRIES) {
+            consentRepository.lockMember(member.id!!)
+            val current = resolveMember(caller)
+            if (current.id == member.id) return member
+            member = current
+        }
+        consentRepository.lockMember(member.id!!)
+        return member
+    }
+
     private fun resolveMember(caller: MemberPrincipal): Member =
         currentMemberResolver.resolveAndLink(caller.subject, caller.email, caller.emailVerified)
+
+    private companion object {
+        const val MAX_IDENTITY_RETRIES = 3
+    }
 }
