@@ -67,7 +67,6 @@ fun CreateMemberRequest.toEntity(): Member =
         workOrSchool = this.workOrSchool?.trim()?.ifBlank { null },
         registrationDate = this.registrationDate,
         baptism = mapBaptism(this.baptism),
-        profileImageUrl = this.profileImageUrl,
     )
 
 // ─── PATCH update ─────────────────────────────────────────────────────────────
@@ -102,7 +101,6 @@ fun Member.applyPatch(request: UpdateMemberRequest) {
     request.workOrSchool?.let { this.workOrSchool = it.trim().ifBlank { null } }
     request.registrationDate?.let { this.registrationDate = it }
     request.baptism?.let { this.baptism = mapBaptism(it) }
-    request.profileImageUrl?.let { this.profileImageUrl = it }
     request.isNextGroupLeader?.let { this.isNextGroupLeader = it }
     request.oneOnOneSignupFilled?.let { this.oneOnOneSignupFilled = it }
 
@@ -131,6 +129,7 @@ fun Member.toDto(
     ministries: List<MinistryHistoryDto> = emptyList(),
     groupLeaderSince: LocalDate? = null,
     graduatedOn: LocalDate? = null,
+    profileImageUrl: String? = null,
 ): MemberDto =
     MemberDto(
         publicId = this.publicId.toString(),
@@ -153,7 +152,8 @@ fun Member.toDto(
         memberStatus = this.memberStatus.name,
         groupPublicId = this.group?.publicId?.toString(),
         groupName = this.group?.name,
-        profileImageUrl = this.profileImageUrl,
+        profileImageUrl = profileImageUrl,
+        profileImageVersion = this.profileImageVersion,
         trainings = trainings,
         ministries = ministries,
         isNextGroupLeader = this.isNextGroupLeader,
@@ -201,11 +201,13 @@ fun Member.toSummaryDto(
     )
 
 /** Minimal identity projection for name pickers. Decryption happens on entity load. */
-fun Member.toNameDto(): MemberNameDto =
+fun Member.toNameDto(profileImageUrl: String? = null): MemberNameDto =
     MemberNameDto(
         publicId = this.publicId.toString(),
         fullName = this.getFullName(),
         discriminator = this.discriminator,
+        profileImageUrl = profileImageUrl,
+        profileImageVersion = this.profileImageVersion,
     )
 
 /**
@@ -215,6 +217,7 @@ fun Member.toNameDto(): MemberNameDto =
 fun Member.toResponse(
     activeMinistries: List<String> = emptyList(),
     emailVerified: Boolean = false,
+    profileImageUrl: String? = null,
 ): MemberResponse =
     MemberResponse(
         publicId = this.publicId.toString(),
@@ -233,7 +236,8 @@ fun Member.toResponse(
         city = this.city,
         phoneNumber = this.phoneNumber,
         birthDate = this.birthDate,
-        profileImageUrl = this.profileImageUrl,
+        profileImageUrl = profileImageUrl,
+        profileImageVersion = this.profileImageVersion,
         identityStatus = this.identityStatus,
         workOrSchool = this.workOrSchool,
     )

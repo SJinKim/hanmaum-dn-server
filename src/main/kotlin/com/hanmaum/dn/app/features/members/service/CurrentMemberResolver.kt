@@ -57,6 +57,15 @@ class CurrentMemberResolver(
             ?: throw MemberProfileNotFoundException()
 
     /**
+     * Like [require], but locks the row until the surrounding transaction ends. For a member's
+     * own writes that read a field before changing it, so two requests cannot both act on the
+     * same stale value.
+     */
+    fun requireForUpdate(keycloakSubject: String): Member =
+        memberRepository.findByKeycloakIdAndDeletedAtIsNullForUpdate(keycloakSubject)
+            ?: throw MemberProfileNotFoundException()
+
+    /**
      * Resolves a registration by subject. A staged registration only claims a pre-existing
      * member after Keycloak has verified its email and the stored name and birth date match.
      *

@@ -90,6 +90,7 @@ class MemberService(
     // Self-registration is anonymous and creates a Keycloak user per call (#237).
     @Value("\${app.registration.rate-limit-per-ten-minutes:10}") registrationRateLimit: Int = 10,
     private val reconciliationIntake: MemberReconciliationIntake? = null,
+    private val profileImageService: ProfileImageService? = null,
 ) {
     private val log = LoggerFactory.getLogger(MemberService::class.java)
     private val registrationLimiter = SlidingWindowRateLimiter(registrationRateLimit, Duration.ofMinutes(10))
@@ -404,7 +405,7 @@ class MemberService(
     fun getMemberNames(): List<MemberNameDto> =
         memberRepository
             .findAllByDeletedAtIsNull()
-            .map { it.toNameDto() }
+            .map { it.toNameDto(profileImageUrl(it)) }
             .sortedBy { it.fullName }
 
     /** Non-deleted members, all of them or only those with [status]. */
@@ -440,9 +441,11 @@ class MemberService(
                     )
                 }
         return member
-            .toDto(trainings, ministries, groupLeaderSince(memberId), graduatedOn(memberId))
+            .toDto(trainings, ministries, groupLeaderSince(memberId), graduatedOn(memberId), profileImageUrl(member))
             .copy(lastGroupLeaderTenure = lastTenure)
     }
+
+    private fun profileImageUrl(member: Member): String? = profileImageService?.urlFor(member)
 
     /**
      * Start of the member's current group-leader tenure, or null when they lead no group.
@@ -533,7 +536,7 @@ class MemberService(
 
         val trainings = rows.map { it.toDto() }
         val ministries = ministryAssignmentRepository.findByMemberId(memberId).map { it.toHistoryDto() }
-        return member.toDto(trainings, ministries, groupLeaderSince(memberId), graduatedOn(memberId))
+        return member.toDto(trainings, ministries, groupLeaderSince(memberId), graduatedOn(memberId), profileImageUrl(member))
     }
 
     /** Replaces the assignment set while retaining role and status on matching rows. */
@@ -584,7 +587,7 @@ class MemberService(
         // Re-read both lists from the DB so the returned detail reflects persisted state.
         val trainings = userTrainingRepository.findByMemberId(memberId).map { it.toDto() }
         val ministries = ministryAssignmentRepository.findByMemberId(memberId).map { it.toHistoryDto() }
-        return member.toDto(trainings, ministries, groupLeaderSince(memberId), graduatedOn(memberId))
+        return member.toDto(trainings, ministries, groupLeaderSince(memberId), graduatedOn(memberId), profileImageUrl(member))
     }
 
     private fun MinistryAssignment.toHistoryDto(): MinistryHistoryDto =
@@ -610,7 +613,7 @@ class MemberService(
         birthDate: LocalDate? = null,
     ): MemberResponse {
         val member = resolveAndLinkMember(keycloakSubject, email, emailVerified, firstName, lastName, birthDate)
-        return member.toResponse(activeMinistryNames(member.id), emailVerified)
+        return member.toResponse(activeMinistryNames(member.id), emailVerified, profileImageUrl(member))
     }
 
     /**
@@ -651,7 +654,6 @@ class MemberService(
         val member = resolveAndLinkMember(keycloakSubject, email, emailVerified, firstName, lastName, birthDateClaim)
         request.phoneNumber?.let { member.phoneNumber = it }
         request.birthDate?.let { member.birthDate = it }
-        request.profileImageUrl?.let { member.profileImageUrl = it }
         request.street?.let { member.street = it }
         request.houseNumber?.let { member.houseNumber = it }
         request.zipCode?.let { member.zipCode = it }
@@ -659,7 +661,7 @@ class MemberService(
         request.identityStatus?.let { member.identityStatus = it }
         request.workOrSchool?.let { member.workOrSchool = it.trim().ifBlank { null } }
         val saved = memberRepository.save(member)
-        return saved.toResponse(activeMinistryNames(saved.id), emailVerified)
+        return saved.toResponse(activeMinistryNames(saved.id), emailVerified, profileImageUrl(saved))
     }
 
     // ─── Write ─────────────────────────────────────────────────────────────────
@@ -678,7 +680,8 @@ class MemberService(
                     .findByPublicIdAndDeletedAtIsNull(UUID.fromString(gpid))
                     .orElseThrow { EntityNotFoundException("Group not found: $gpid") }
         }
-        return memberRepository.save(member).toDto()
+        val saved = memberRepository.save(member)
+        return saved.toDto(profileImageUrl = profileImageUrl(saved))
     }
 
     @Transactional
@@ -738,7 +741,7 @@ class MemberService(
                 ),
             )
         }
-        return saved.toDto()
+        return saved.toDto(profileImageUrl = profileImageUrl(saved))
     }
 
     /**
@@ -785,7 +788,7 @@ class MemberService(
             .addKeyValue("event.outcome", "success")
             .addKeyValue("member.public_id", publicId)
             .log("Member registration rejected")
-        return saved.toDto()
+        return saved.toDto(profileImageUrl = profileImageUrl(saved))
     }
 
     /**
@@ -838,7 +841,7 @@ class MemberService(
             .addKeyValue("event.outcome", "success")
             .addKeyValue("member.public_id", publicId)
             .log("Member restored")
-        return saved.toDto()
+        return saved.toDto(profileImageUrl = profileImageUrl(saved))
     }
 
     /**

@@ -17,6 +17,12 @@ spring:
     baseline-version: 1
   profiles:
     active: dev
+  # Profile pictures are the only upload (HDN-140). Tomcat rejects anything larger before
+  # it reaches the controller; ProfileImageProcessor enforces the same 5 MB on the bytes.
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
 
 management:
   endpoints:
@@ -94,3 +100,14 @@ app:
   newcomer-visits:
     retention-years: ${NEWCOMER_VISIT_RETENTION_YEARS:3}
     deleted-retention-days: ${NEWCOMER_VISIT_DELETED_RETENTION_DAYS:30}
+  # 프로필 사진 (#140): private S3-compatible bucket (Hetzner). Blank keys let the app boot;
+  # storage calls then fail per request.
+  storage:
+    s3:
+      endpoint: ${S3_ENDPOINT:}
+      region: ${S3_REGION:eu-central-1}
+      bucket: ${S3_BUCKET:hanmaum-dn-photos}
+      access-key: ${S3_ACCESS_KEY:}
+      secret-key: ${S3_SECRET_KEY:}
+      create-bucket: ${S3_CREATE_BUCKET:false}
+      get-url-ttl: ${S3_GET_URL_TTL:7d}

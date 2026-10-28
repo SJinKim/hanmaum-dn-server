@@ -11,6 +11,7 @@ import com.hanmaum.dn.app.features.members.domain.IdentityStatus
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.members.service.MemberPurgeService
 import com.hanmaum.dn.app.features.members.service.MemberService
+import com.hanmaum.dn.app.features.members.service.ProfileImageService
 import org.mockito.Mockito.`when`
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
@@ -54,6 +55,8 @@ class MemberProfileControllerTest {
     @MockitoBean private lateinit var memberService: MemberService
 
     @MockitoBean private lateinit var memberPurgeService: MemberPurgeService
+
+    @MockitoBean private lateinit var profileImageService: ProfileImageService
 
     @MockitoBean private lateinit var memberRepository: MemberRepository
 
@@ -265,6 +268,41 @@ class MemberProfileControllerTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"workOrSchool":"${"가".repeat(101)}"}"""),
             ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `PATCH members-me still accepts an old client sending profileImageUrl and ignores it`() {
+        `when`(
+            memberService.updateMyProfile(
+                eq("kc-001"),
+                anyOrNull(),
+                any(),
+                anyOrNull(),
+                anyOrNull(),
+                anyOrNull(),
+                any(),
+            ),
+        ).thenReturn(profile())
+
+        mockMvc
+            .perform(
+                patch("/api/v1/members/me")
+                    .with(memberToken())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"workOrSchool":"Siemens","profileImageUrl":"https://evil.example/x.jpg"}"""),
+            ).andExpect(status().isOk)
+
+        val captor = argumentCaptor<UpdateMyProfileRequest>()
+        verify(memberService).updateMyProfile(
+            eq("kc-001"),
+            anyOrNull(),
+            any(),
+            anyOrNull(),
+            anyOrNull(),
+            anyOrNull(),
+            captor.capture(),
+        )
+        assertEquals("Siemens", captor.firstValue.workOrSchool)
     }
 
     @Test

@@ -271,3 +271,15 @@
 ### Collect new decisions at the end and leave PRs open
 - **Correction**: The user wants newly required decisions summarized at the end of the issue queue, with PRs left open.
 - **Rule**: Continue independent authorized work; collect unresolved choices with affected issues/PRs, options and a recommendation in the final report. Leave affected PRs open, do not merge or guess approval, and preserve decisions already explicitly approved by the user.
+
+### An application counter is not concurrency control
+- **Mistake**: The profile image upload read the stored key and version, then wrote the new ones. Two concurrent uploads by one member both read the same state, both bumped the version, and the loser's object was never deleted, leaving it orphaned in S3.
+- **Rule**: For read-modify-write on member-owned fields, load the row with `PESSIMISTIC_WRITE` (`CurrentMemberResolver.requireForUpdate`) or use JPA `@Version`. Prove it with a two-transaction integration test that fails without the lock.
+
+### A stale read must not acknowledge a cleanup order that was renewed meanwhile
+- **Mistake**: The cleanup sweeper checked a key, then deleted its row unconditionally. A producer that re-listed the same key in between (`ON CONFLICT DO NOTHING`) had its retry removed by the sweeper.
+- **Rule**: Release a work-queue row only if it is unchanged since it was read (compare `created_at`), and make re-listing move that timestamp. List the object key in the same transaction that deletes its last reference.
+
+### Every acknowledgement of a queue row needs the handle of the listing it answers
+- **Mistake**: After fixing the sweeper, the upload's after-commit callback still released its key with an unconditional `DELETE`. A parallel delete had re-listed the key, so the upload removed the only durable retry.
+- **Rule**: When a producer lists a row, keep the timestamp `track` returns and acknowledge with `releaseIfUnchanged(key, timestamp)`. Audit every `release`/`DELETE` of a work-queue row, not just the one the review named.

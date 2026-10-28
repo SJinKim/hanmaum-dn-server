@@ -2,6 +2,10 @@ package com.hanmaum.dn.app.common.config
 
 import com.hanmaum.dn.app.common.api.ApiErrorCode
 import com.hanmaum.dn.app.features.members.service.MemberProfileNotFoundException
+import com.hanmaum.dn.app.features.members.service.ProfileImageInvalidException
+import com.hanmaum.dn.app.features.members.service.ProfileImageStorageUnavailableException
+import com.hanmaum.dn.app.features.members.service.ProfileImageTooLargeException
+import com.hanmaum.dn.app.features.members.service.ProfileImageUnsupportedTypeException
 import jakarta.persistence.EntityNotFoundException
 import org.springframework.core.MethodParameter
 import org.springframework.http.HttpHeaders
@@ -10,6 +14,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.HttpRequestMethodNotSupportedException
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
+import org.springframework.web.multipart.MaxUploadSizeExceededException
 import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.servlet.resource.NoResourceFoundException
 import tools.jackson.databind.json.JsonMapper
@@ -142,5 +147,47 @@ class GlobalExceptionHandlerTest {
 
         // The code is opt-in. A client branching on it must not be handed one for every 404.
         assertNull(assertNotNull(response.body).code)
+    }
+
+    @Test
+    fun `profile image errors map to their status and code`() {
+        val cases =
+            listOf(
+                handler.handleProfileImageTooLarge(ProfileImageTooLargeException()) to
+                    (HttpStatus.CONTENT_TOO_LARGE to ApiErrorCode.PROFILE_IMAGE_TOO_LARGE),
+                handler.handleProfileImageUnsupportedType(ProfileImageUnsupportedTypeException()) to
+                    (HttpStatus.UNSUPPORTED_MEDIA_TYPE to ApiErrorCode.PROFILE_IMAGE_UNSUPPORTED_TYPE),
+                handler.handleProfileImageInvalid(ProfileImageInvalidException()) to
+                    (HttpStatus.UNPROCESSABLE_CONTENT to ApiErrorCode.PROFILE_IMAGE_INVALID),
+                handler.handleProfileImageStorageUnavailable(ProfileImageStorageUnavailableException(RuntimeException("down"))) to
+                    (HttpStatus.SERVICE_UNAVAILABLE to ApiErrorCode.PROFILE_IMAGE_STORAGE_UNAVAILABLE),
+            )
+
+        cases.forEach { (response, expected) ->
+            assertEquals(expected.first, response.statusCode)
+            assertEquals(expected.second, assertNotNull(response.body).code)
+        }
+    }
+
+    @Test
+    fun `the multipart size limit reads like the processor's own limit`() {
+        val response = handler.handleProfileImageTooLarge(MaxUploadSizeExceededException(5L * 1024 * 1024))
+
+        // Tomcat rejects an oversized upload before the processor sees it; the client must
+        // not be able to tell which of the two caught it.
+        assertEquals(HttpStatus.CONTENT_TOO_LARGE, response.statusCode)
+        val body = assertNotNull(response.body)
+        assertEquals(ApiErrorCode.PROFILE_IMAGE_TOO_LARGE, body.code)
+        assertEquals(ProfileImageTooLargeException().message, body.message)
+    }
+
+    @Test
+    fun `a storage outage never leaks the SDK message`() {
+        val response =
+            handler.handleProfileImageStorageUnavailable(
+                ProfileImageStorageUnavailableException(RuntimeException("bucket hdn-st at fsn1 refused key AKIA")),
+            )
+
+        assertEquals(false, assertNotNull(response.body).message.contains("AKIA"))
     }
 }

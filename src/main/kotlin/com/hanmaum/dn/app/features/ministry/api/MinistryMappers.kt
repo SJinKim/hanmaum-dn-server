@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.ministry.api
 
 import com.hanmaum.dn.app.features.members.api.toNameDto
+import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.ActiveMinistryMemberDto
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.CreateMinistryRequest
 import com.hanmaum.dn.app.features.ministry.api.v1.dto.MinistryContactDto
@@ -50,7 +51,10 @@ fun Ministry.applyPatch(request: UpdateMinistryRequest) {
 
 // ─── Entity → DTO mappings ────────────────────────────────────────────────────
 
-fun Ministry.toSummaryDto(assignments: List<MinistryAssignment> = emptyList()): MinistrySummaryDto =
+fun Ministry.toSummaryDto(
+    assignments: List<MinistryAssignment> = emptyList(),
+    profileImageUrlOf: (Member) -> String? = { null },
+): MinistrySummaryDto =
     MinistrySummaryDto(
         publicId = this.publicId.toString(),
         title = this.name,
@@ -66,7 +70,7 @@ fun Ministry.toSummaryDto(assignments: List<MinistryAssignment> = emptyList()): 
                 .distinctBy { it.publicId }
                 .sortedBy { it.getFullName() }
                 .take(4)
-                .map { it.toNameDto() },
+                .map { it.toNameDto(profileImageUrlOf(it)) },
         leaderPublicId =
             assignments
                 .firstOrNull { it.role == MinistryAssignmentRole.LEADER }

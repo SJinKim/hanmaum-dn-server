@@ -74,4 +74,16 @@ enum class ApiErrorCode {
      * INACTIVE members may still be without a 순.
      */
     MEMBER_GROUP_REQUIRED,
+
+    /** The profile picture is larger than 5 MB (HDN-140). */
+    PROFILE_IMAGE_TOO_LARGE,
+
+    /** The profile picture is not a JPEG, PNG or WebP, judged by its bytes (HDN-140). */
+    PROFILE_IMAGE_UNSUPPORTED_TYPE,
+
+    /** The profile picture claims a supported format but cannot be decoded (HDN-140). */
+    PROFILE_IMAGE_INVALID,
+
+    /** Object storage is unreachable; the member's picture is unchanged and the upload can be retried (HDN-140). */
+    PROFILE_IMAGE_STORAGE_UNAVAILABLE,
 }

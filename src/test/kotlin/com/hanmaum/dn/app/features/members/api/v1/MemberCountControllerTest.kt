@@ -6,6 +6,7 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.MemberCountDto
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.members.service.MemberPurgeService
 import com.hanmaum.dn.app.features.members.service.MemberService
+import com.hanmaum.dn.app.features.members.service.ProfileImageService
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import org.springframework.beans.factory.annotation.Autowired
@@ -32,6 +33,8 @@ class MemberCountControllerTest {
     @MockitoBean private lateinit var memberService: MemberService
 
     @MockitoBean private lateinit var memberPurgeService: MemberPurgeService
+
+    @MockitoBean private lateinit var profileImageService: ProfileImageService
 
     @MockitoBean private lateinit var memberRepository: MemberRepository
 

@@ -21,6 +21,8 @@ class MemberPurgeService(
     private val jdbcTemplate: JdbcTemplate,
     private val transactionTemplate: TransactionTemplate,
     private val keycloak: Keycloak,
+    private val profileImageService: ProfileImageService,
+    private val profileImageCleanup: ProfileImageCleanup,
     @Value("\${app.keycloak.realm:hanmaum}") private val realm: String,
 ) {
     private val log = LoggerFactory.getLogger(MemberPurgeService::class.java)
@@ -29,17 +31,17 @@ class MemberPurgeService(
         val expiredMembers = memberRepository.findAllByDeleteEntryAtLessThanEqualAndDeletedAtIsNotNull(now)
         expiredMembers.forEach { member ->
             deleteKeycloakUser(member.keycloakId, member.id!!)
-            transactionTemplate.executeWithoutResult {
-                purgeMemberRows(member.id!!)
-            }
+            purgeRowsAndTrackImage(member.id!!, member.profileImageKey)
+            member.profileImageKey?.let(profileImageService::deleteStoredObject)
         }
         return expiredMembers.size
     }
 
     /**
      * Admin hard delete of one soft-deleted member, ahead of the retention period. Same steps
-     * as [purgeExpired]: the Keycloak account goes first (404 counts as gone), then the rows.
-     * Afterwards the email can be registered again.
+     * as [purgeExpired]: the Keycloak account goes first (404 counts as gone), then the rows,
+     * then the profile picture in the bucket — last, so a failed row purge never leaves a row
+     * pointing at a missing object. Afterwards the email can be registered again.
      */
     fun purgeMember(publicId: UUID) {
         val member =
@@ -51,7 +53,20 @@ class MemberPurgeService(
         }
         val memberId = member.id!!
         deleteKeycloakUser(member.keycloakId, memberId)
+        purgeRowsAndTrackImage(memberId, member.profileImageKey)
+        member.profileImageKey?.let(profileImageService::deleteStoredObject)
+    }
+
+    /**
+     * The image key is listed for cleanup in the transaction that deletes the member row: a crash after the
+     * commit cannot lose the last reference, the sweeper still finds the object.
+     */
+    private fun purgeRowsAndTrackImage(
+        memberId: Long,
+        imageKey: String?,
+    ) {
         transactionTemplate.executeWithoutResult {
+            imageKey?.let(profileImageCleanup::trackInCurrentTransaction)
             purgeMemberRows(memberId)
         }
     }

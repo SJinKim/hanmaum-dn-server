@@ -47,7 +47,10 @@ data class MemberDto(
     /** publicId of the member's church group, or null. Used to pre-select the group on edit. */
     @Unredacted val groupPublicId: String? = null,
     @Unredacted val groupName: String? = null,
+    /** Presigned, short-lived URL of the profile picture (HDN-140). */
     val profileImageUrl: String? = null,
+    /** Changes on every upload and delete; clients key their image cache on it, not on the URL. */
+    val profileImageVersion: Long = 0,
     /** Full training history, ordered by training sort order. */
     @Unredacted val trainings: List<UserTrainingDto> = emptyList(),
     /** Full ministry history, most recent registration period first. */
@@ -122,6 +125,10 @@ data class MemberNameDto(
     val publicId: String,
     val fullName: String,
     val discriminator: String? = null,
+    /** Presigned, short-lived GET URL of the avatar (HDN-140); null without a picture. */
+    val profileImageUrl: String? = null,
+    /** Changes with every upload or delete; clients key their image cache on it, not on the URL. */
+    val profileImageVersion: Long = 0,
 )
 
 /** Number of non-deleted members, optionally narrowed to one status (Home 승인 대기, 현황). */
@@ -200,7 +207,10 @@ data class MemberResponse(
     val city: String? = null,
     val phoneNumber: String? = null,
     val birthDate: LocalDate? = null,
+    /** Presigned, short-lived URL of the profile picture (HDN-140). */
     val profileImageUrl: String? = null,
+    /** Changes on every upload and delete; clients key their image cache on it, not on the URL. */
+    val profileImageVersion: Long = 0,
     @Unredacted val identityStatus: IdentityStatus? = null,
     val workOrSchool: String? = null,
 )
@@ -234,7 +244,6 @@ data class CreateMemberRequest(
     val registrationDate: LocalDate? = null,
     /** publicId of the church group to assign; null leaves the member ungrouped. */
     @Unredacted val groupPublicId: String? = null,
-    val profileImageUrl: String? = null,
 )
 
 /**
@@ -272,7 +281,6 @@ data class UpdateMemberRequest(
      * 400 with code MEMBER_GROUP_REQUIRED and fieldErrors.groupPublicId (HDN-314).
      */
     @Unredacted val groupPublicId: String? = null,
-    val profileImageUrl: String? = null,
     @get:JsonProperty("isNextGroupLeader")
     @Unredacted val isNextGroupLeader: Boolean? = null,
     @Unredacted val oneOnOneSignupFilled: Boolean? = null,
@@ -333,7 +341,6 @@ data class UpdateMyProfileRequest(
     @field:Size(max = 50)
     val phoneNumber: String? = null,
     val birthDate: LocalDate? = null,
-    val profileImageUrl: String? = null,
     val street: String? = null,
     @field:Size(max = 50)
     val houseNumber: String? = null,

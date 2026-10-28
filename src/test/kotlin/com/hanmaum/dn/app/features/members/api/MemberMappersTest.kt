@@ -307,6 +307,17 @@ class MemberMappersTest {
     }
 
     @Test
+    fun `toNameDto carries the presigned avatar url and the cache version`() {
+        val member = Member(lastName = "Kim", firstName = "Min").apply { profileImageVersion = 3 }
+
+        val dto = member.toNameDto("https://s3.example/a.jpg?sig")
+
+        assertEquals("https://s3.example/a.jpg?sig", dto.profileImageUrl)
+        assertEquals(3L, dto.profileImageVersion)
+        assertNull(member.toNameDto().profileImageUrl)
+    }
+
+    @Test
     fun `toSummaryDto derives isGroupLeader from the tenure start date`() {
         val member = Member(lastName = "박", firstName = "준호", memberStatus = MemberStatus.ACTIVE)
 
@@ -492,5 +503,34 @@ class MemberMappersTest {
         val dto = member.toSummaryDto()
         assertEquals(true, dto.isNextGroupLeader)
         assertEquals(true, dto.oneOnOneSignupFilled)
+    }
+
+    // --- profile image (HDN-140) ---
+
+    @Test
+    fun `toDto exposes the given profile image url and the member version`() {
+        val member = memberWithId(1).apply { profileImageVersion = 3 }
+
+        val dto = member.toDto(profileImageUrl = "https://s3/a.jpg?sig")
+
+        assertEquals("https://s3/a.jpg?sig", dto.profileImageUrl)
+        assertEquals(3L, dto.profileImageVersion)
+    }
+
+    @Test
+    fun `toResponse exposes the given profile image url and the member version`() {
+        val member = memberWithId(1).apply { profileImageVersion = 2 }
+
+        val response = member.toResponse(emptyList(), true, "https://s3/b.jpg?sig")
+
+        assertEquals("https://s3/b.jpg?sig", response.profileImageUrl)
+        assertEquals(2L, response.profileImageVersion)
+    }
+
+    @Test
+    fun `toDto ignores the legacy url column`() {
+        val member = memberWithId(1).apply { profileImageUrl = "https://legacy/old.jpg" }
+
+        assertNull(member.toDto().profileImageUrl)
     }
 }

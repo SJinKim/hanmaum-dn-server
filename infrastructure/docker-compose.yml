@@ -19,6 +19,27 @@ services:
       timeout: 5s
       retries: 5
 
+  # S3-compatible dev storage. Console: http://localhost:9002 (S3 API: 9000).
+  # Credentials: MINIO_ROOT_USER / MINIO_ROOT_PASSWORD from infrastructure/.env locally
+  # (defaults below are dev-only); real S3 creds come from .env.staging / .env.prod.
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    container_name: hanmaumApp-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-hanmaum-dev}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-hanmaum-dev-secret}
+    ports:
+      - "9000:9000"
+      - "9002:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # test db
   test-db:
     image: postgres:15-alpine
@@ -98,6 +119,9 @@ services:
       SPRING_FLYWAY_ENABLED: "true"
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: ${KEYCLOAK_SERVER_URL_DOCKER}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/certs
       KEYCLOAK_AUTH_SERVER_URL: ${KEYCLOAK_SERVER_URL_DOCKER}
+      # MinIO inside the compose network; presigned URLs keep the host-reachable address.
+      S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:9000}
 
     env_file:
       - .env
@@ -106,6 +130,9 @@ services:
         condition: service_healthy
       hanmaumApp-keycloak:
         condition: service_started
+      minio:
+        condition: service_healthy
 
 volumes:
   hanmaumApp_postgres_data:
+  minio_data:

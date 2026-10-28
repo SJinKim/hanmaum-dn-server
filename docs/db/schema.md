@@ -1,8 +1,8 @@
 <!-- Erzeugt von ./gradlew schemaSnapshot aus den Flyway-Migrationen. Nicht von Hand bearbeiten, siehe docs/db/README.md. -->
 # DB-Schema
 
-- Migrations-SHA-256: `cb49947c62b75ef2fb11890f7719e76b938161f7f1714c4b2560b2e5c94ea83d`
-- Tabellen: 56 · Spalten: 584
+- Migrations-SHA-256: `9b62548f3d7022bbfbc49e65b9e88e00721ebeaed210f001004d8ce8f7f31555`
+- Tabellen: 57 · Spalten: 589
 - Fachliche Notizen: `docs/db/schema-notes.md`
 - Spalten ohne `NOT NULL` sind nullable. Indizes, die nur einen Primärschlüssel oder Unique-Constraint tragen, stehen beim Constraint.
 
@@ -768,6 +768,8 @@ Indizes:
 - `origin` character varying(20) NOT NULL DEFAULT `'MANUAL'::character varying`
 - `identity_status` character varying(30)
 - `work_or_school` text
+- `profile_image_key` character varying(255)
+- `profile_image_version` bigint NOT NULL DEFAULT `0`
 
 Constraints:
 - `ck_members_identity_status` `CHECK (((identity_status IS NULL) OR ((identity_status)::text = ANY ((ARRAY['EMPLOYEE'::character varying, 'UNIVERSITY_STUDENT'::character varying, 'EXAM_PREPARATION'::character varying, 'WORKING_HOLIDAY'::character varying, 'EXCHANGE_STUDENT'::character varying, 'SELF_EMPLOYED'::character varying, 'EXPATRIATE'::character varying, 'JOB_SEEKING'::character varying])::text[]))))`
@@ -1063,6 +1065,16 @@ Constraints:
 Indizes:
 - `idx_notifications_member_created` `btree (member_id, created_at DESC)`
 - `idx_notifications_member_unseen` `btree (member_id) WHERE (seen_at IS NULL)`
+
+## public.profile_image_cleanup
+
+- `id` bigint NOT NULL DEFAULT `nextval('profile_image_cleanup_id_seq'::regclass)`
+- `object_key` character varying(255) NOT NULL
+- `created_at` timestamp with time zone NOT NULL DEFAULT `now()`
+
+Constraints:
+- `profile_image_cleanup_object_key_key` `UNIQUE (object_key)`
+- `profile_image_cleanup_pkey` `PRIMARY KEY (id)`
 
 ## public.room
 

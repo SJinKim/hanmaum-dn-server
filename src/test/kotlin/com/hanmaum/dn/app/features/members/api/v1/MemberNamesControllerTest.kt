@@ -5,6 +5,7 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.MemberNameDto
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import com.hanmaum.dn.app.features.members.service.MemberPurgeService
 import com.hanmaum.dn.app.features.members.service.MemberService
+import com.hanmaum.dn.app.features.members.service.ProfileImageService
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.Mockito.verify
@@ -40,6 +41,8 @@ class MemberNamesControllerTest {
     @MockitoBean private lateinit var memberService: MemberService
 
     @MockitoBean private lateinit var memberPurgeService: MemberPurgeService
+
+    @MockitoBean private lateinit var profileImageService: ProfileImageService
 
     @MockitoBean private lateinit var memberRepository: MemberRepository
 
