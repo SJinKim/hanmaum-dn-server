@@ -65,21 +65,34 @@ class PiiBackfillRunner(
     ): Long {
         var migrated = 0L
         while (true) {
-            val rows = findLegacyRows(table, column)
-            if (rows.isEmpty()) {
+            val ids = rewriteBatch(table, column)
+            if (ids.isEmpty()) {
                 return migrated
             }
-            transactionTemplate.executeWithoutResult {
-                rows.forEach { (id, stored) -> rewriteRow(table, column, id, stored) }
-            }
-            val stalled = countLegacy(table, column, rows.map { it.first })
+            val stalled = countLegacy(table, column, ids)
             check(stalled == 0L) {
                 "PII backfill stalled table=$table column=$column rows=$stalled"
             }
-            migrated += rows.size
+            migrated += ids.size
             log.info("PII backfill progress table={} column={} migrated={}", table, column, migrated)
         }
     }
+
+    /**
+     * Reads and rewrites one batch in a single transaction, with the rows locked. Reading first and
+     * writing later would encrypt a stale snapshot over a value another writer committed in between;
+     * under `FOR UPDATE` a concurrent writer either finishes before the read (the runner sees its
+     * value) or waits until the batch is committed. Returns the ids written.
+     */
+    private fun rewriteBatch(
+        table: String,
+        column: String,
+    ): List<Long> =
+        transactionTemplate.execute {
+            val rows = findLegacyRows(table, column)
+            rows.forEach { (id, stored) -> rewriteRow(table, column, id, stored) }
+            rows.map { it.first }
+        } ?: emptyList()
 
     private fun findLegacyRows(
         table: String,
@@ -93,6 +106,7 @@ class PiiBackfillRunner(
               AND ${requiresEncryption(column)}
             ORDER BY id
             LIMIT ?
+            FOR UPDATE
             """.trimIndent(),
             { rs, _ -> rs.getLong("id") to rs.getString("legacy_value") },
             properties.backfillBatchSize,
