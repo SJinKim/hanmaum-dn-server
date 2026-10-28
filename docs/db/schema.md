@@ -1,7 +1,7 @@
 <!-- Erzeugt von ./gradlew schemaSnapshot aus den Flyway-Migrationen. Nicht von Hand bearbeiten, siehe docs/db/README.md. -->
 # DB-Schema
 
-- Migrations-SHA-256: `9b62548f3d7022bbfbc49e65b9e88e00721ebeaed210f001004d8ce8f7f31555`
+- Migrations-SHA-256: `be0bf24189c2e69254487b3fa2ef65c8f155b57ce13b4dcdeacd014125dc07ad`
 - Tabellen: 57 · Spalten: 589
 - Fachliche Notizen: `docs/db/schema-notes.md`
 - Spalten ohne `NOT NULL` sind nullable. Indizes, die nur einen Primärschlüssel oder Unique-Constraint tragen, stehen beim Constraint.
@@ -770,6 +770,7 @@ Indizes:
 - `work_or_school` text
 - `profile_image_key` character varying(255)
 - `profile_image_version` bigint NOT NULL DEFAULT `0`
+- `kakao_id` text
 
 Constraints:
 - `ck_members_identity_status` `CHECK (((identity_status IS NULL) OR ((identity_status)::text = ANY ((ARRAY['EMPLOYEE'::character varying, 'UNIVERSITY_STUDENT'::character varying, 'EXAM_PREPARATION'::character varying, 'WORKING_HOLIDAY'::character varying, 'EXCHANGE_STUDENT'::character varying, 'SELF_EMPLOYED'::character varying, 'EXPATRIATE'::character varying, 'JOB_SEEKING'::character varying])::text[]))))`
@@ -979,7 +980,6 @@ Indizes:
 - `assignment_reason` text
 - `overall_notes` text
 - `post_assignment_attendance` character varying(30)
-- `kakao_id` text
 - `previous_church` text
 - `church_experience` character varying(30)
 - `visit_motives` text

@@ -4,7 +4,6 @@ import com.hanmaum.dn.app.common.jpa.BaseEntity
 import com.hanmaum.dn.app.common.pii.EncryptedNewcomerAdditionalNotesConverter
 import com.hanmaum.dn.app.common.pii.EncryptedNewcomerAssignmentReasonConverter
 import com.hanmaum.dn.app.common.pii.EncryptedNewcomerFirstVisitDateConverter
-import com.hanmaum.dn.app.common.pii.EncryptedNewcomerKakaoIdConverter
 import com.hanmaum.dn.app.common.pii.EncryptedNewcomerOverallNotesConverter
 import com.hanmaum.dn.app.common.pii.EncryptedNewcomerPreviousChurchConverter
 import com.hanmaum.dn.app.common.pii.EncryptedNewcomerVisitMotivesConverter
@@ -65,9 +64,6 @@ class NewcomerProfile(
     @Enumerated(EnumType.STRING)
     @Column(name = "post_assignment_attendance", length = 30)
     var postAssignmentAttendance: PostAssignmentAttendance? = null,
-    @Convert(converter = EncryptedNewcomerKakaoIdConverter::class)
-    @Column(name = "kakao_id", columnDefinition = "TEXT")
-    var kakaoId: String? = null,
     @Convert(converter = EncryptedNewcomerPreviousChurchConverter::class)
     @Column(name = "previous_church", columnDefinition = "TEXT")
     var previousChurch: String? = null,
@@ -103,6 +99,13 @@ class NewcomerProfile(
         get() = member.workOrSchool
         set(value) {
             member.workOrSchool = value
+        }
+
+    // On the member since HDN-360, so it survives the newcomer profile being archived.
+    var kakaoId: String?
+        get() = member.kakaoId
+        set(value) {
+            member.kakaoId = value
         }
 
     @PrePersist

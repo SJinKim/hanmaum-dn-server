@@ -12,6 +12,7 @@ import com.hanmaum.dn.app.common.pii.EncryptedEmailConverter
 import com.hanmaum.dn.app.common.pii.EncryptedFirstNameConverter
 import com.hanmaum.dn.app.common.pii.EncryptedGenderFieldConverter
 import com.hanmaum.dn.app.common.pii.EncryptedHouseNumberConverter
+import com.hanmaum.dn.app.common.pii.EncryptedKakaoIdConverter
 import com.hanmaum.dn.app.common.pii.EncryptedKeycloakIdConverter
 import com.hanmaum.dn.app.common.pii.EncryptedLastNameConverter
 import com.hanmaum.dn.app.common.pii.EncryptedOccupationConverter
@@ -77,6 +78,10 @@ class Member(
     @Convert(converter = EncryptedWorkOrSchoolConverter::class)
     @Column(name = "work_or_school", columnDefinition = "TEXT")
     var workOrSchool: String? = null,
+    /** 카카오 아이디 — the messenger handle the office contacts the member on. */
+    @Convert(converter = EncryptedKakaoIdConverter::class)
+    @Column(name = "kakao_id", columnDefinition = "TEXT")
+    var kakaoId: String? = null,
     // --- ADRESSE ---
     @Convert(converter = EncryptedStreetConverter::class)
     @Column(columnDefinition = "TEXT")

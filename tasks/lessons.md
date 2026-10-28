@@ -283,3 +283,7 @@
 ### Every acknowledgement of a queue row needs the handle of the listing it answers
 - **Mistake**: After fixing the sweeper, the upload's after-commit callback still released its key with an unconditional `DELETE`. A parallel delete had re-listed the key, so the upload removed the only durable retry.
 - **Rule**: When a producer lists a row, keep the timestamp `track` returns and acknowledge with `releaseIfUnchanged(key, timestamp)`. Audit every `release`/`DELETE` of a work-queue row, not just the one the review named.
+
+### Read and write a backfill batch under one row lock
+- **Mistake**: The PII backfill read a batch, then wrote it back in a later transaction. A business change committed in between was overwritten by the re-encrypted old snapshot, and the stalled check could not notice because the stale value was correctly encrypted.
+- **Rule**: A job that rewrites rows from values it read earlier must read and write in the same transaction with `SELECT ... FOR UPDATE`. Cover it with a two-connection test that commits a change between read and write.

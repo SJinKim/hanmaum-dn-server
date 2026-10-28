@@ -66,6 +66,7 @@ class NewcomerService(
                     origin = MemberOrigin.NEWCOMER_FORM,
                     identityStatus = request.identityStatus,
                     workOrSchool = request.workOrSchool?.trim()?.ifBlank { null },
+                    kakaoId = request.kakaoId?.trim()?.ifBlank { null },
                 ),
             )
         // ACTIVE needs a 순 (HDN-314); a new 새가족 starts in the 새가족 순.
@@ -82,7 +83,6 @@ class NewcomerService(
                 assignmentReason = request.assignmentReason,
                 overallNotes = request.overallNotes,
                 postAssignmentAttendance = request.postAssignmentAttendance,
-                kakaoId = request.kakaoId,
                 previousChurch = request.previousChurch,
                 churchExperience = request.churchExperience,
                 visitMotives = encodeList(request.visitMotives),
@@ -179,11 +179,17 @@ class NewcomerService(
         request.caregiverPublicId?.let { profile.caregiver = resolveCaregiver(it) }
         val identityBefore = profile.identityStatus
         val workOrSchoolBefore = profile.workOrSchool
+        val kakaoIdBefore = profile.kakaoId
         request.identityStatus?.let { profile.identityStatus = it }
         request.workOrSchool?.let { profile.workOrSchool = it.trim().ifBlank { null } }
-        // Both now live on the member, so editing only them would leave the profile row clean and
-        // skip its @Version bump; touching the profile keeps the optimistic lock covering them.
-        if (profile.identityStatus != identityBefore || profile.workOrSchool != workOrSchoolBefore) {
+        request.kakaoId?.let { profile.kakaoId = it.trim().ifBlank { null } }
+        // All three now live on the member, so editing only them would leave the profile row clean
+        // and skip its @Version bump; touching the profile keeps the optimistic lock covering them.
+        if (
+            profile.identityStatus != identityBefore ||
+            profile.workOrSchool != workOrSchoolBefore ||
+            profile.kakaoId != kakaoIdBefore
+        ) {
             profile.updatedAt = Instant.now()
         }
         request.firstVisitDate?.let { profile.firstVisitDate = it }
@@ -191,7 +197,6 @@ class NewcomerService(
         request.assignmentReason?.let { profile.assignmentReason = it }
         request.overallNotes?.let { profile.overallNotes = it }
         request.postAssignmentAttendance?.let { profile.postAssignmentAttendance = it }
-        request.kakaoId?.let { profile.kakaoId = it }
         request.previousChurch?.let { profile.previousChurch = it }
         request.churchExperience?.let { profile.churchExperience = it }
         request.visitMotives?.let { profile.visitMotives = encodeList(it) }

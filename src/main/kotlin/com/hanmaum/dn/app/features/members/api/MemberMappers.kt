@@ -148,6 +148,7 @@ fun Member.toDto(
         occupation = this.occupation,
         identityStatus = this.identityStatus,
         workOrSchool = this.workOrSchool,
+        kakaoId = this.kakaoId,
         registrationDate = this.registrationDate,
         memberStatus = this.memberStatus.name,
         groupPublicId = this.group?.publicId?.toString(),
@@ -240,4 +241,5 @@ fun Member.toResponse(
         profileImageVersion = this.profileImageVersion,
         identityStatus = this.identityStatus,
         workOrSchool = this.workOrSchool,
+        kakaoId = this.kakaoId,
     )
