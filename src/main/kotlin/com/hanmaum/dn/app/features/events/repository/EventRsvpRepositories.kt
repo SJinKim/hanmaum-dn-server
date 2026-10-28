@@ -2,6 +2,7 @@ package com.hanmaum.dn.app.features.events.repository
 
 import com.hanmaum.dn.app.features.events.domain.EventRsvp
 import com.hanmaum.dn.app.features.events.domain.EventRsvpLog
+import com.hanmaum.dn.app.features.members.domain.Member
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
@@ -42,6 +43,17 @@ interface EventRsvpRepository : JpaRepository<EventRsvp, Long> {
 
 @Repository
 interface EventRsvpLogRepository : JpaRepository<EventRsvpLog, Long> {
+    /** Fetch groups with the eligible member set to avoid a query per unanswered member. */
+    @Query(
+        """
+        SELECT m FROM Member m
+        LEFT JOIN FETCH m.group
+        WHERE m.deletedAt IS NULL
+          AND m.memberStatus = com.hanmaum.dn.app.common.domainvalue.MemberStatus.ACTIVE
+        """,
+    )
+    fun findResponseMembers(): List<Member>
+
     @Query(
         """
         SELECT DISTINCT new com.hanmaum.dn.app.features.events.repository.RsvpResponder(l.eventRsvp.id, m.id)

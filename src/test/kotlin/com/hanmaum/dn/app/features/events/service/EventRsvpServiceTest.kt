@@ -825,4 +825,60 @@ class EventRsvpServiceTest {
         assertEquals("다니엘조", result.attendees[0].groupName)
         assertEquals("청년부", result.attendees[0].groupDivision)
     }
+
+    @Test
+    fun `response overview distinguishes every answer from no response on closed inactive events`() {
+        val rsvp = makeRsvp(windowEnd = now.minusHours(1), isActive = false)
+        val members = (1L..4L).map { makeMember(id = it, group = makeGroup()) }
+        val logs =
+            listOf(
+                makeLog(rsvp, members[0], status = RsvpStatus.GOING),
+                makeLog(rsvp, members[1], status = RsvpStatus.NOT_GOING),
+                makeLog(rsvp, members[2], status = RsvpStatus.MAYBE),
+            )
+        `when`(eventRsvpRepo.findByPublicIdAndDeletedAtIsNull(rsvp.publicId)).thenReturn(Optional.of(rsvp))
+        `when`(eventRsvpLogRepo.findResponseMembers()).thenReturn(members)
+        `when`(eventRsvpLogRepo.findAttendeesWithDetails(rsvp.id!!)).thenReturn(logs)
+        val result = service.getResponses(rsvp.publicId)
+        assertEquals(4, result.expectedCount)
+        assertEquals(3, result.respondedCount)
+        assertEquals(1, result.goingCount)
+        assertEquals(1, result.notGoingCount)
+        assertEquals(1, result.maybeCount)
+        assertEquals(1, result.pendingCount)
+        val byId = result.responses.associateBy { it.memberPublicId }
+        assertEquals(RsvpStatus.NOT_GOING, byId[members[1].publicId]?.status)
+        assertEquals(fixedInstant, byId[members[2].publicId]?.respondedAt?.toInstant())
+        assertNull(byId[members[3].publicId]?.status)
+        assertNull(byId[members[3].publicId]?.respondedAt)
+        assertEquals("다니엘조", byId[members[3].publicId]?.groupName)
+    }
+
+    @Test
+    fun `response overview counts only eligible members and reflects the latest answer`() {
+        val rsvp = makeRsvp()
+        val member = makeMember()
+        val ineligible = makeMember(id = 2L)
+        `when`(eventRsvpRepo.findByPublicIdAndDeletedAtIsNull(rsvp.publicId)).thenReturn(Optional.of(rsvp))
+        `when`(eventRsvpLogRepo.findResponseMembers()).thenReturn(listOf(member))
+        `when`(eventRsvpLogRepo.findAttendeesWithDetails(rsvp.id!!)).thenReturn(
+            listOf(
+                makeLog(rsvp, member, status = RsvpStatus.NOT_GOING),
+                makeLog(rsvp, ineligible),
+            ),
+        )
+        val result = service.getResponses(rsvp.publicId)
+        assertEquals(1, result.expectedCount)
+        assertEquals(0, result.goingCount)
+        assertEquals(1, result.notGoingCount)
+        assertEquals(listOf(member.publicId), result.responses.map { it.memberPublicId })
+    }
+
+    @Test
+    fun `response overview rejects unknown or deleted events`() {
+        val id = UUID.randomUUID()
+        `when`(eventRsvpRepo.findByPublicIdAndDeletedAtIsNull(id)).thenReturn(Optional.empty())
+        assertThrows<EntityNotFoundException> { service.getResponses(id) }
+        verify(eventRsvpLogRepo, never()).findResponseMembers()
+    }
 }

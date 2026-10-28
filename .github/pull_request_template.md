@@ -6,6 +6,8 @@
 
 Closes #
 
+**Agent:** Claude A / Codex / Claude B · **Reviewer laut Matrix:** Codex / Claude A
+
 ## MVP scope
 
 - [ ] This is MVP-required

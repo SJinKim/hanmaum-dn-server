@@ -247,3 +247,27 @@
 ### Match deployment health states exactly
 - Correction: A substring check for healthy also accepted unhealthy in the final deployment gate.
 - Rule: Match enum-like health output as an entire fixed string; test unhealthy, starting, missing output and upstream command failures alongside the positive case.
+
+### Validate nullable enums in the generated OpenAPI contract
+- **Correction**: Kotlin nullable RSVP fields were emitted as non-null strings, and the response enum excluded the actual JSON null used for unanswered members.
+- **Rule**: Compare serialized unanswered DTOs with the generated OpenAPI 3.1 schema. Permit null in both the type union and any enum constraint; verify default and grouped documentation, regenerate the Ops contract, and compare its semantic diff before merge.
+
+### Preserve the presenter's personal motivation in stakeholder materials
+- **Mistake**: Made the community presentation mainly about benefits and collaboration, while the presenter wanted their substantial time, effort, and feelings to help encourage adoption.
+- **Rule**: When the presenter explicitly asks for personal motivation, include their stated effort and sincere hope in the opening and closing, then connect it to a concrete request to use and improve the project together. Do not invent sacrifices or imply an obligation to repay the presenter.
+
+### Make stakeholder decks visually varied and scripts speakable
+- **Mistake**: Repeated flat text layouts made the presentation feel bland, and separate explanatory paragraphs made the Korean script sound disconnected.
+- **Rule**: For a warm community presentation, vary the compositions, use relevant illustrations and clear typographic emphasis, and add restrained slide transitions when requested. Write the full script as connected spoken Korean, with a natural handoff between slides, and read it as one speech before delivery.
+
+### Use the community's own name in public-facing materials
+- **Mistake**: Used the repository's DN abbreviation as the presentation name, while the community is 한마음교회 청년교구 LDN.
+- **Rule**: Treat the user's community name as authoritative in slide titles, scripts, speaker notes, and deliverable filenames. Keep repository names only in technical source references.
+
+### Distinguish realm exports from live Keycloak rollout
+- **Mistake**: Reported the training roles/groups as delivered after merging realm exports, while the existing staging realm had not been updated and configure-realm.sh did not provision them.
+- **Rule**: Report checked-in realm definitions, deployment and verified live realm state separately. For changes intended for an existing realm, provide an idempotent provisioning path and verify the live roles, group hierarchy and mappings before claiming rollout is complete.
+
+### Collect new decisions at the end and leave PRs open
+- **Correction**: The user wants newly required decisions summarized at the end of the issue queue, with PRs left open.
+- **Rule**: Continue independent authorized work; collect unresolved choices with affected issues/PRs, options and a recommendation in the final report. Leave affected PRs open, do not merge or guess approval, and preserve decisions already explicitly approved by the user.

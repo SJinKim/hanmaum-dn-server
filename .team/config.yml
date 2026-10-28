@@ -1,0 +1,36 @@
+# KI-Entwicklungsteam – Projektkonfiguration
+# Flache "key: value"-Zeilen werden von Skripten gelesen – Format bitte beibehalten.
+
+project_key: HDN                 # Ticket-Präfix
+product_name: Hanmaum DN
+github_owner: SJinKim            # User oder Organisation, der das GitHub Project gehört
+project_number: 5                # Nummer des GitHub Project (Board)
+stage_field: Stage
+auto_merge: false                # true = nach Review (+ QA bei ui/size:M) + grüner CI automatisch mergen
+codex_cloud_review: auto         # mention = Developer kommentiert "@codex review" | auto = GitHub-Integration reviewt selbst | off
+figma_file:
+
+# Sprache
+language_docs: de                # Issues, Kommentare, Doku
+language_code: en                # Code, Commits, Branches
+
+# Repos desselben Produkts (eine Zeile pro Repo)
+repos:
+  - SJinKim/hanmaum-dn-server
+  - SJinKim/hanmaum-dn-web-app
+  - SJinKim/hanmaum-dn-mobile-app
+
+# Dieses Repo
+repo_role: backend               # backend | web | mobile | ops | fullstack
+
+# Befehle (von Developer, Reviewer und QA verwendet)
+commands:
+  build: ./gradlew build -x test
+  test: ./gradlew test               # Testcontainers – Docker muss laufen
+  lint: ./gradlew ktlintCheck
+  arch_test:
+  e2e:
+  run_local: make up                 # Docker Compose: Postgres, Keycloak, Backend
+
+# Design-Puffer: so viele Tickets sollen mindestens in "Ready" liegen
+ready_buffer: 3
