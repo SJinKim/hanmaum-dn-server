@@ -167,6 +167,7 @@ class ConsentService(
         purpose: ConsentPurpose,
     ) {
         val member = resolveMember(caller)
+        consentRepository.lockMember(member.id!!)
         val standing = consentRepository.findStanding(member.id!!, purpose) ?: return
         standing.end(ConsentEndReason.WITHDRAWN, Instant.now(clock))
         consentRepository.save(standing)
@@ -186,6 +187,8 @@ class ConsentService(
         source: ConsentSource,
     ): MemberConsent {
         val now = Instant.now(clock)
+        // Locks the member first, so a parallel identical grant waits and then finds this one standing.
+        member.id?.let { consentRepository.lockMember(it) }
         val standing = member.id?.let { consentRepository.findStanding(it, purpose) }
         if (standing != null) {
             if (standing.policyVersion == version) return standing

@@ -2,7 +2,6 @@ package com.hanmaum.dn.app.features.consents.api.v1.dto
 
 import com.hanmaum.dn.app.common.domainvalue.ConsentPurpose
 import jakarta.validation.Valid
-import jakarta.validation.constraints.AssertTrue
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
@@ -17,8 +16,8 @@ import java.time.Instant
  * agreement to a text the member never saw.
  */
 data class ConsentGrant(
-    // Must be ticked by the member; a client sending false has a bug, not a choice.
-    @field:AssertTrue(message = "개인정보 수집·이용에 동의해야 합니다.")
+    // Not bean-validated: an unticked box must reach ConsentService.check() and fail with the
+    // documented CONSENT_REQUIRED code instead of a code-less validation 400.
     val accepted: Boolean,
     @field:NotBlank
     @field:Size(max = 50)

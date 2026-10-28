@@ -15,7 +15,6 @@ import org.mockito.Mockito.`when`
 import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.verify
-import org.mockito.kotlin.verifyNoInteractions
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
@@ -96,7 +95,11 @@ class ConsentControllerTest {
     }
 
     @Test
-    fun `POST with an unticked box is a 400 and records nothing`() {
+    fun `POST with an unticked box is a 400 carrying CONSENT_REQUIRED`() {
+        `when`(consentService.grant(any<MemberPrincipal>(), any(), any())).thenThrow(
+            ConsentException(HttpStatus.BAD_REQUEST, ApiErrorCode.CONSENT_REQUIRED, "required"),
+        )
+
         mockMvc
             .perform(
                 post("/api/v1/members/me/consents")
@@ -104,8 +107,7 @@ class ConsentControllerTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(grantBody(accepted = false)),
             ).andExpect(status().isBadRequest)
-
-        verifyNoInteractions(consentService)
+            .andExpect(jsonPath("$.code").value("CONSENT_REQUIRED"))
     }
 
     @Test
