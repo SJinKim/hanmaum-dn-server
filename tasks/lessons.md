@@ -283,3 +283,11 @@
 ### Every acknowledgement of a queue row needs the handle of the listing it answers
 - **Mistake**: After fixing the sweeper, the upload's after-commit callback still released its key with an unconditional `DELETE`. A parallel delete had re-listed the key, so the upload removed the only durable retry.
 - **Rule**: When a producer lists a row, keep the timestamp `track` returns and acknowledge with `releaseIfUnchanged(key, timestamp)`. Audit every `release`/`DELETE` of a work-queue row, not just the one the review named.
+
+### Member-bound data must follow identity changes
+- **Mistake**: Consent was stored on the temporary registration member; claim and manual link deleted that row and the proof went with it.
+- **Rule**: When adding data bound to a member, check every path that merges, claims, links or purges members (`CurrentMemberResolver`, `MemberReconciliationService`) and carry the data over there, with a PostgreSQL test of the register → link → status flow.
+
+### A member lock must survive an identity change
+- **Mistake**: Withdrawal resolved the member, then locked that row; a parallel link moved the consent to the canonical member, so the withdrawal ended with 204 and the grant stayed standing.
+- **Rule**: After taking a per-member lock, resolve the identity again and lock the member it now points to (`ConsentService.resolveAndLockMember`) before reading or writing member-bound data.
