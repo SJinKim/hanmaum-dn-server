@@ -271,3 +271,7 @@
 ### Collect new decisions at the end and leave PRs open
 - **Correction**: The user wants newly required decisions summarized at the end of the issue queue, with PRs left open.
 - **Rule**: Continue independent authorized work; collect unresolved choices with affected issues/PRs, options and a recommendation in the final report. Leave affected PRs open, do not merge or guess approval, and preserve decisions already explicitly approved by the user.
+
+### Member-bound data must follow identity changes
+- **Mistake**: Consent was stored on the temporary registration member; claim and manual link deleted that row and the proof went with it.
+- **Rule**: When adding data bound to a member, check every path that merges, claims, links or purges members (`CurrentMemberResolver`, `MemberReconciliationService`) and carry the data over there, with a PostgreSQL test of the register → link → status flow.
