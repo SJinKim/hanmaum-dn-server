@@ -218,3 +218,28 @@ tasks.register<Copy>("syncOpenApiToOps") {
     from(layout.buildDirectory.file("openapi/openapi.yaml"))
     into(opsDir.resolve("api"))
 }
+
+// HDN-366: docs/db/schema.md is generated in CI from an empty database; see docs/db/README.md.
+// The tooling lives in the test source set so it never reaches the boot JAR.
+val schemaSnapshotCandidate = layout.buildDirectory.file("schema/schema.md")
+
+tasks.register<JavaExec>("schemaSnapshot") {
+    group = "documentation"
+    description = "Migrates the empty database in SCHEMA_SNAPSHOT_DB_URL and writes build/schema/schema.md."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.hanmaum.dn.tooling.schema.SchemaSnapshotKt")
+    workingDir = rootDir
+    jvmArgs("-Dfile.encoding=UTF-8", "-Duser.timezone=UTC", "-Duser.language=en", "-Duser.country=US")
+    args("generate", schemaSnapshotCandidate.get().asFile.path)
+    outputs.upToDateWhen { false }
+}
+
+tasks.register<JavaExec>("checkSchemaSnapshot") {
+    group = "verification"
+    description = "Fails when docs/db/schema.md differs from build/schema/schema.md."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.hanmaum.dn.tooling.schema.SchemaSnapshotKt")
+    workingDir = rootDir
+    jvmArgs("-Dfile.encoding=UTF-8")
+    args("check", file("docs/db/schema.md").path, schemaSnapshotCandidate.get().asFile.path)
+}

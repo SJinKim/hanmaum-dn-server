@@ -94,6 +94,7 @@ docs/*
 !docs/product/
 !docs/architecture/
 !docs/design/
+!docs/db/
 DEPLOYMENT.md
 
 # --- Claude Code (per-machine, never commit) ---
