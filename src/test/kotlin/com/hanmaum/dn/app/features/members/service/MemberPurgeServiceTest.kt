@@ -13,6 +13,7 @@ import org.keycloak.admin.client.resource.RealmResource
 import org.keycloak.admin.client.resource.UsersResource
 import org.mockito.Mock
 import org.mockito.Mockito.doAnswer
+import org.mockito.Mockito.inOrder
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
@@ -46,6 +47,8 @@ class MemberPurgeServiceTest {
 
     @Mock private lateinit var profileImageService: ProfileImageService
 
+    @Mock private lateinit var profileImageCleanup: ProfileImageCleanup
+
     @Test
     fun `purgeExpired deletes dependent rows and member in one transaction`() {
         val now = Instant.parse("2026-06-15T00:00:00Z")
@@ -69,6 +72,7 @@ class MemberPurgeServiceTest {
                 transactionTemplate = transactionTemplate,
                 keycloak = keycloak,
                 profileImageService = profileImageService,
+                profileImageCleanup = profileImageCleanup,
                 realm = "test-realm",
             )
 
@@ -97,6 +101,31 @@ class MemberPurgeServiceTest {
         verifyNoInteractions(profileImageService)
     }
 
+    @Test
+    fun `purgeExpired lists the image key for cleanup before the member row is deleted`() {
+        val now = Instant.parse("2026-06-15T00:00:00Z")
+        val member =
+            Member(lastName = "Kim", firstName = "Min").apply {
+                id = 42L
+                deletedAt = now.minusSeconds(60)
+                deleteEntryAt = now
+                profileImageKey = "profile-images/pub-42/a.jpg"
+            }
+        `when`(memberRepository.findAllByDeleteEntryAtLessThanEqualAndDeletedAtIsNotNull(now))
+            .thenReturn(listOf(member))
+        doAnswer { invocation ->
+            invocation.getArgument<Consumer<TransactionStatus>>(0).accept(transactionStatus)
+            null
+        }.`when`(transactionTemplate).executeWithoutResult(any())
+
+        service().purgeExpired(now)
+
+        val order = inOrder(profileImageCleanup, memberRepository, profileImageService)
+        order.verify(profileImageCleanup).trackInCurrentTransaction("profile-images/pub-42/a.jpg")
+        order.verify(memberRepository).deleteById(42L)
+        order.verify(profileImageService).deleteStoredObject("profile-images/pub-42/a.jpg")
+    }
+
     private fun service() =
         MemberPurgeService(
             memberRepository = memberRepository,
@@ -104,6 +133,7 @@ class MemberPurgeServiceTest {
             transactionTemplate = transactionTemplate,
             keycloak = keycloak,
             profileImageService = profileImageService,
+            profileImageCleanup = profileImageCleanup,
             realm = "test-realm",
         )
 
@@ -137,6 +167,10 @@ class MemberPurgeServiceTest {
         verify(jdbcTemplate).update(eq("DELETE FROM group_leaders WHERE member_id = ?"), eq(42L))
         verify(memberRepository).deleteById(42L)
         verify(memberRepository).flush()
+        // Listed inside the row-deleting transaction, before the rows go.
+        val order = inOrder(profileImageCleanup, memberRepository)
+        order.verify(profileImageCleanup).trackInCurrentTransaction("profile-images/pub-42/a.jpg")
+        order.verify(memberRepository).deleteById(42L)
         verify(profileImageService).deleteStoredObject("profile-images/pub-42/a.jpg")
     }
 

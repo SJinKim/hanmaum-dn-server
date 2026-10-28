@@ -7,6 +7,7 @@ import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.doThrow
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
@@ -24,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional
 import software.amazon.awssdk.core.exception.SdkClientException
 import java.time.Duration
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /** The sweeper drains the cleanup list without ever deleting an object a member still shows (HDN-140). */
 @DataJpaTest(properties = ["spring.jpa.show-sql=false"])
@@ -72,6 +74,30 @@ class ProfileImageCleanupIT {
 
         verify(storage, never()).deleteObjects(any())
         assertEquals(emptyList(), pending())
+    }
+
+    @Test
+    fun `sweep keeps a row that was listed again after it read it`() {
+        val cleanup = cleanup()
+        cleanup.track("profile-images/relisted.jpg")
+        // A producer needs the retry again while the sweeper is talking to the bucket.
+        doAnswer { cleanup.track("profile-images/relisted.jpg") }.`when`(storage).deleteObjects(any())
+
+        cleanup.sweep()
+
+        assertEquals(listOf("profile-images/relisted.jpg"), pending())
+    }
+
+    @Test
+    fun `listing a key twice keeps one row and restarts its grace period`() {
+        val cleanup = cleanup()
+        cleanup.track("profile-images/twice.jpg")
+        val first = jdbcTemplate.queryForObject("SELECT created_at FROM profile_image_cleanup", java.sql.Timestamp::class.java)!!
+
+        cleanup.track("profile-images/twice.jpg")
+
+        val second = jdbcTemplate.queryForObject("SELECT created_at FROM profile_image_cleanup", java.sql.Timestamp::class.java)!!
+        assertTrue(second.after(first), "expected created_at to move forward, was $first then $second")
     }
 
     @Test

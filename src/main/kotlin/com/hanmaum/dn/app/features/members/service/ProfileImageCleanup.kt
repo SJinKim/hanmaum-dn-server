@@ -46,23 +46,41 @@ class ProfileImageCleanup(
     @Scheduled(fixedDelayString = "\${app.profile-image.cleanup-delay:PT10M}")
     fun sweep() {
         val candidates =
-            jdbcTemplate.queryForList(
-                "SELECT object_key FROM profile_image_cleanup WHERE created_at < now() - make_interval(secs => ?)",
-                String::class.java,
+            jdbcTemplate.query(
+                "SELECT object_key, created_at FROM profile_image_cleanup WHERE created_at < now() - make_interval(secs => ?)",
+                { rs, _ -> rs.getString("object_key") to rs.getTimestamp("created_at") },
                 gracePeriod.seconds.toDouble(),
             )
-        candidates.forEach { key ->
+        candidates.forEach { (key, listedAt) ->
             try {
                 if (!isReferenced(key)) storage.deleteObjects(listOf(key))
-                release(key)
+                releaseIfUnchanged(key, listedAt)
             } catch (e: RuntimeException) {
                 logger.warn("Profile image cleanup failed, will retry key={}", key, e)
             }
         }
     }
 
+    /**
+     * Drops the row only if nobody re-listed the key since [sweep] read it: a producer that needs the retry
+     * again moves `created_at` (see [insert]), so a stale read can never acknowledge a newer cleanup order.
+     */
+    private fun releaseIfUnchanged(
+        key: String,
+        listedAt: java.sql.Timestamp,
+    ) {
+        independent.executeWithoutResult {
+            jdbcTemplate.update("DELETE FROM profile_image_cleanup WHERE object_key = ? AND created_at = ?", key, listedAt)
+        }
+    }
+
     private fun insert(key: String) {
-        jdbcTemplate.update("INSERT INTO profile_image_cleanup (object_key) VALUES (?) ON CONFLICT DO NOTHING", key)
+        // Re-listing an existing key restarts its grace period; clock_timestamp() differs from every earlier read.
+        jdbcTemplate.update(
+            "INSERT INTO profile_image_cleanup (object_key) VALUES (?) " +
+                "ON CONFLICT (object_key) DO UPDATE SET created_at = clock_timestamp()",
+            key,
+        )
     }
 
     private fun isReferenced(key: String): Boolean =

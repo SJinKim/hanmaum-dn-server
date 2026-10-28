@@ -22,6 +22,7 @@ class MemberPurgeService(
     private val transactionTemplate: TransactionTemplate,
     private val keycloak: Keycloak,
     private val profileImageService: ProfileImageService,
+    private val profileImageCleanup: ProfileImageCleanup,
     @Value("\${app.keycloak.realm:hanmaum}") private val realm: String,
 ) {
     private val log = LoggerFactory.getLogger(MemberPurgeService::class.java)
@@ -30,9 +31,7 @@ class MemberPurgeService(
         val expiredMembers = memberRepository.findAllByDeleteEntryAtLessThanEqualAndDeletedAtIsNotNull(now)
         expiredMembers.forEach { member ->
             deleteKeycloakUser(member.keycloakId, member.id!!)
-            transactionTemplate.executeWithoutResult {
-                purgeMemberRows(member.id!!)
-            }
+            purgeRowsAndTrackImage(member.id!!, member.profileImageKey)
             member.profileImageKey?.let(profileImageService::deleteStoredObject)
         }
         return expiredMembers.size
@@ -54,10 +53,22 @@ class MemberPurgeService(
         }
         val memberId = member.id!!
         deleteKeycloakUser(member.keycloakId, memberId)
+        purgeRowsAndTrackImage(memberId, member.profileImageKey)
+        member.profileImageKey?.let(profileImageService::deleteStoredObject)
+    }
+
+    /**
+     * The image key is listed for cleanup in the transaction that deletes the member row: a crash after the
+     * commit cannot lose the last reference, the sweeper still finds the object.
+     */
+    private fun purgeRowsAndTrackImage(
+        memberId: Long,
+        imageKey: String?,
+    ) {
         transactionTemplate.executeWithoutResult {
+            imageKey?.let(profileImageCleanup::trackInCurrentTransaction)
             purgeMemberRows(memberId)
         }
-        member.profileImageKey?.let(profileImageService::deleteStoredObject)
     }
 
     private fun deleteKeycloakUser(

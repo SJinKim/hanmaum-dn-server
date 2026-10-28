@@ -39,6 +39,23 @@ class ProfileImageProcessorTest {
     }
 
     @Test
+    fun `non-square webp is cropped to its centered square`() {
+        // 40x20 lossless WebP: red bands at x<10 and x>=30, black in the centered 20x20 square.
+        val webp =
+            Base64.getDecoder().decode(
+                "UklGRnwAAABXRUJQVlA4THAAAAAvJ8AEEIgD/Ef/438AAPj/fwAA+P9/AAD4/38AAPj/fwAA+P9/AAD4/38AAPj/fwAA+P9/AAD4/38A" +
+                    "APj/fwAA+P9/AAD4/38AAPj/fwAA+P9/AAD4/38AAPj/fwAA+B8A",
+            )
+
+        val image = decode(processor.process(webp).bytes)
+
+        listOf(5, 256, 506).forEach { x ->
+            val pixel = Color(image.getRGB(x, 256))
+            assertTrue(pixel.red < 40 && pixel.green < 40 && pixel.blue < 40, "expected black at x=$x, got $pixel")
+        }
+    }
+
+    @Test
     fun `transparent png is flattened onto white`() {
         val transparent = BufferedImage(100, 100, BufferedImage.TYPE_INT_ARGB)
 

@@ -109,13 +109,22 @@ class ProfileImageProcessor {
                 reader.addIIOReadWarningListener(IIOReadWarningListener { _, _ -> warned = true })
                 val width = reader.getWidth(0)
                 val height = reader.getHeight(0)
-                if (width <= 0 || height <= 0 || width.toLong() * height > MAX_PIXELS) {
+                val maxPixels = if (format == ImageFormat.WEBP) MAX_WEBP_PIXELS else MAX_PIXELS
+                if (width <= 0 || height <= 0 || width.toLong() * height > maxPixels) {
                     throw ProfileImageInvalidException()
                 }
                 val side = minOf(width, height)
+                val x = (width - side) / 2
+                val y = (height - side) / 2
+                if (format == ImageFormat.WEBP) {
+                    // The WebP reader ignores sourceRegion and subsampling, so it decodes whole and is cropped here.
+                    val full = reader.read(0)
+                    if (warned) throw ProfileImageInvalidException()
+                    return full.getSubimage(x, y, side, side)
+                }
                 val step = maxOf(1, side / DECODE_TARGET_SIZE)
                 val param = reader.defaultReadParam
-                param.sourceRegion = Rectangle((width - side) / 2, (height - side) / 2, side, side)
+                param.sourceRegion = Rectangle(x, y, side, side)
                 param.setSourceSubsampling(step, step, 0, 0)
                 val image = reader.read(0, param)
                 if (warned) throw ProfileImageInvalidException()
@@ -286,6 +295,9 @@ class ProfileImageProcessor {
         private const val COPY_BUFFER_BYTES = 8 * 1024
         private const val DECODE_TARGET_SIZE = 1024
         private const val MAX_PIXELS = 50_000_000L
+
+        // Whole-image decode at 4 bytes per pixel: 16 MP is about 64 MB of heap.
+        private const val MAX_WEBP_PIXELS = 16_000_000L
         private const val JPEG_QUALITY = 0.85f
         private const val MARKER_PREFIX = 0xFF.toByte()
         private const val APP1_MARKER = 0xE1
