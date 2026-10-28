@@ -41,6 +41,8 @@ class ProfileImageServiceTest {
 
     @Mock private lateinit var cleanup: ProfileImageCleanup
 
+    private val listedAt = java.sql.Timestamp.valueOf("2026-10-28 12:00:00")
+
     private val processed = ProcessedProfileImage(byteArrayOf(1, 2, 3), "image/jpeg")
 
     private fun service() = ProfileImageService(memberRepository, currentMemberResolver, processor, storage, cleanup)
@@ -213,6 +215,7 @@ class ProfileImageServiceTest {
         val member = member()
         `when`(currentMemberResolver.requireForUpdate("sub")).thenReturn(member)
         `when`(processor.process(any<InputStream>())).thenReturn(processed)
+        `when`(cleanup.track(any())).thenReturn(listedAt)
         TransactionSynchronizationManager.initSynchronization()
         try {
             service().uploadForMember("sub", ByteArrayInputStream(byteArrayOf(9)))
@@ -237,6 +240,7 @@ class ProfileImageServiceTest {
         val member = member(key = "profile-images/old.jpg")
         `when`(currentMemberResolver.requireForUpdate("sub")).thenReturn(member)
         `when`(processor.process(any<InputStream>())).thenReturn(processed)
+        `when`(cleanup.track(any())).thenReturn(listedAt)
         TransactionSynchronizationManager.initSynchronization()
         try {
             service().uploadForMember("sub", ByteArrayInputStream(byteArrayOf(9)))
@@ -248,7 +252,8 @@ class ProfileImageServiceTest {
                 )
             }
 
-            verify(cleanup).release(member.profileImageKey!!)
+            verify(cleanup).releaseIfUnchanged(member.profileImageKey!!, listedAt)
+            verify(cleanup, never()).release(member.profileImageKey!!)
             verify(storage).deleteObjects(listOf("profile-images/old.jpg"))
             verify(storage, never()).deleteObjects(listOf(member.profileImageKey!!))
         } finally {

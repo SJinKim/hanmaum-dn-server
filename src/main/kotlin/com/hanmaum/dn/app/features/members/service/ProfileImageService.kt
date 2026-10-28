@@ -53,7 +53,7 @@ class ProfileImageService(
         val member = currentMemberResolver.requireForUpdate(keycloakSubject)
         val image = processor.process(upload)
         val key = "$KEY_PREFIX/${member.publicId}/${UUID.randomUUID()}.jpg"
-        cleanup.track(key)
+        val listedAt = cleanup.track(key)
         deleteOnRollback(key)
         try {
             storage.putObject(key, image.bytes, image.contentType)
@@ -64,7 +64,7 @@ class ProfileImageService(
         member.profileImageKey = key
         member.profileImageVersion += 1
         memberRepository.save(member)
-        releaseAfterCommit(key)
+        releaseAfterCommit(key, listedAt)
         previousKey?.let { deleteAfterCommit(it) }
         return member
     }
@@ -136,8 +136,14 @@ class ProfileImageService(
         deleteAfterCommit(key)
     }
 
-    private fun releaseAfterCommit(key: String) {
-        afterCompletion { status -> if (status == TransactionSynchronization.STATUS_COMMITTED) cleanup.release(key) }
+    /** Bound to this upload's own listing: a delete that re-listed the key in the meantime keeps its retry. */
+    private fun releaseAfterCommit(
+        key: String,
+        listedAt: java.sql.Timestamp,
+    ) {
+        afterCompletion { status ->
+            if (status == TransactionSynchronization.STATUS_COMMITTED) cleanup.releaseIfUnchanged(key, listedAt)
+        }
     }
 
     private fun deleteOnRollback(key: String) {

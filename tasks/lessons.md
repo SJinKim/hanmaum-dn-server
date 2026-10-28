@@ -279,3 +279,7 @@
 ### A stale read must not acknowledge a cleanup order that was renewed meanwhile
 - **Mistake**: The cleanup sweeper checked a key, then deleted its row unconditionally. A producer that re-listed the same key in between (`ON CONFLICT DO NOTHING`) had its retry removed by the sweeper.
 - **Rule**: Release a work-queue row only if it is unchanged since it was read (compare `created_at`), and make re-listing move that timestamp. List the object key in the same transaction that deletes its last reference.
+
+### Every acknowledgement of a queue row needs the handle of the listing it answers
+- **Mistake**: After fixing the sweeper, the upload's after-commit callback still released its key with an unconditional `DELETE`. A parallel delete had re-listed the key, so the upload removed the only durable retry.
+- **Rule**: When a producer lists a row, keep the timestamp `track` returns and acknowledge with `releaseIfUnchanged(key, timestamp)`. Audit every `release`/`DELETE` of a work-queue row, not just the one the review named.

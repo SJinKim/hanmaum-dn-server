@@ -30,13 +30,16 @@ class ProfileImageCleanup(
     private val independent =
         TransactionTemplate(transactionManager).apply { propagationBehavior = TransactionDefinition.PROPAGATION_REQUIRES_NEW }
 
-    /** Lists [key] as a candidate in a transaction of its own, so a rollback of the caller keeps it. */
-    fun track(key: String) {
-        independent.executeWithoutResult { insert(key) }
-    }
+    /**
+     * Lists [key] as a candidate in a transaction of its own, so a rollback of the caller keeps it.
+     * Returns the listing's timestamp, the handle for [releaseIfUnchanged].
+     */
+    fun track(key: String): java.sql.Timestamp = independent.execute { insert(key) }!!
 
     /** Lists [key] in the caller's transaction: it only counts if the caller commits. */
-    fun trackInCurrentTransaction(key: String) = insert(key)
+    fun trackInCurrentTransaction(key: String) {
+        insert(key)
+    }
 
     /** Always in a transaction of its own: callers run it from transaction callbacks, where the outer one is spent. */
     fun release(key: String) {
@@ -65,7 +68,7 @@ class ProfileImageCleanup(
      * Drops the row only if nobody re-listed the key since [sweep] read it: a producer that needs the retry
      * again moves `created_at` (see [insert]), so a stale read can never acknowledge a newer cleanup order.
      */
-    private fun releaseIfUnchanged(
+    fun releaseIfUnchanged(
         key: String,
         listedAt: java.sql.Timestamp,
     ) {
@@ -74,14 +77,14 @@ class ProfileImageCleanup(
         }
     }
 
-    private fun insert(key: String) {
+    private fun insert(key: String): java.sql.Timestamp =
         // Re-listing an existing key restarts its grace period; clock_timestamp() differs from every earlier read.
-        jdbcTemplate.update(
+        jdbcTemplate.queryForObject(
             "INSERT INTO profile_image_cleanup (object_key) VALUES (?) " +
-                "ON CONFLICT (object_key) DO UPDATE SET created_at = clock_timestamp()",
+                "ON CONFLICT (object_key) DO UPDATE SET created_at = clock_timestamp() RETURNING created_at",
+            java.sql.Timestamp::class.java,
             key,
-        )
-    }
+        )!!
 
     private fun isReferenced(key: String): Boolean =
         jdbcTemplate.queryForObject("SELECT EXISTS (SELECT 1 FROM members WHERE profile_image_key = ?)", Boolean::class.java, key) == true

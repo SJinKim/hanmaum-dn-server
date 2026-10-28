@@ -89,6 +89,28 @@ class ProfileImageCleanupIT {
     }
 
     @Test
+    fun `releaseIfUnchanged keeps a row that a delete listed again after the upload listed it`() {
+        val cleanup = cleanup()
+        val uploadListedAt = cleanup.track("profile-images/live.jpg")
+        // A parallel delete re-lists the key before the upload's commit callback runs.
+        cleanup.track("profile-images/live.jpg")
+
+        cleanup.releaseIfUnchanged("profile-images/live.jpg", uploadListedAt)
+
+        assertEquals(listOf("profile-images/live.jpg"), pending())
+    }
+
+    @Test
+    fun `releaseIfUnchanged drops a row nobody listed again`() {
+        val cleanup = cleanup()
+        val listedAt = cleanup.track("profile-images/live.jpg")
+
+        cleanup.releaseIfUnchanged("profile-images/live.jpg", listedAt)
+
+        assertEquals(emptyList<String>(), pending())
+    }
+
+    @Test
     fun `listing a key twice keeps one row and restarts its grace period`() {
         val cleanup = cleanup()
         cleanup.track("profile-images/twice.jpg")
