@@ -271,3 +271,7 @@
 ### Collect new decisions at the end and leave PRs open
 - **Correction**: The user wants newly required decisions summarized at the end of the issue queue, with PRs left open.
 - **Rule**: Continue independent authorized work; collect unresolved choices with affected issues/PRs, options and a recommendation in the final report. Leave affected PRs open, do not merge or guess approval, and preserve decisions already explicitly approved by the user.
+
+### Read and write a backfill batch under one row lock
+- **Mistake**: The PII backfill read a batch, then wrote it back in a later transaction. A business change committed in between was overwritten by the re-encrypted old snapshot, and the stalled check could not notice because the stale value was correctly encrypted.
+- **Rule**: A job that rewrites rows from values it read earlier must read and write in the same transaction with `SELECT ... FOR UPDATE`. Cover it with a two-connection test that commits a change between read and write.
