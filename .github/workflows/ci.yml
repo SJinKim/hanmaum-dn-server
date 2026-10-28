@@ -131,3 +131,79 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify against disposable Keycloak 26.3
         run: python3 scripts/keycloak/test-realm-access-integration.py
+
+  # HDN-366: regenerates docs/db/schema.md from an empty database and fails when the
+  # checked-in file is stale. How to update it: docs/db/README.md.
+  schema-snapshot:
+    name: Schema snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: schema_snapshot
+          POSTGRES_PASSWORD: schema_snapshot
+          POSTGRES_DB: schema_snapshot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U schema_snapshot"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      SCHEMA_SNAPSHOT_DB_URL: jdbc:postgresql://localhost:5432/schema_snapshot
+      SCHEMA_SNAPSHOT_DB_USER: schema_snapshot
+      SCHEMA_SNAPSHOT_DB_PASSWORD: schema_snapshot
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Compile
+        run: ./gradlew compileKotlin compileTestKotlin --no-daemon
+
+      # The integration test works in its own scratch databases, so schema_snapshot stays empty.
+      - name: Test snapshot tooling
+        run: ./gradlew test -PincludeIntegration --tests "com.hanmaum.dn.tooling.schema.*" --no-daemon
+
+      - name: Generate snapshot
+        run: ./gradlew schemaSnapshot --no-daemon
+
+      # Only reached when generation succeeded, so the artifact is never a partial result; it is
+      # uploaded before the comparison so a stale check still offers the current file.
+      - name: Upload snapshot candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: schema-snapshot
+          path: build/schema/schema.md
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Compare with docs/db/schema.md
+        run: ./gradlew checkSchemaSnapshot --no-daemon
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: schema-snapshot-test-reports
+          path: build/reports/tests/
+          retention-days: 7

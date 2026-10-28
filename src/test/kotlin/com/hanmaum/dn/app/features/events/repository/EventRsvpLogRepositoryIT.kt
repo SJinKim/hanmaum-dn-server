@@ -180,6 +180,43 @@ class EventRsvpLogRepositoryIT {
         )
     }
 
+    @Test
+    fun `response overview member query includes unanswered members but excludes inactive pending and deleted`() {
+        val now = OffsetDateTime.now()
+        val event = persistRsvp("행사", now.plusDays(1))
+        val going = persistMember("참석").also { it.memberStatus = MemberStatus.ACTIVE }
+        val notGoing = persistMember("불참").also { it.memberStatus = MemberStatus.ACTIVE }
+        val maybe = persistMember("미정").also { it.memberStatus = MemberStatus.ACTIVE }
+        val unanswered = persistMember("미응답").also { it.memberStatus = MemberStatus.ACTIVE }
+        val erased = persistMember("응답삭제").also { it.memberStatus = MemberStatus.ACTIVE }
+        persistMember("비활성").memberStatus = MemberStatus.INACTIVE
+        persistMember("승인대기")
+        persistMember("삭제").also {
+            it.memberStatus = MemberStatus.ACTIVE
+            it.deletedAt = now.toInstant()
+        }
+        persistResponse(event, going, RsvpStatus.GOING)
+        persistResponse(event, notGoing, RsvpStatus.NOT_GOING)
+        persistResponse(event, maybe, RsvpStatus.MAYBE)
+        persistResponse(event, erased, RsvpStatus.GOING).deletedAt = now.toInstant()
+        entityManager.flush()
+        entityManager.clear()
+        assertEquals(
+            setOf(going.publicId, notGoing.publicId, maybe.publicId, unanswered.publicId, erased.publicId),
+            repository.findResponseMembers().map { it.publicId }.toSet(),
+        )
+        val logs = repository.findAttendeesWithDetails(event.id!!).associateBy { it.member.publicId }
+        assertEquals(RsvpStatus.NOT_GOING, logs[notGoing.publicId]?.status)
+        assertEquals(RsvpStatus.MAYBE, logs[maybe.publicId]?.status)
+        assertEquals(null, logs[unanswered.publicId])
+        assertEquals(null, logs[erased.publicId])
+        repository.upsertResponse(UUID.randomUUID(), event.id!!, maybe.id!!, null, now, "NOT_GOING")
+        entityManager.clear()
+        val changed = repository.findAttendeesWithDetails(event.id!!).filter { it.member.publicId == maybe.publicId }
+        assertEquals(1, changed.size)
+        assertEquals(RsvpStatus.NOT_GOING, changed.single().status)
+    }
+
     private fun persistMember(firstName: String): Member = Member(lastName = "김", firstName = firstName).also(entityManager::persist)
 
     private fun persistRsvp(
