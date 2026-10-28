@@ -8,12 +8,16 @@ import java.awt.geom.AffineTransform
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.io.IOException
+import java.io.InputStream
+import java.nio.file.Files
+import java.nio.file.Path
 import javax.imageio.IIOImage
 import javax.imageio.ImageIO
 import javax.imageio.ImageWriteParam
 import javax.imageio.event.IIOReadWarningListener
-import javax.imageio.stream.MemoryCacheImageInputStream
+import javax.imageio.stream.FileImageInputStream
 import javax.imageio.stream.MemoryCacheImageOutputStream
 
 /** A normalized profile picture, ready to store. */
@@ -37,12 +41,42 @@ class ProfileImageProcessor {
         ImageIO.scanForPlugins()
     }
 
-    fun process(input: ByteArray): ProcessedProfileImage {
-        if (input.size > MAX_UPLOAD_BYTES) throw ProfileImageTooLargeException()
-        val format = detectFormat(input) ?: throw ProfileImageUnsupportedTypeException()
-        val square = scale(decodeCenteredSquare(input, format), OUTPUT_SIZE)
-        val oriented = if (format == ImageFormat.JPEG) orient(square, readJpegOrientation(input)) else square
-        return ProcessedProfileImage(encodeJpeg(oriented), OUTPUT_CONTENT_TYPE)
+    fun process(input: ByteArray): ProcessedProfileImage = process(ByteArrayInputStream(input))
+
+    /**
+     * Spools [input] to a temporary file, at most [MAX_UPLOAD_BYTES], and decodes from there: the
+     * upload is never held in the heap, only its first [HEAD_BYTES] for the type and EXIF checks.
+     */
+    fun process(input: InputStream): ProcessedProfileImage {
+        val file = Files.createTempFile("profile-image-", ".upload")
+        try {
+            spool(input, file)
+            val head = Files.newInputStream(file).use { it.readNBytes(HEAD_BYTES) }
+            val format = detectFormat(head) ?: throw ProfileImageUnsupportedTypeException()
+            val square = scale(decodeCenteredSquare(file.toFile(), format), OUTPUT_SIZE)
+            val oriented = if (format == ImageFormat.JPEG) orient(square, readJpegOrientation(head)) else square
+            return ProcessedProfileImage(encodeJpeg(oriented), OUTPUT_CONTENT_TYPE)
+        } finally {
+            Files.deleteIfExists(file)
+        }
+    }
+
+    private fun spool(
+        input: InputStream,
+        target: Path,
+    ) {
+        Files.newOutputStream(target).use { out ->
+            val buffer = ByteArray(COPY_BUFFER_BYTES)
+            var total = 0L
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                total += read
+                // Stops at the first byte over the limit instead of reading the rest.
+                if (total > MAX_UPLOAD_BYTES) throw ProfileImageTooLargeException()
+                out.write(buffer, 0, read)
+            }
+        }
     }
 
     private enum class ImageFormat(
@@ -62,14 +96,14 @@ class ProfileImageProcessor {
         }
 
     private fun decodeCenteredSquare(
-        input: ByteArray,
+        file: File,
         format: ImageFormat,
     ): BufferedImage {
         val reader =
             ImageIO.getImageReadersByFormatName(format.readerName).asSequence().firstOrNull()
                 ?: error("No ImageIO reader registered for ${format.readerName}")
         try {
-            MemoryCacheImageInputStream(ByteArrayInputStream(input)).use { stream ->
+            FileImageInputStream(file).use { stream ->
                 reader.input = stream
                 var warned = false
                 reader.addIIOReadWarningListener(IIOReadWarningListener { _, _ -> warned = true })
@@ -248,6 +282,8 @@ class ProfileImageProcessor {
         const val MAX_UPLOAD_BYTES = 5 * 1024 * 1024
         const val OUTPUT_CONTENT_TYPE = "image/jpeg"
         private const val OUTPUT_SIZE = 512
+        private const val HEAD_BYTES = 256 * 1024
+        private const val COPY_BUFFER_BYTES = 8 * 1024
         private const val DECODE_TARGET_SIZE = 1024
         private const val MAX_PIXELS = 50_000_000L
         private const val JPEG_QUALITY = 0.85f

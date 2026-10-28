@@ -67,7 +67,7 @@ class ProfileImageServiceMinioIT {
     private fun service(): ProfileImageService {
         val repository = mock<MemberRepository> { on { save(any<Member>()) } doAnswer { it.getArgument(0) } }
         val resolver = mock<CurrentMemberResolver> { on { requireForUpdate("kc-1") } doReturn member }
-        return ProfileImageService(repository, resolver, ProfileImageProcessor(), storage)
+        return ProfileImageService(repository, resolver, ProfileImageProcessor(), storage, mock<ProfileImageCleanup>())
     }
 
     private fun png(
@@ -83,7 +83,7 @@ class ProfileImageServiceMinioIT {
     fun `upload stores a 512 JPEG and a second upload removes the first object`() {
         val service = service()
 
-        service.uploadForMember("kc-1", png(1200, 800))
+        service.uploadForMember("kc-1", ByteArrayInputStream(png(1200, 800)))
         val firstKey = member.profileImageKey!!
         assertTrue(firstKey.startsWith("profile-images/${member.publicId}/"))
         val stored = ImageIO.read(ByteArrayInputStream(storage.getObjectBytes(firstKey)))
@@ -91,7 +91,7 @@ class ProfileImageServiceMinioIT {
         assertEquals(512, stored.height)
         assertEquals(1, member.profileImageVersion)
 
-        service.uploadForMember("kc-1", png(600, 900))
+        service.uploadForMember("kc-1", ByteArrayInputStream(png(600, 900)))
         val secondKey = member.profileImageKey!!
         assertNotEquals(firstKey, secondKey)
         assertTrue(storage.objectExists(secondKey))

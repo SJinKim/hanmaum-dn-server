@@ -1,15 +1,18 @@
 package com.hanmaum.dn.app.features.members.service
 
+import com.hanmaum.dn.app.common.storage.ObjectDeletionFailedException
 import com.hanmaum.dn.app.common.storage.S3StorageService
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import jakarta.persistence.EntityNotFoundException
 import org.slf4j.LoggerFactory
+import org.springframework.dao.DataAccessException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 import software.amazon.awssdk.core.exception.SdkException
+import java.io.InputStream
 import java.util.UUID
 
 /**
@@ -27,6 +30,7 @@ class ProfileImageService(
     private val currentMemberResolver: CurrentMemberResolver,
     private val processor: ProfileImageProcessor,
     private val storage: S3StorageService,
+    private val cleanup: ProfileImageCleanup,
 ) {
     private val logger = LoggerFactory.getLogger(ProfileImageService::class.java)
 
@@ -35,18 +39,22 @@ class ProfileImageService(
      *
      * The new object is written before the row changes, so a storage outage leaves the
      * member exactly as it was. The old object goes only after the commit: deleting it
-     * earlier would leave the row pointing at nothing if the commit failed. The reverse
-     * failure — a commit that fails after the upload — leaves an orphaned object, which
-     * costs a few hundred kilobytes and no correctness.
+     * earlier would leave the row pointing at nothing if the commit failed.
+     *
+     * Neither failure orphans an object for good: the new key is tracked in [ProfileImageCleanup]
+     * before it is written and released after the commit, and a rollback removes it right away; the
+     * old key is tracked in the same transaction, so a failed delete is retried by the sweeper.
      */
     @Transactional
     fun uploadForMember(
         keycloakSubject: String,
-        bytes: ByteArray,
+        upload: InputStream,
     ): Member {
         val member = currentMemberResolver.requireForUpdate(keycloakSubject)
-        val image = processor.process(bytes)
+        val image = processor.process(upload)
         val key = "$KEY_PREFIX/${member.publicId}/${UUID.randomUUID()}.jpg"
+        cleanup.track(key)
+        deleteOnRollback(key)
         try {
             storage.putObject(key, image.bytes, image.contentType)
         } catch (e: SdkException) {
@@ -56,6 +64,7 @@ class ProfileImageService(
         member.profileImageKey = key
         member.profileImageVersion += 1
         memberRepository.save(member)
+        releaseAfterCommit(key)
         previousKey?.let { deleteAfterCommit(it) }
         return member
     }
@@ -92,12 +101,30 @@ class ProfileImageService(
         }
     }
 
-    /** Best-effort removal of an object whose row is already gone, e.g. during a purge. */
+    /**
+     * Removes an object nothing references any more, e.g. after a purge. A failure is not lost: the key
+     * stays in [ProfileImageCleanup] and the sweeper retries it.
+     */
     fun deleteStoredObject(key: String) {
         try {
             storage.deleteObjects(listOf(key))
+            cleanup.release(key)
         } catch (e: SdkException) {
-            logger.warn("Could not delete profile image object {}", key, e)
+            retryLater(key, e)
+        } catch (e: ObjectDeletionFailedException) {
+            retryLater(key, e)
+        }
+    }
+
+    private fun retryLater(
+        key: String,
+        cause: RuntimeException,
+    ) {
+        logger.warn("Could not delete profile image object, queued for retry key={}", key, cause)
+        try {
+            cleanup.track(key)
+        } catch (e: DataAccessException) {
+            logger.error("Could not queue profile image object for retry key={}", key, e)
         }
     }
 
@@ -109,14 +136,29 @@ class ProfileImageService(
         deleteAfterCommit(key)
     }
 
+    private fun releaseAfterCommit(key: String) {
+        afterCompletion { status -> if (status == TransactionSynchronization.STATUS_COMMITTED) cleanup.release(key) }
+    }
+
+    private fun deleteOnRollback(key: String) {
+        afterCompletion { status -> if (status != TransactionSynchronization.STATUS_COMMITTED) deleteStoredObject(key) }
+    }
+
+    /** The key stops being referenced with the caller's commit, so it is queued in the same transaction. */
     private fun deleteAfterCommit(key: String) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             deleteStoredObject(key)
             return
         }
+        cleanup.trackInCurrentTransaction(key)
+        afterCompletion { status -> if (status == TransactionSynchronization.STATUS_COMMITTED) deleteStoredObject(key) }
+    }
+
+    private fun afterCompletion(action: (Int) -> Unit) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) return
         TransactionSynchronizationManager.registerSynchronization(
             object : TransactionSynchronization {
-                override fun afterCommit() = deleteStoredObject(key)
+                override fun afterCompletion(status: Int) = action(status)
             },
         )
     }

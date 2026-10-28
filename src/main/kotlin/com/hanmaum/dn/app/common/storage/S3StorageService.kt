@@ -73,19 +73,27 @@ class S3StorageService(
         )
     }
 
+    /**
+     * Deletes [keys]. DeleteObjects answers 200 even when single keys fail (e.g. AccessDenied), so the
+     * per-key errors are checked and reported as [ObjectDeletionFailedException].
+     */
     fun deleteObjects(keys: List<String>) {
         if (keys.isEmpty()) return
-        s3Client.deleteObjects(
-            DeleteObjectsRequest
-                .builder()
-                .bucket(properties.bucket)
-                .delete(
-                    Delete
-                        .builder()
-                        .objects(keys.map { ObjectIdentifier.builder().key(it).build() })
-                        .build(),
-                ).build(),
-        )
+        val response =
+            s3Client.deleteObjects(
+                DeleteObjectsRequest
+                    .builder()
+                    .bucket(properties.bucket)
+                    .delete(
+                        Delete
+                            .builder()
+                            .objects(keys.map { ObjectIdentifier.builder().key(it).build() })
+                            .build(),
+                    ).build(),
+            )
+        if (response.hasErrors() && response.errors().isNotEmpty()) {
+            throw ObjectDeletionFailedException(response.errors().map { "${it.key()}: ${it.code()}" })
+        }
     }
 
     fun presignGet(key: String): String =

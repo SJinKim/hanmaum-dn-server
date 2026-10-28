@@ -17,7 +17,6 @@ import org.mockito.Mockito.never
 import org.mockito.Mockito.`when`
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
-import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.verify
 import org.springframework.beans.factory.annotation.Autowired
@@ -36,8 +35,10 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delet
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import java.io.InputStream
 import java.time.LocalDate
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 
@@ -96,7 +97,11 @@ class MemberProfileImageControllerTest {
     @Test
     fun `upload hands the file to the service and answers with the fresh profile`() {
         stubProfile()
-        `when`(profileImageService.uploadForMember(eq("kc-001"), any())).thenReturn(Member(lastName = "김", firstName = "철수"))
+        val received = AtomicReference<ByteArray>()
+        `when`(profileImageService.uploadForMember(eq("kc-001"), any())).thenAnswer {
+            received.set(it.getArgument<InputStream>(1).readAllBytes())
+            Member(lastName = "김", firstName = "철수")
+        }
 
         mockMvc
             .perform(upload().with(memberToken()))
@@ -104,9 +109,7 @@ class MemberProfileImageControllerTest {
             .andExpect(jsonPath("$.data.profileImageUrl").value("https://s3.example/profile-images/pub-1/a.jpg?sig"))
             .andExpect(jsonPath("$.data.profileImageVersion").value(3))
 
-        val bytes = argumentCaptor<ByteArray>()
-        verify(profileImageService).uploadForMember(eq("kc-001"), bytes.capture())
-        assertContentEquals(imageBytes, bytes.firstValue)
+        assertContentEquals(imageBytes, received.get())
     }
 
     @Test

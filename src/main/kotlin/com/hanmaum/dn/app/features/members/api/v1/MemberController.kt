@@ -18,7 +18,6 @@ import com.hanmaum.dn.app.features.members.api.v1.dto.UpdateMyProfileRequest
 import com.hanmaum.dn.app.features.members.domain.MemberOrigin
 import com.hanmaum.dn.app.features.members.service.MemberPurgeService
 import com.hanmaum.dn.app.features.members.service.MemberService
-import com.hanmaum.dn.app.features.members.service.ProfileImageProcessor
 import com.hanmaum.dn.app.features.members.service.ProfileImageService
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerLifecycle
 import io.swagger.v3.oas.annotations.Parameter
@@ -156,10 +155,8 @@ class MemberController(
     fun uploadMyProfileImage(
         @AuthenticationPrincipal jwt: Jwt,
         @RequestParam("file") file: MultipartFile,
-    ): ResponseEntity<ApiResponse<*>> {
-        // One byte past the limit is enough for the processor to answer 413 without reading the rest.
-        val bytes = file.inputStream.use { it.readNBytes(ProfileImageProcessor.MAX_UPLOAD_BYTES + 1) }
-        profileImageService.uploadForMember(jwt.subject, bytes)
+    ): ResponseEntity<ApiResponse<MemberResponse>> {
+        file.inputStream.use { profileImageService.uploadForMember(jwt.subject, it) }
         return ResponseEntity.ok(ApiResponse.success(data = myProfile(jwt)))
     }
 
@@ -171,7 +168,7 @@ class MemberController(
     @PreAuthorize("isAuthenticated()")
     fun deleteMyProfileImage(
         @AuthenticationPrincipal jwt: Jwt,
-    ): ResponseEntity<ApiResponse<*>> {
+    ): ResponseEntity<ApiResponse<MemberResponse>> {
         profileImageService.deleteForMember(jwt.subject)
         return ResponseEntity.ok(ApiResponse.success(data = myProfile(jwt)))
     }

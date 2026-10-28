@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
 import java.awt.image.BufferedImage
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -38,7 +39,13 @@ import kotlin.test.assertTrue
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Tag("integration")
-@Import(PiiCryptoConfiguration::class, CurrentMemberResolver::class, ProfileImageService::class, ProfileImageProcessor::class)
+@Import(
+    PiiCryptoConfiguration::class,
+    CurrentMemberResolver::class,
+    ProfileImageService::class,
+    ProfileImageProcessor::class,
+    ProfileImageCleanup::class,
+)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class ProfileImageConcurrencyIT {
     @Autowired private lateinit var service: ProfileImageService
@@ -62,7 +69,7 @@ class ProfileImageConcurrencyIT {
             val first =
                 pool.submit<String> {
                     tx.execute {
-                        val key = service.uploadForMember(subject, png()).profileImageKey!!
+                        val key = service.uploadForMember(subject, ByteArrayInputStream(png())).profileImageKey!!
                         written.countDown()
                         check(release.await(10, TimeUnit.SECONDS))
                         key
@@ -73,7 +80,7 @@ class ProfileImageConcurrencyIT {
             val second =
                 pool.submit<String> {
                     secondStarted.countDown()
-                    service.uploadForMember(subject, png()).profileImageKey!!
+                    service.uploadForMember(subject, ByteArrayInputStream(png())).profileImageKey!!
                 }
             assertTrue(secondStarted.await(5, TimeUnit.SECONDS))
             assertFailsWith<TimeoutException> { second.get(200, TimeUnit.MILLISECONDS) }
