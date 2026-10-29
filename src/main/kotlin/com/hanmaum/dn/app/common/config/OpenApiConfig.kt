@@ -3,6 +3,7 @@ package com.hanmaum.dn.app.common.config
 import io.swagger.v3.oas.models.Components
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.info.Info
+import io.swagger.v3.oas.models.media.Schema
 import io.swagger.v3.oas.models.media.StringSchema
 import io.swagger.v3.oas.models.security.SecurityRequirement
 import io.swagger.v3.oas.models.security.SecurityScheme
@@ -96,8 +97,46 @@ class OpenApiConfig(
             }
         }
 
+    /**
+     * 장기결석자 (HDN-375): every response field is serialized, nulls included, and springdoc keeps
+     * no Kotlin nullability. Marks all fields required and the nullable ones as such, including
+     * null in the enum and the nullable object references.
+     */
+    @Bean
+    fun longAbsenceNullabilityCustomizer(): GlobalOpenApiCustomizer = GlobalOpenApiCustomizer { applyLongAbsenceNullability(it) }
+
     companion object {
         const val BEARER_SCHEME = "bearerAuth"
+
+        internal fun applyLongAbsenceNullability(openApi: OpenAPI) {
+            val schemas = openApi.components?.schemas ?: return
+            schemas["LongAbsenceResponse"]?.let { response ->
+                val properties = response.properties ?: return@let
+                for (field in listOf("discriminator", "postAssignmentAttendance", "contactedBy", "contactedAt", "memo")) {
+                    properties[field]?.types = linkedSetOf("string", "null")
+                }
+                properties["postAssignmentAttendance"]?.let { attendance ->
+                    attendance.enum?.let { values -> if (null !in values) attendance.addEnumItemObject(null) }
+                }
+                for (field in listOf("group", "contactedByMember")) {
+                    val reference = properties[field]?.`$ref` ?: continue
+                    response.addProperty(
+                        field,
+                        Schema<Any>()
+                            .anyOf(listOf(Schema<Any>().`$ref`(reference), Schema<Any>().types(setOf("null"))))
+                            .description(properties[field]?.description),
+                    )
+                }
+                response.required = response.properties.keys.toList()
+            }
+            schemas["LongAbsenceGroupDto"]?.let { group ->
+                group.properties?.get("division")?.types = linkedSetOf("string", "null")
+                group.required = group.properties?.keys?.toList()
+            }
+            for (name in listOf("LongAbsenceActorDto", "LongAbsenceSummaryResponse")) {
+                schemas[name]?.let { it.required = it.properties?.keys?.toList() }
+            }
+        }
 
         internal fun applyBearerSecurity(
             openApi: OpenAPI,
