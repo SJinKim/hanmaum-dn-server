@@ -157,3 +157,11 @@ class EncryptedNewcomerVisitGenderConverter : EncryptedGenderConverter("newcomer
 
 @Converter
 class EncryptedNewcomerVisitNoteConverter : EncryptedStringConverter("newcomer_visits.note")
+
+// 장기결석자 follow-up (HDN-375). The memo may hold sensitive reasons for an absence; the actor is
+// the Keycloak subject of whoever marked the phase as contacted.
+@Converter
+class EncryptedAbsenceFollowupMemoConverter : EncryptedStringConverter("attendance_absence_followups.memo")
+
+@Converter
+class EncryptedAbsenceFollowupContactedByConverter : EncryptedStringConverter("attendance_absence_followups.contacted_by")
