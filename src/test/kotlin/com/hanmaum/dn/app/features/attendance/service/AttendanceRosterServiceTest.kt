@@ -19,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
+import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
@@ -44,6 +45,8 @@ class AttendanceRosterServiceTest {
 
     @Mock private lateinit var memberRepo: MemberRepository
 
+    @Mock private lateinit var longAbsenceRetention: LongAbsenceRetentionService
+
     private lateinit var service: AttendanceRosterService
 
     // Sunday 2026-06-14, 10:30 in Berlin.
@@ -62,7 +65,7 @@ class AttendanceRosterServiceTest {
 
     @BeforeEach
     fun setUp() {
-        service = AttendanceRosterService(definitionRepo, logRepo, memberRepo, clock)
+        service = AttendanceRosterService(definitionRepo, logRepo, memberRepo, longAbsenceRetention, clock)
     }
 
     private fun setId(
@@ -136,7 +139,7 @@ class AttendanceRosterServiceTest {
     // ─── addLog ───────────────────────────────────────────────────────────────
 
     private fun givenMemberAndDefinition() {
-        `when`(memberRepo.findByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(memberRepo.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
         `when`(definitionRepo.findByPublicIdAndDeletedAtIsNull(definition.publicId)).thenReturn(Optional.of(definition))
     }
 
@@ -154,6 +157,7 @@ class AttendanceRosterServiceTest {
         verify(logRepo).findByPublicId(publicId.firstValue)
         assertEquals(CheckInPresence.UNCONFIRMED, row.presence)
         assertEquals("홍길동", row.fullName)
+        verify(longAbsenceRetention).markReturned(1L)
     }
 
     @Test
@@ -164,6 +168,7 @@ class AttendanceRosterServiceTest {
         val ex = assertThrows<ResponseStatusException> { service.addLog(request()) }
 
         assertEquals(HttpStatus.CONFLICT, ex.statusCode)
+        verifyNoInteractions(longAbsenceRetention)
     }
 
     @Test
@@ -188,7 +193,7 @@ class AttendanceRosterServiceTest {
 
     @Test
     fun `addLog for an unknown member is a 404`() {
-        `when`(memberRepo.findByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.empty())
+        `when`(memberRepo.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.empty())
 
         assertThrows<EntityNotFoundException> { service.addLog(request()) }
     }

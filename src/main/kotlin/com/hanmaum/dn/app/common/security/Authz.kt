@@ -17,4 +17,10 @@ object Authz {
     /** Access to the 양육 team's church-group matrix and leader assignments. */
     const val TRAINING_READ = "hasAnyRole('${Roles.ADMIN}', '${Roles.TRAINING_VIEWER}')"
     const val TRAINING_WRITE = "hasAnyRole('${Roles.ADMIN}', '${Roles.TRAINING_EDITOR}')"
+
+    /**
+     * 장기결석자 list and follow-up (HDN-375): pastors and admins only. Deliberately not
+     * OPERATIONS_*, which also admit note takers and the general operations team.
+     */
+    const val PASTORAL_CARE = "hasAnyRole('${Roles.PASTOR}', '${Roles.ADMIN}')"
 }
