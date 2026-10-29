@@ -1,8 +1,8 @@
 <!-- Erzeugt von ./gradlew schemaSnapshot aus den Flyway-Migrationen. Nicht von Hand bearbeiten, siehe docs/db/README.md. -->
 # DB-Schema
 
-- Migrations-SHA-256: `b44a9e32daf9067543dff6d323f06d522a6e8c5616a1af36dba5d50add5a1af2`
-- Tabellen: 58 · Spalten: 601
+- Migrations-SHA-256: `6a38a723352a57295e6468bde68fb0f871eab4444fe66177aad1d9b403f458b7`
+- Tabellen: 59 · Spalten: 615
 - Fachliche Notizen: `docs/db/schema-notes.md`
 - Spalten ohne `NOT NULL` sind nullable. Indizes, die nur einen Primärschlüssel oder Unique-Constraint tragen, stehen beim Constraint.
 
@@ -46,6 +46,39 @@ Indizes:
 Constraints:
 - `announcements_pkey` `PRIMARY KEY (id)`
 - `announcements_public_id_key` `UNIQUE (public_id)`
+
+## public.attendance_absence_followups
+
+Nachverfolgung der 장기결석자 (HDN-375): Kontaktstatus und Memo je Mitglied und Abwesenheitsphase.
+Die Phase ist `(member_id, last_sunday_date)`, das Datum des letzten zählenden Sonntags-Check-ins;
+die Liste selbst wird aus `attendance_logs` berechnet. `memo` und `contacted_by` sind verschlüsselt.
+`closed_on` ist die erste Rückkehr nach dem Anker; der Cleanup-Job löscht die Zeile 90 Tage danach hart.
+
+- `id` bigint NOT NULL DEFAULT `nextval('attendance_absence_followups_id_seq'::regclass)`
+- `public_id` uuid NOT NULL
+- `member_id` bigint NOT NULL
+- `last_sunday_date` date NOT NULL
+- `contacted` boolean NOT NULL DEFAULT `false`
+- `contacted_by` text
+- `contacted_at` timestamp with time zone
+- `memo` text
+- `pii_key_id` character varying(50)
+- `closed_on` date
+- `version` bigint NOT NULL DEFAULT `0`
+- `created_at` timestamp with time zone NOT NULL DEFAULT `CURRENT_TIMESTAMP`
+- `updated_at` timestamp with time zone
+- `deleted_at` timestamp with time zone
+
+Constraints:
+- `attendance_absence_followups_member_id_fkey` `FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE`
+- `attendance_absence_followups_pkey` `PRIMARY KEY (id)`
+- `ck_attendance_absence_followup_closed` `CHECK (((closed_on IS NULL) OR (closed_on > last_sunday_date)))`
+- `ck_attendance_absence_followup_contact` `CHECK (((contacted AND (contacted_by IS NOT NULL) AND (contacted_at IS NOT NULL)) OR ((NOT contacted) AND (contacted_by IS NULL) AND (contacted_at IS NULL))))`
+- `uq_attendance_absence_followup_phase` `UNIQUE (member_id, last_sunday_date)`
+- `uq_attendance_absence_followups_public_id` `UNIQUE (public_id)`
+
+Indizes:
+- `idx_attendance_absence_followups_closed_on` `btree (closed_on) WHERE (closed_on IS NOT NULL)`
 
 ## public.attendance_definitions
 
