@@ -121,17 +121,30 @@ class CurrentMemberResolver(
         memberRepository.saveAndFlush(registration)
 
         candidate.keycloakId = keycloakSubject
-        copyRegisteredValues(registration, candidate)
+        val superseded = copyRegisteredValues(registration, candidate)
         moveNewcomerProfile(registration, candidate)
         consentCarryOver?.carryOver(registration, candidate)
         newcomerGroupAssigner?.assignIfUngrouped(candidate)
-        return memberRepository.save(candidate)
+        val linked = memberRepository.save(candidate)
+        if (superseded.isNotEmpty()) intake?.noteSuperseded(registration, linked, superseded)
+        return linked
     }
 
+    /**
+     * Fills the gaps in the claimed member from what the registration submitted, and returns the
+     * fields where both sides held a value and one of them was dropped.
+     *
+     * The seven fields in [conflictingFields] never get here with two different values — linking
+     * already aborted. 신분, 소속 and 카카오 아이디 do (HDN-360): all three change over a
+     * lifetime, so a difference is an update rather than a contradiction and must not keep anyone
+     * out of the app. 신분 takes what the app just submitted, because that is the person's own
+     * current answer; 소속 and 카카오 아이디 keep what the office already has, because the office
+     * maintains them. Either way the dropped field is reported so it ends up in 중복 확인.
+     */
     private fun copyRegisteredValues(
         registration: Member,
         candidate: Member,
-    ) {
+    ): Set<String> {
         candidate.gender = candidate.gender ?: registration.gender
         candidate.phoneNumber = candidate.phoneNumber ?: registration.phoneNumber
         candidate.street = candidate.street ?: registration.street
@@ -139,6 +152,17 @@ class CurrentMemberResolver(
         candidate.zipCode = candidate.zipCode ?: registration.zipCode
         candidate.city = candidate.city ?: registration.city
         candidate.baptism = candidate.baptism ?: registration.baptism
+
+        val superseded =
+            buildSet {
+                conflict("identityStatus", registration.identityStatus, candidate.identityStatus)
+                conflict("workOrSchool", registration.workOrSchool, candidate.workOrSchool)
+                conflict("kakaoId", registration.kakaoId, candidate.kakaoId)
+            }
+        candidate.identityStatus = registration.identityStatus ?: candidate.identityStatus
+        candidate.workOrSchool = candidate.workOrSchool ?: registration.workOrSchool
+        candidate.kakaoId = candidate.kakaoId ?: registration.kakaoId
+        return superseded
     }
 
     private fun moveNewcomerProfile(

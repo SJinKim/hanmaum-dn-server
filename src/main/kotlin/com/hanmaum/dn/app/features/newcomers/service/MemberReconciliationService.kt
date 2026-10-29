@@ -125,7 +125,6 @@ class MemberReconciliationService(
         if (!merge) {
             throw NewcomerException(HttpStatus.CONFLICT, "Both members have newcomer history; use the merge action.")
         }
-        target.kakaoId = target.kakaoId ?: source.kakaoId
         target.previousChurch = target.previousChurch ?: source.previousChurch
         target.assignmentReason = target.assignmentReason ?: source.assignmentReason
         target.overallNotes = target.overallNotes ?: source.overallNotes
@@ -160,6 +159,9 @@ class MemberReconciliationService(
         target.baptism = source.baptism ?: target.baptism
         target.identityStatus = source.identityStatus ?: target.identityStatus
         target.workOrSchool = source.workOrSchool ?: target.workOrSchool
+        // On the member since HDN-360, so it is merged here with the other member fields rather
+        // than in preserveNewcomerHistory — the newcomer profile only delegates to it now.
+        target.kakaoId = source.kakaoId ?: target.kakaoId
         target.profileImageUrl = source.profileImageUrl ?: target.profileImageUrl
         target.group = source.group ?: target.group
     }
