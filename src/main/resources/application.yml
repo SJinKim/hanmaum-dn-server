@@ -89,6 +89,15 @@ app:
     backfill-enabled: ${PII_BACKFILL_ENABLED:true}
     backfill-batch-size: ${PII_BACKFILL_BATCH_SIZE:200}
     max-in-memory-members: ${PII_MAX_IN_MEMORY_MEMBERS:5000}
+  # Consent to data processing (HDN-358). Bump a version when its policy text changes: every
+  # standing grant of the old one turns OUTDATED and the app asks again.
+  consents:
+    versions:
+      APP_PRIVACY: ${APP_CONSENTS_VERSION_APP_PRIVACY:v1}
+      COURSE_APPLICATION: ${APP_CONSENTS_VERSION_COURSE_APPLICATION:v1}
+    # 403 CONSENT_REQUIRED on every endpoint but /members/me and the consent routes. Turn on
+    # once the app build with the consent screen is out; earlier builds cannot unlock.
+    enforce-account-consent: ${APP_CONSENTS_ENFORCE_ACCOUNT_CONSENT:false}
   cors:
     allowed-origins: "http://localhost:4200,http://localhost"
   cleanup:

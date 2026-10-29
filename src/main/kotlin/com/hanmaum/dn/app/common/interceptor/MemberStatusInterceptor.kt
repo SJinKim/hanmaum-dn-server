@@ -2,9 +2,11 @@ package com.hanmaum.dn.app.common.interceptor
 
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.common.security.Roles
+import com.hanmaum.dn.app.features.consents.service.ConsentService
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
@@ -15,12 +17,20 @@ import org.springframework.web.servlet.HandlerInterceptor
  * Blocks PENDING and INACTIVE members from accessing any endpoint except:
  * - GET /api/v1/members/me  (so the mobile app can read status and show the correct screen)
  * - POST /api/v1/members/register (public via permitAll, the caller has no member yet)
+ * - /api/v1/members/me/consents and GET /api/v1/consents/policies, so a PENDING member can
+ *   read and withdraw consent (HDN-358, GDPR Art. 7(3): withdrawing must not wait for approval)
+ *
+ * An ACTIVE member must also hold the consents required for an account, else the request
+ * fails with 403 CONSENT_REQUIRED (HDN-358). The same routes are exempt, so the app can still
+ * read the status and ask for the consent. The lock is off until app.consents.enforce-account-consent.
  *
  * ADMIN-role users bypass this check entirely.
  */
 @Component
 class MemberStatusInterceptor(
     private val memberRepository: MemberRepository,
+    // Resolved only once a member is found, so web slices without a consent bean still start.
+    private val consentService: ObjectProvider<ConsentService>,
 ) : HandlerInterceptor {
     override fun preHandle(
         request: HttpServletRequest,
@@ -28,8 +38,12 @@ class MemberStatusInterceptor(
         handler: Any,
     ): Boolean {
         val path = request.requestURI
-        // Always allow /me and /register through
-        if (path.endsWith("/members/me") || path.contains("/members/register")) {
+        // Always allow /me, /register and the consent routes through
+        if (path.endsWith("/members/me") ||
+            path.contains("/members/register") ||
+            path.contains("/members/me/consents") ||
+            path.endsWith("/consents/policies")
+        ) {
             return true
         }
         val auth =
@@ -53,6 +67,8 @@ class MemberStatusInterceptor(
             )
             return false
         }
+        // Thrown, not sendError: GlobalExceptionHandler then writes the JSON with its code.
+        consentService.getObject().requireAccountConsent(member)
         return true
     }
 }

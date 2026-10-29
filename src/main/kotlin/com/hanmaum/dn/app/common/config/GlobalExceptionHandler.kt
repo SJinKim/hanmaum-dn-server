@@ -5,6 +5,7 @@ import com.hanmaum.dn.app.common.api.ErrorResponse
 import com.hanmaum.dn.app.common.security.securityProblemDetail
 import com.hanmaum.dn.app.features.attendance.service.AttendanceWindowOverlapException
 import com.hanmaum.dn.app.features.bulletin.service.BulletinIncompleteException
+import com.hanmaum.dn.app.features.consents.service.ConsentException
 import com.hanmaum.dn.app.features.courseapplication.service.CourseApplicationException
 import com.hanmaum.dn.app.features.members.service.MemberGroupRequiredException
 import com.hanmaum.dn.app.features.members.service.MemberProfileNotFoundException
@@ -91,6 +92,20 @@ class GlobalExceptionHandler {
                 message = e.message ?: e.status.reasonPhrase,
                 code = e.code,
                 fieldErrors = e.fieldErrors,
+            )
+        return ResponseEntity(response, e.status)
+    }
+
+    /** Consent missing or for an outdated policy version (HDN-358); the code tells the app which. */
+    @ExceptionHandler(ConsentException::class)
+    fun handleConsent(e: ConsentException): ResponseEntity<ErrorResponse> {
+        logger.warn("Consent rejected: status={} code={}", e.status.value(), e.code)
+        val response =
+            ErrorResponse(
+                status = e.status.value(),
+                error = e.status.reasonPhrase,
+                message = e.message ?: e.status.reasonPhrase,
+                code = e.code,
             )
         return ResponseEntity(response, e.status)
     }

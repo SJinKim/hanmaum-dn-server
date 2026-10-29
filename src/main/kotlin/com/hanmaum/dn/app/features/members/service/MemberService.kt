@@ -1,11 +1,14 @@
 package com.hanmaum.dn.app.features.members.service
 
 import com.hanmaum.dn.app.common.domainvalue.Baptism
+import com.hanmaum.dn.app.common.domainvalue.ConsentPurpose
 import com.hanmaum.dn.app.common.domainvalue.Gender
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.common.observability.ExternalCallOutcome
 import com.hanmaum.dn.app.common.observability.OperationalMetrics
 import com.hanmaum.dn.app.common.security.SlidingWindowRateLimiter
+import com.hanmaum.dn.app.features.consents.domain.ConsentSource
+import com.hanmaum.dn.app.features.consents.service.ConsentService
 import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
 import com.hanmaum.dn.app.features.groups.repository.GroupLeaderRepository
 import com.hanmaum.dn.app.features.members.api.applyPatch
@@ -90,6 +93,7 @@ class MemberService(
     // Self-registration is anonymous and creates a Keycloak user per call (#237).
     @Value("\${app.registration.rate-limit-per-ten-minutes:10}") registrationRateLimit: Int = 10,
     private val reconciliationIntake: MemberReconciliationIntake? = null,
+    private val consentService: ConsentService,
     private val profileImageService: ProfileImageService? = null,
 ) {
     private val log = LoggerFactory.getLogger(MemberService::class.java)
@@ -855,6 +859,8 @@ class MemberService(
         if (!registrationLimiter.tryAcquire(remoteAddress)) {
             throw ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Too many registrations. Try again later.")
         }
+        // Before anything is written: a missing or stale consent must not leave an account behind.
+        consentService.check(ConsentPurpose.APP_PRIVACY, req.consent)
         // A dashboard/newcomer record with this email is not an error. The account is
         // created as a separate pending registration and is linked only after Keycloak has
         // verified the email and the identity checks run on first authenticated access.
@@ -907,6 +913,8 @@ class MemberService(
             )
 
         val savedMember = memberRepository.save(newMember)
+        // Same transaction as the member row: if Keycloak fails below, the grant rolls back too.
+        consentService.require(savedMember, ConsentPurpose.APP_PRIVACY, req.consent, ConsentSource.REGISTRATION)
         // Create Keycloak user and store keycloakId back on the member record
         val keycloakUser =
             UserRepresentation().apply {

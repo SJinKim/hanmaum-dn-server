@@ -17,6 +17,8 @@ object PublicApiRoutes {
             HttpMethod.POST to "/newcomer-forms/*/submissions",
             // Self-registration, rate-limited in MemberService.
             HttpMethod.POST to "/members/register",
+            // The policy versions registration must send back; nothing member-specific.
+            HttpMethod.GET to "/consents/policies",
         )
 
     /** True if [path], a spec path such as `/api/v1/newcomer-forms/{token}`, is public for [method]. */

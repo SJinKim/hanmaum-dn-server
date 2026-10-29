@@ -3,6 +3,7 @@ package com.hanmaum.dn.app.features.groups.service
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.common.observability.OperationalMetrics
 import com.hanmaum.dn.app.common.pii.PiiCryptoConfiguration
+import com.hanmaum.dn.app.features.consents.service.ConsentService
 import com.hanmaum.dn.app.features.groups.api.v1.dto.AssignGroupLeaderRequest
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
@@ -65,6 +66,8 @@ class TrainingMatrixServiceIT {
     @MockitoBean private lateinit var currentMemberResolver: CurrentMemberResolver
 
     @MockitoBean private lateinit var operationalMetrics: OperationalMetrics
+
+    @MockitoBean private lateinit var consentService: ConsentService
 
     @Test
     fun `setting and clearing the flag persists without changing contact or other flags`() {

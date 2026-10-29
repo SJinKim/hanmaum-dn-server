@@ -86,4 +86,19 @@ enum class ApiErrorCode {
 
     /** Object storage is unreachable; the member's picture is unchanged and the upload can be retried (HDN-140). */
     PROFILE_IMAGE_STORAGE_UNAVAILABLE,
+
+    /**
+     * The request needs the member's consent to a data processing purpose and carried none,
+     * or carried one not accepted. The app shows the consent text and asks again.
+     *
+     * Also 403 on any endpoint when the member lacks a standing grant required for an account
+     * (missing, withdrawn or outdated). The app reads GET /members/me/consents and asks.
+     */
+    CONSENT_REQUIRED,
+
+    /**
+     * The consent names a policy version that is no longer in force. The app refetches
+     * GET /consents/policies, shows the new text and asks again.
+     */
+    CONSENT_VERSION_OUTDATED,
 }
