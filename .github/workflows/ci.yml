@@ -74,6 +74,8 @@ jobs:
             --tests "com.hanmaum.dn.app.features.guide.service.GuideDetailsPersistenceIT" \
             --tests "com.hanmaum.dn.app.features.guide.service.GuideAreaPersistenceIT" \
             --tests "com.hanmaum.dn.app.features.guide.service.GuideDetailsConcurrencyIT" \
+            --tests "com.hanmaum.dn.app.features.attendance.service.LongAbsenceServiceIT" \
+            --tests "com.hanmaum.dn.app.features.attendance.service.LongAbsenceConcurrencyIT" \
             --no-daemon
         env:
           SPRING_PROFILES_ACTIVE: test
