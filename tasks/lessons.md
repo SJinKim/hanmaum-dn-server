@@ -287,3 +287,11 @@
 ### Read and write a backfill batch under one row lock
 - **Mistake**: The PII backfill read a batch, then wrote it back in a later transaction. A business change committed in between was overwritten by the re-encrypted old snapshot, and the stalled check could not notice because the stale value was correctly encrypted.
 - **Rule**: A job that rewrites rows from values it read earlier must read and write in the same transaction with `SELECT ... FOR UPDATE`. Cover it with a two-connection test that commits a change between read and write.
+
+### Member-bound data must follow identity changes
+- **Mistake**: Consent was stored on the temporary registration member; claim and manual link deleted that row and the proof went with it.
+- **Rule**: When adding data bound to a member, check every path that merges, claims, links or purges members (`CurrentMemberResolver`, `MemberReconciliationService`) and carry the data over there, with a PostgreSQL test of the register → link → status flow.
+
+### A member lock must survive an identity change
+- **Mistake**: Withdrawal resolved the member, then locked that row; a parallel link moved the consent to the canonical member, so the withdrawal ended with 204 and the grant stayed standing.
+- **Rule**: After taking a per-member lock, resolve the identity again and lock the member it now points to (`ConsentService.resolveAndLockMember`) before reading or writing member-bound data.

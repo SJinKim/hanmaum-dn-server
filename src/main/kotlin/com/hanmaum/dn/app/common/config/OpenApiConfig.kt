@@ -85,6 +85,17 @@ class OpenApiConfig(
             }
         }
 
+    /** A purpose without a standing grant (MISSING) serializes both granted fields as null. */
+    @Bean
+    fun consentStatusNullabilityCustomizer(): GlobalOpenApiCustomizer =
+        GlobalOpenApiCustomizer { openApi ->
+            openApi.components?.schemas?.get("MemberConsentStatus")?.properties?.let { properties ->
+                for (field in listOf("grantedVersion", "grantedAt")) {
+                    properties[field]?.let { it.types = linkedSetOf("string", "null") }
+                }
+            }
+        }
+
     companion object {
         const val BEARER_SCHEME = "bearerAuth"
 

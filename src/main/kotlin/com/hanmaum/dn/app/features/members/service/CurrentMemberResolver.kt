@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.members.service
 
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
+import com.hanmaum.dn.app.features.consents.service.ConsentCarryOver
 import com.hanmaum.dn.app.features.groups.service.NewcomerGroupAssigner
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.domain.MemberClaimConflict
@@ -44,6 +45,7 @@ class CurrentMemberResolver(
     private val reconciliationRepository: MemberReconciliationRepository? = null,
     private val newcomerProfileRepository: NewcomerProfileRepository? = null,
     private val newcomerGroupAssigner: NewcomerGroupAssigner? = null,
+    private val consentCarryOver: ConsentCarryOver? = null,
 ) {
     private val log = LoggerFactory.getLogger(CurrentMemberResolver::class.java)
     private val intake = reconciliationRepository?.let { MemberReconciliationIntake(memberRepository, it) }
@@ -121,6 +123,7 @@ class CurrentMemberResolver(
         candidate.keycloakId = keycloakSubject
         val superseded = copyRegisteredValues(registration, candidate)
         moveNewcomerProfile(registration, candidate)
+        consentCarryOver?.carryOver(registration, candidate)
         newcomerGroupAssigner?.assignIfUngrouped(candidate)
         val linked = memberRepository.save(candidate)
         if (superseded.isNotEmpty()) intake?.noteSuperseded(registration, linked, superseded)
