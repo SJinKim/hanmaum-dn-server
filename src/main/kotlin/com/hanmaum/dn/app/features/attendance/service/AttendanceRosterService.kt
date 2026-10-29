@@ -28,6 +28,7 @@ class AttendanceRosterService(
     private val definitionRepo: AttendanceDefinitionRepository,
     private val logRepo: AttendanceLogRepository,
     private val memberRepo: MemberRepository,
+    private val longAbsenceRetention: LongAbsenceRetentionService,
     private val clock: Clock,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -53,9 +54,10 @@ class AttendanceRosterService(
      */
     @Transactional
     fun addLog(request: CreateAttendanceLogRequest): AttendanceLogResponse {
+        // Locked like every 장기결석자 follow-up write (HDN-375).
         val member =
             memberRepo
-                .findByPublicIdAndDeletedAtIsNull(request.memberId)
+                .findForUpdateByPublicIdAndDeletedAtIsNull(request.memberId)
                 .orElseThrow { EntityNotFoundException("Member not found: ${request.memberId}") }
         val definition =
             definitionRepo
@@ -82,6 +84,7 @@ class AttendanceRosterService(
         if (inserted == 0) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "이미 출석이 기록되어 있습니다.")
         }
+        longAbsenceRetention.markReturned(member.id!!)
 
         log.info("Attendance log added by admin definitionId={} date={}", definition.id, request.date)
 

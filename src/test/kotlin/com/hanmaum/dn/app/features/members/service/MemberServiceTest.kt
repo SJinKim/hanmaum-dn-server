@@ -5,6 +5,7 @@ import com.hanmaum.dn.app.common.domainvalue.ConsentPurpose
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.common.observability.ExternalCallOutcome
 import com.hanmaum.dn.app.common.observability.OperationalMetrics
+import com.hanmaum.dn.app.features.attendance.service.LongAbsenceRetentionService
 import com.hanmaum.dn.app.features.consents.api.v1.dto.ConsentGrant
 import com.hanmaum.dn.app.features.consents.domain.ConsentSource
 import com.hanmaum.dn.app.features.consents.service.ConsentException
@@ -114,6 +115,8 @@ class MemberServiceTest {
 
     @Mock private lateinit var consentService: ConsentService
 
+    @Mock private lateinit var longAbsenceRetention: LongAbsenceRetentionService
+
     @Mock private lateinit var realmResource: RealmResource
 
     @Mock private lateinit var usersResource: UsersResource
@@ -143,6 +146,7 @@ class MemberServiceTest {
                 eventPublisher,
                 "test-realm",
                 consentService = consentService,
+                longAbsenceRetention = longAbsenceRetention,
             )
     }
 
@@ -1104,6 +1108,24 @@ class MemberServiceTest {
         assertEquals("다니엘순", result.groupName)
     }
 
+    @Test
+    fun `updateMember to INACTIVE removes the long-absence follow-ups, other edits keep them`() {
+        val member = memberWithId(10L).also { it.memberStatus = MemberStatus.ACTIVE }
+        member.group = group(1L)
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId)).thenReturn(Optional.of(member))
+        `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
+
+        memberService.updateMember(member.publicId, UpdateMemberRequest(occupation = "학생"))
+        verify(longAbsenceRetention, never()).deleteForMember(10L)
+
+        memberService.updateMember(member.publicId, UpdateMemberRequest(memberStatus = "INACTIVE"))
+        verify(longAbsenceRetention).deleteForMember(10L)
+
+        // Already INACTIVE: nothing left to remove, no second delete.
+        memberService.updateMember(member.publicId, UpdateMemberRequest(memberStatus = "INACTIVE"))
+        verify(longAbsenceRetention, times(1)).deleteForMember(10L)
+    }
+
     // --- rejectMember ---
 
     @Test
@@ -1218,6 +1240,7 @@ class MemberServiceTest {
         assertNull(member.statusBeforeDelete)
         assertNull(member.deletedAt)
         assertNull(member.deleteEntryAt)
+        verify(longAbsenceRetention, never()).deleteForMember(any())
     }
 
     @Test
@@ -1229,6 +1252,8 @@ class MemberServiceTest {
         memberService.restoreMember(member.publicId)
 
         assertEquals(MemberStatus.INACTIVE, member.memberStatus)
+        // Restored as INACTIVE: any follow-ups kept during the soft delete go now (HDN-375).
+        verify(longAbsenceRetention).deleteForMember(1L)
     }
 
     @Test
