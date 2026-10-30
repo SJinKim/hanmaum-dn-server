@@ -109,6 +109,11 @@ app:
   newcomer-visits:
     retention-years: ${NEWCOMER_VISIT_RETENTION_YEARS:3}
     deleted-retention-days: ${NEWCOMER_VISIT_DELETED_RETENTION_DAYS:30}
+  # 장기결석자 (HDN-375): public ids of the 주일 2부/3부 attendance definitions, comma-separated,
+  # including retired predecessors. Their check-ins count as Sunday attendance at any time of
+  # day. Not secret; must be mapped per environment before rollout. Empty = time window only.
+  long-absence:
+    sunday-service-definition-ids: ${LONG_ABSENCE_SUNDAY_SERVICE_DEFINITION_IDS:}
   # 프로필 사진 (#140): private S3-compatible bucket (Hetzner). Blank keys let the app boot;
   # storage calls then fail per request.
   storage:

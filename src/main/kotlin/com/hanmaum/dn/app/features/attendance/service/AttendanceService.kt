@@ -40,6 +40,7 @@ class AttendanceService(
     private val churchGeofenceService: ChurchGeofenceService,
     private val churchGroupRepo: ChurchGroupRepository,
     private val newcomerVisitRepo: NewcomerVisitRepository,
+    private val longAbsenceRetention: LongAbsenceRetentionService,
     private val clock: Clock,
 ) {
     private val log = LoggerFactory.getLogger(AttendanceService::class.java)
@@ -143,7 +144,9 @@ class AttendanceService(
         keycloakSubject: String,
         request: AttendanceCheckInRequest? = null,
     ): AttendanceCheckInResponse {
-        val member = currentMemberResolver.require(keycloakSubject)
+        // Locked like every follow-up write (HDN-375), so a 장기결석자 memo is never saved
+        // into a phase this check-in has just ended.
+        val member = currentMemberResolver.requireForUpdate(keycloakSubject)
         // Only approved members check in (#311). A PENDING account has no 순 yet, so its log
         // would land in a "no group" row of every group count. Checked before anything is read
         // or written.
@@ -188,6 +191,7 @@ class AttendanceService(
         if (inserted == 0) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "이미 오늘 출석 체크인 했습니다.")
         }
+        longAbsenceRetention.markReturned(member.id!!)
 
         log.info(
             "Attendance check-in recorded definitionId={} presence={}",

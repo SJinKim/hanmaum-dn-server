@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.members.service
 
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
+import com.hanmaum.dn.app.features.attendance.service.LongAbsenceRetentionService
 import com.hanmaum.dn.app.features.members.domain.GraduationReason
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.domain.MemberGraduation
@@ -27,6 +28,7 @@ import java.util.UUID
 class MemberGraduationService(
     private val memberRepository: MemberRepository,
     private val graduationRepository: MemberGraduationRepository,
+    private val longAbsenceRetention: LongAbsenceRetentionService,
 ) {
     private val log = LoggerFactory.getLogger(MemberGraduationService::class.java)
 
@@ -38,7 +40,11 @@ class MemberGraduationService(
         note: String?,
         actorSubject: String,
     ): MemberGraduation {
-        val member = requireMember(publicId)
+        // Locked before the follow-up delete below, in the same order as every follow-up write.
+        val member =
+            memberRepository
+                .findForUpdateByPublicIdAndDeletedAtIsNull(publicId)
+                .orElseThrow { EntityNotFoundException("Member not found: $publicId") }
         val memberId = member.id!!
 
         if (member.memberStatus == MemberStatus.DELETED) {
@@ -66,6 +72,8 @@ class MemberGraduationService(
                 ),
             )
         member.memberStatus = MemberStatus.INACTIVE
+        // Graduation ends membership; the 장기결석자 memos go with it (#376 F3).
+        longAbsenceRetention.deleteForMember(memberId)
 
         // Counters and identifiers only — never the member's name or the note.
         log.info("Graduated member memberId={} reason={} on={}", memberId, reason, graduatedOn)

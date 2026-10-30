@@ -27,6 +27,7 @@ import org.mockito.Mock
 import org.mockito.Mockito.lenient
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
+import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
@@ -58,6 +59,8 @@ class AttendanceServiceTest {
 
     @Mock private lateinit var newcomerVisitRepo: NewcomerVisitRepository
 
+    @Mock private lateinit var longAbsenceRetention: LongAbsenceRetentionService
+
     private lateinit var service: AttendanceService
 
     private val berlinZone = ZoneId.of("Europe/Berlin")
@@ -75,6 +78,7 @@ class AttendanceServiceTest {
                 churchGeofenceService,
                 churchGroupRepo,
                 newcomerVisitRepo,
+                longAbsenceRetention,
                 clock,
             )
         // The real evaluator never returns null: with no position, no geofence, or a fix it
@@ -344,7 +348,7 @@ class AttendanceServiceTest {
         val group = makeGroup()
         val member = makeMember(group = group)
         val definition = makeDefinition()
-        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNullForUpdate("kc-001")).thenReturn(member)
         `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
             .thenReturn(listOf(definition))
         `when`(
@@ -372,6 +376,8 @@ class AttendanceServiceTest {
             eq(CheckInPresence.UNCONFIRMED.name),
         )
         assertNotNull(publicIdCaptor.firstValue)
+        // The check-in closes the member's 장기결석자 phases they returned from (HDN-375).
+        verify(longAbsenceRetention).markReturned(1L)
     }
 
     @Test
@@ -379,7 +385,7 @@ class AttendanceServiceTest {
         val member = makeMember()
         val early = makeDefinition(id = 1L, windowStart = LocalTime.of(10, 0), windowEnd = LocalTime.of(11, 0))
         val late = makeDefinition(id = 2L, windowStart = LocalTime.of(10, 15), windowEnd = LocalTime.of(12, 0))
-        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNullForUpdate("kc-001")).thenReturn(member)
         // The repository orders by windowStart; rows from before the overlap check can still overlap.
         `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
             .thenReturn(listOf(early, late))
@@ -394,7 +400,7 @@ class AttendanceServiceTest {
     fun `checkIn stores and returns the verdict the geofence service produced`() {
         val member = makeMember()
         val definition = makeDefinition()
-        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNullForUpdate("kc-001")).thenReturn(member)
         `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
             .thenReturn(listOf(definition))
         `when`(churchGeofenceService.evaluate(eq(50.128), eq(8.584), eq(12.0)))
@@ -422,7 +428,7 @@ class AttendanceServiceTest {
     fun `checkIn without a body is accepted and recorded as UNCONFIRMED`() {
         val member = makeMember()
         val definition = makeDefinition()
-        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNullForUpdate("kc-001")).thenReturn(member)
         `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
             .thenReturn(listOf(definition))
         `when`(churchGeofenceService.evaluate(anyOrNull(), anyOrNull(), anyOrNull()))
@@ -440,7 +446,7 @@ class AttendanceServiceTest {
     fun `checkIn supports members without a church group`() {
         val member = makeMember()
         val definition = makeDefinition()
-        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNullForUpdate("kc-001")).thenReturn(member)
         `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
             .thenReturn(listOf(definition))
         `when`(logRepo.insertIfAbsent(any(), eq(1L), eq(1L), eq(null), eq(attendanceDate), any())).thenReturn(1)
@@ -454,7 +460,7 @@ class AttendanceServiceTest {
     fun `checkIn returns conflict when atomic insert detects duplicate`() {
         val member = makeMember()
         val definition = makeDefinition()
-        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNullForUpdate("kc-001")).thenReturn(member)
         `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
             .thenReturn(listOf(definition))
         `when`(logRepo.insertIfAbsent(any(), eq(1L), eq(1L), eq(null), eq(attendanceDate), any())).thenReturn(0)
@@ -462,13 +468,14 @@ class AttendanceServiceTest {
         val exception = assertThrows<ResponseStatusException> { service.checkIn("kc-001") }
 
         assertEquals(409, exception.statusCode.value())
+        verifyNoInteractions(longAbsenceRetention)
     }
 
     @Test
     fun `checkIn rejects request outside active definition window`() {
         val member = makeMember()
         val definition = makeDefinition(windowStart = LocalTime.of(12, 0), windowEnd = LocalTime.of(13, 0))
-        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(member)
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNullForUpdate("kc-001")).thenReturn(member)
         `when`(definitionRepo.findByDayOfWeekAndIsActiveTrueAndDeletedAtIsNullOrderByWindowStartAsc(DayOfWeek.SUNDAY))
             .thenReturn(listOf(definition))
 
@@ -481,7 +488,7 @@ class AttendanceServiceTest {
     @Test
     fun `checkIn rejects every member that is not ACTIVE without reading a window or writing a log`() {
         listOf(MemberStatus.PENDING, MemberStatus.INACTIVE, MemberStatus.REJECTED, MemberStatus.DELETED).forEach { status ->
-            `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("kc-001")).thenReturn(makeMember(status = status))
+            `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNullForUpdate("kc-001")).thenReturn(makeMember(status = status))
 
             val exception = assertThrows<ResponseStatusException> { service.checkIn("kc-001") }
 
@@ -493,7 +500,7 @@ class AttendanceServiceTest {
 
     @Test
     fun `checkIn rejects unknown member`() {
-        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNull("unknown")).thenReturn(null)
+        `when`(memberRepo.findByKeycloakIdAndDeletedAtIsNullForUpdate("unknown")).thenReturn(null)
 
         assertThrows<MemberProfileNotFoundException> { service.checkIn("unknown") }
 

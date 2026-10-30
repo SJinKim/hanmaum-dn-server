@@ -4,6 +4,7 @@ import com.hanmaum.dn.app.common.observability.OperationOutcome
 import com.hanmaum.dn.app.common.observability.OperationalMetrics
 import com.hanmaum.dn.app.features.announcements.repository.AnnouncementRepository
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
+import com.hanmaum.dn.app.features.attendance.service.LongAbsenceRetentionService
 import com.hanmaum.dn.app.features.members.service.MemberPurgeService
 import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
 import com.hanmaum.dn.app.features.newcomers.service.NewcomerVisitPurgeService
@@ -18,6 +19,7 @@ class CleanupService(
     private val ministryAssignmentRepository: MinistryAssignmentRepository,
     private val announcementRepository: AnnouncementRepository,
     private val attendanceLogRepository: AttendanceLogRepository,
+    private val longAbsenceRetentionService: LongAbsenceRetentionService,
     private val memberPurgeService: MemberPurgeService,
     private val newcomerVisitPurgeService: NewcomerVisitPurgeService,
     private val operationalMetrics: OperationalMetrics,
@@ -37,6 +39,10 @@ class CleanupService(
         purge("Announcement", failures) {
             // Announcements use delete_entry_at = admin click time; purge 30 days after.
             announcementRepository.hardDeleteExpired(now.minus(30, ChronoUnit.DAYS))
+        }
+        // Before the log purge: closing returned phases reads the logs (HDN-375).
+        purge("AttendanceAbsenceFollowup", failures) {
+            longAbsenceRetentionService.purgeExpired()
         }
         purge("AttendanceLog", failures) {
             attendanceLogRepository.hardDeleteExpired(now)

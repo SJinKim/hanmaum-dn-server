@@ -4,6 +4,7 @@ import com.hanmaum.dn.app.common.observability.OperationOutcome
 import com.hanmaum.dn.app.common.observability.OperationalMetrics
 import com.hanmaum.dn.app.features.announcements.repository.AnnouncementRepository
 import com.hanmaum.dn.app.features.attendance.repository.AttendanceLogRepository
+import com.hanmaum.dn.app.features.attendance.service.LongAbsenceRetentionService
 import com.hanmaum.dn.app.features.members.service.MemberPurgeService
 import com.hanmaum.dn.app.features.ministry.repository.MinistryAssignmentRepository
 import com.hanmaum.dn.app.features.newcomers.service.NewcomerVisitPurgeService
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.InjectMocks
 import org.mockito.Mock
 import org.mockito.Mockito.doThrow
+import org.mockito.Mockito.inOrder
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
@@ -29,6 +31,8 @@ class CleanupServiceTest {
     @Mock private lateinit var announcementRepository: AnnouncementRepository
 
     @Mock private lateinit var attendanceLogRepository: AttendanceLogRepository
+
+    @Mock private lateinit var longAbsenceRetentionService: LongAbsenceRetentionService
 
     @Mock private lateinit var memberPurgeService: MemberPurgeService
 
@@ -73,6 +77,10 @@ class CleanupServiceTest {
         verify(attendanceLogRepository).hardDeleteExpired(any())
         verify(memberPurgeService).purgeExpired(any())
         verify(newcomerVisitPurgeService).purgeExpired(any())
+        // Returns are read from the logs, so the follow-up step runs before the log purge (HDN-375).
+        val order = inOrder(longAbsenceRetentionService, attendanceLogRepository)
+        order.verify(longAbsenceRetentionService).purgeExpired()
+        order.verify(attendanceLogRepository).hardDeleteExpired(any())
     }
 
     @Test
