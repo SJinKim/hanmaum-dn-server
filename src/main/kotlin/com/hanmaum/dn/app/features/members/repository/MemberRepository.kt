@@ -41,6 +41,19 @@ interface MemberRepository :
 
     fun findByPublicId(publicId: UUID): Optional<Member>
 
+    /** Locked like [findForUpdateByPublicIdAndDeletedAtIsNull], for a restore of a soft-deleted member. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT m FROM Member m WHERE m.publicId = :publicId")
+    fun findForUpdateByPublicId(
+        @Param("publicId") publicId: UUID,
+    ): Optional<Member>
+
+    /** Row-locks the members in id order, the lock order of the 장기결석자 writers (HDN-379). */
+    @Query(value = "SELECT id FROM members WHERE id IN (:ids) ORDER BY id FOR UPDATE", nativeQuery = true)
+    fun lockIdsForUpdate(
+        @Param("ids") ids: Collection<Long>,
+    ): List<Long>
+
     /** Members with their current 순 in one query, for list enrichment without N+1. */
     @Query("SELECT m FROM Member m LEFT JOIN FETCH m.group WHERE m.id IN :ids")
     fun findAllWithGroupByIdIn(

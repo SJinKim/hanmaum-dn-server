@@ -179,6 +179,7 @@ class AttendanceService(
                 accuracyMeters = request?.accuracyMeters,
             )
 
+        val absenceBaseline = longAbsenceRetention.beforeCheckIn(member)
         val inserted =
             logRepo.insertIfAbsent(
                 publicId = UUID.randomUUID(),
@@ -191,7 +192,7 @@ class AttendanceService(
         if (inserted == 0) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "이미 오늘 출석 체크인 했습니다.")
         }
-        longAbsenceRetention.markReturned(member.id!!)
+        longAbsenceRetention.afterCheckIn(member, absenceBaseline)
 
         log.info(
             "Attendance check-in recorded definitionId={} presence={}",

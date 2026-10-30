@@ -9,7 +9,11 @@ import com.hanmaum.dn.app.features.attendance.api.v1.dto.LongAbsenceContactStatu
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.LongAbsenceMemoRequest
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.LongAbsenceMemoUpdate
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.LongAbsenceResponse
+import com.hanmaum.dn.app.features.attendance.api.v1.dto.LongAbsenceReturnRequest
 import com.hanmaum.dn.app.features.attendance.berlin
+import com.hanmaum.dn.app.features.attendance.domain.AbsenceChangeKind
+import com.hanmaum.dn.app.features.attendance.domain.AbsenceChangeOrigin
+import com.hanmaum.dn.app.features.attendance.domain.AbsencePhaseEndReason
 import com.hanmaum.dn.app.features.groups.domain.ChurchGroup
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.newcomers.domain.NewcomerLifecycle
@@ -38,8 +42,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * HDN-375 against PostgreSQL: which check-ins count, who is listed, and how the follow-up of a
- * phase is written, closed and purged. Today is Monday 2026-10-26 unless a test moves the clock,
+ * HDN-375 and HDN-379 against PostgreSQL: which check-ins count, who is listed, how the follow-up
+ * of a phase is written, ended by a check-in or a manual return, read back as history and purged. Today is Monday 2026-10-26 unless a test moves the clock,
  * so a member is listed when the last Sunday is 2026-07-26 or earlier.
  */
 @DataJpaTest(properties = ["spring.jpa.show-sql=false", NAMED_SERVICE_PROPERTY])
@@ -49,6 +53,8 @@ import kotlin.test.assertTrue
 @Import(
     PiiCryptoConfiguration::class,
     LongAbsenceService::class,
+    LongAbsenceHistoryService::class,
+    LongAbsencePhases::class,
     LongAbsenceRetentionService::class,
     SundayAttendancePolicy::class,
     LongAbsenceServiceIT.ClockConfig::class,
@@ -63,6 +69,8 @@ class LongAbsenceServiceIT {
     @Autowired private lateinit var service: LongAbsenceService
 
     @Autowired private lateinit var retention: LongAbsenceRetentionService
+
+    @Autowired private lateinit var history: LongAbsenceHistoryService
 
     @Autowired private lateinit var clock: MutableClock
 
@@ -93,7 +101,32 @@ class LongAbsenceServiceIT {
         value: String?,
         version: Long,
         lastSundayDate: String = "2026-01-04",
-    ) = service.setMemo(member.publicId, LongAbsenceMemoRequest(d(lastSundayDate), version, value))
+        actor: String = "kc-pastor",
+    ) = service.setMemo(member.publicId, LongAbsenceMemoRequest(d(lastSundayDate), version, value), actor)
+
+    private fun markReturned(
+        member: Member,
+        version: Long,
+        lastSundayDate: String = "2026-01-04",
+        actor: String = "kc-pastor",
+    ) = service.markReturned(member.publicId, LongAbsenceReturnRequest(d(lastSundayDate), version), actor)
+
+    /** What both check-in writers do around their insert, with the member locked by the test transaction. */
+    private fun checkIn(
+        member: Member,
+        date: String,
+        createdAt: Instant = berlin(date, "10:00"),
+    ) {
+        val baseline = retention.beforeCheckIn(member)
+        fx.log(member, date, createdAt)
+        retention.afterCheckIn(member, baseline)
+        entityManager.flush()
+    }
+
+    private fun countRows(
+        sql: String,
+        vararg args: Any,
+    ): Int = jdbcTemplate.queryForObject(sql, Int::class.java, *args)!!
 
     private fun contact(
         member: Member,
@@ -331,7 +364,7 @@ class LongAbsenceServiceIT {
         assertEquals(LongAbsenceException.NOT_CURRENT, notListed.code)
         val unknown =
             assertThrows<LongAbsenceException> {
-                service.setMemo(UUID.randomUUID(), LongAbsenceMemoRequest(d("2026-01-04"), 0, "x"))
+                service.setMemo(UUID.randomUUID(), LongAbsenceMemoRequest(d("2026-01-04"), 0, "x"), "kc-pastor")
             }
         assertEquals(LongAbsenceException.MEMBER_NOT_FOUND, unknown.code)
 
@@ -342,44 +375,283 @@ class LongAbsenceServiceIT {
         assertEquals(1, row.version)
     }
 
-    // ─── Phases and retention (AK 13, #376 F3) ──────────────────────────────
+    // ─── Phases, return and history (HDN-379) ───────────────────────────────
 
     @Test
-    fun `a return closes the phase, the next absence starts empty and the old memo is purged after 90 days`() {
+    fun `a check-in closes the phase with the visit date, the next absence starts empty and keeps no memo`() {
         val member = absentee()
-        memo(member, "old phase", 0)
-        fx.log(member, "2026-07-05")
-        retention.markReturned(member.id!!)
+        val written = memo(member, "old phase", 0)
+        checkIn(member, "2026-07-05")
 
         val next = listed().getValue(member.publicId)
         assertEquals(d("2026-07-05"), next.lastSundayDate)
         assertNull(next.memo)
-        assertEquals(0, next.version)
-        assertEquals(
-            d("2026-07-05"),
-            jdbcTemplate.queryForObject(
-                "SELECT closed_on FROM attendance_absence_followups WHERE member_id = ?",
-                LocalDate::class.java,
-                member.id,
-            ),
-        )
-
-        clock.setToday(d("2026-10-02"))
-        assertEquals(0, retention.purgeExpired())
-        assertEquals(1, followupRows(member))
-        clock.setToday(d("2026-10-03"))
-        assertEquals(1, retention.purgeExpired())
-        assertEquals(0, followupRows(member))
-        assertEquals(0, retention.purgeExpired())
+        assertNull(next.phasePublicId)
+        assertTrue(next.version > written.version, "the check-in makes the old token stale")
+        val closed = history.history(member.publicId, 0, 20).items.single()
+        assertEquals(written.phasePublicId, closed.phasePublicId)
+        assertEquals(d("2026-07-05"), closed.endedOn)
+        assertEquals(AbsencePhaseEndReason.CHECK_IN, closed.endReason)
+        assertNull(closed.returnedBy)
+        assertNull(closed.returnedAt)
     }
 
     @Test
-    fun `the daily job catches up on a return nobody marked and takes the earliest one`() {
+    fun `a check-in ending a listed absence with nothing recorded stores it for the history`() {
+        val member = absentee()
+        checkIn(member, "2026-10-25")
+
+        val closed = history.history(member.publicId, 0, 20).items.single()
+        assertEquals(d("2026-01-04"), closed.absenceAnchorDate)
+        assertEquals(d("2026-10-25"), closed.endedOn)
+        assertEquals(false, closed.contacted)
+        // A non-listed member's check-in stores nothing.
+        val recent = fx.member().also { fx.log(it, "2026-10-04") }
+        checkIn(recent, "2026-10-25")
+        assertEquals(0, followupRows(recent))
+    }
+
+    @Test
+    fun `manual return ends the phase atomically with actor and server time and writes no attendance log`() {
+        val pastor = fx.member(firstName = "목사")
+        val member = absentee()
+        val before = listed().getValue(member.publicId)
+        val logs = countRows("SELECT COUNT(*) FROM attendance_logs WHERE member_id = ?", member.id!!)
+        val baseline = service.summary()
+
+        val returned = markReturned(member, before.version, actor = pastor.keycloakId!!)
+
+        assertEquals(d("2026-10-26"), returned.endedOn)
+        assertEquals(clock.instant, returned.returnedAt)
+        assertEquals(pastor.keycloakId, returned.returnedBy)
+        assertEquals(pastor.publicId, returned.returnedByMember?.publicId)
+        assertEquals(before.version + 1, returned.version)
+        assertNull(listed()[member.publicId])
+        assertEquals(baseline.totalCount - 1, service.summary().totalCount)
+        assertEquals(logs, countRows("SELECT COUNT(*) FROM attendance_logs WHERE member_id = ?", member.id!!))
+        val raw =
+            jdbcTemplate.queryForObject(
+                "SELECT returned_by FROM attendance_absence_followups WHERE member_id = ?",
+                String::class.java,
+                member.id,
+            )
+        assertNotEquals(pastor.keycloakId, raw)
+
+        val phase = history.phase(member.publicId, returned.phasePublicId)
+        assertEquals(AbsencePhaseEndReason.MANUAL_RETURN, phase.endReason)
+        assertEquals(pastor.keycloakId, phase.returnedBy)
+        assertEquals(false, phase.isCurrent)
+
+        // Repeating the action with the old token is a 409, not a second close.
+        val again = assertThrows<LongAbsenceException> { markReturned(member, before.version) }
+        assertEquals(LongAbsenceException.NOT_CURRENT, again.code)
+        assertEquals(1, followupRows(member))
+    }
+
+    @Test
+    fun `after a manual return the absence counts from it, three months later empty again with a new phase id`() {
+        val member = absentee()
+        val first = memo(member, "첫 번째", 0)
+        val returned = markReturned(member, first.version)
+
+        clock.setToday(d("2027-01-25"))
+        assertNull(listed()[member.publicId], "one day before three months")
+        clock.setToday(d("2027-01-26"))
+        val again = listed().getValue(member.publicId)
+        assertEquals(d("2026-01-04"), again.lastSundayDate, "lastSundayDate stays the check-in date")
+        assertEquals(d("2026-10-26"), again.absenceAnchorDate)
+        assertEquals(d("2026-10-27"), again.absentSince)
+        assertEquals(3, again.absenceMonths)
+        assertNull(again.memo)
+        assertEquals(false, again.contacted)
+        assertNull(again.phasePublicId)
+        assertEquals(returned.version, again.version)
+
+        val second = memo(member, "두 번째", again.version)
+        assertNotNull(second.phasePublicId)
+        assertNotEquals(first.phasePublicId, second.phasePublicId)
+        assertEquals(2, followupRows(member))
+
+        // A back-filled visit before the return does not move the anchor back.
+        fx.log(member, "2026-10-04")
+        assertEquals(d("2026-10-26"), listed().getValue(member.publicId).absenceAnchorDate)
+        // A check-in after the return does, and the return date is no longer needed.
+        checkIn(member, "2027-01-24")
+        assertNull(member.absenceManualReturnOn)
+        assertNull(listed()[member.publicId])
+    }
+
+    @Test
+    fun `contact and memo changes are versioned with actor and time, a no-op records nothing`() {
+        val member = absentee()
+        val a = memo(member, "A", 0, actor = "kc-one")
+        clock.instant = clock.instant.plusSeconds(60)
+        val b = memo(member, "B", a.version, actor = "kc-two")
+        val contacted = contact(member, true, b.version, actor = "kc-one")
+        val uncontacted = contact(member, false, contacted.version, actor = "kc-two")
+        val same = contact(member, false, uncontacted.version, actor = "kc-three")
+        assertEquals(uncontacted.version, same.version)
+        val both = contact(member, true, uncontacted.version, actor = "kc-three", memoUpdate = LongAbsenceMemoUpdate("C"))
+
+        val page = history.changes(member.publicId, both.phasePublicId!!, 0, 20)
+        assertEquals(6, page.totalElements)
+        val items = page.items
+        assertEquals(
+            listOf(both.version, both.version, uncontacted.version, contacted.version, b.version, a.version),
+            items.map { it.revision },
+        )
+        assertEquals(listOf(AbsenceChangeKind.CONTACT_CHANGED, AbsenceChangeKind.MEMO_CHANGED), items.take(2).map { it.kind })
+        assertEquals(listOf("kc-three", "kc-three", "kc-two", "kc-one", "kc-two", "kc-one"), items.map { it.actorSubject })
+        assertEquals(listOf(true, null, false, true, null, null), items.map { it.contacted })
+        assertEquals(listOf(null, "C", null, null, "B", "A"), items.map { it.memo })
+        assertTrue(items.all { it.origin == AbsenceChangeOrigin.ACTION && it.occurredAt != null })
+        assertEquals(items[0].occurredAt, items[1].occurredAt, "one write, one time")
+
+        val rawMemos = jdbcTemplate.queryForList("SELECT memo FROM attendance_absence_changes WHERE memo IS NOT NULL", String::class.java)
+        assertTrue(rawMemos.none { it in setOf("A", "B", "C") }, "memo versions are encrypted")
+        val rawActors = jdbcTemplate.queryForList("SELECT actor_subject FROM attendance_absence_changes", String::class.java)
+        assertTrue(rawActors.none { it.startsWith("kc-") }, "actors are encrypted")
+    }
+
+    @Test
+    fun `clearing the memo removes text and every memo version, contact history stays, a new text starts fresh`() {
+        val member = absentee()
+        val a = memo(member, "A", 0)
+        val b = memo(member, "B", a.version)
+        val contacted = contact(member, true, b.version)
+        val cleared = memo(member, null, contacted.version)
+        assertTrue(cleared.version > contacted.version, "clearing raises the counter")
+        assertNull(cleared.memo)
+        val phaseId = cleared.phasePublicId!!
+
+        entityManager.flush()
+        entityManager.clear()
+        assertEquals(
+            0,
+            countRows(
+                "SELECT COUNT(*) FROM attendance_absence_changes WHERE kind = 'MEMO_CHANGED' AND followup_id IN (SELECT id FROM attendance_absence_followups WHERE member_id = ?)",
+                member.id!!,
+            ),
+        )
+        assertNull(
+            jdbcTemplate.queryForObject("SELECT memo FROM attendance_absence_followups WHERE member_id = ?", String::class.java, member.id),
+        )
+        val afterClear = history.changes(member.publicId, phaseId, 0, 20).items
+        assertEquals(listOf(AbsenceChangeKind.CONTACT_CHANGED), afterClear.map { it.kind })
+        assertNull(history.phase(member.publicId, phaseId).memo)
+
+        memo(member, "D", cleared.version)
+        assertEquals(listOf("D"), history.changes(member.publicId, phaseId, 0, 20).items.mapNotNull { it.memo })
+    }
+
+    @Test
+    fun `history pages are stable, total counts are right and a page past the end is empty`() {
+        val absentees = (1..3).map { absentee() }
+        absentees.forEach { markReturned(it, listed().getValue(it.publicId).version) }
+
+        val all = history.history(null, 0, 100)
+        val mine = all.items.filter { item -> absentees.any { it.publicId == item.memberPublicId } }
+        assertEquals(3, mine.size)
+        val firstTwo = history.history(null, 0, 2)
+        assertEquals(all.totalElements, firstTwo.totalElements)
+        assertEquals(((all.totalElements + 1) / 2).toInt(), firstTwo.totalPages)
+        val ordered = all.items.map { it.phasePublicId }
+        assertEquals(ordered.take(2), firstTwo.items.map { it.phasePublicId })
+        assertEquals(ordered.drop(2).take(2), history.history(null, 1, 2).items.map { it.phasePublicId })
+        // Same endedOn: ties by phase id, descending.
+        // PostgreSQL orders uuids bytewise, which is the order of their lowercase text, not UUID.compareTo.
+        val sameDay = all.items.filter { it.endedOn == d("2026-10-26") }.map { it.phasePublicId.toString() }
+        assertEquals(sameDay.sortedDescending(), sameDay)
+        val past = history.history(null, 1000, 20)
+        assertTrue(past.items.isEmpty())
+        assertEquals(all.totalElements, past.totalElements)
+
+        val stranger = fx.member()
+        assertTrue(history.history(stranger.publicId, 0, 20).items.isEmpty())
+        val unknown = assertThrows<LongAbsenceException> { history.history(UUID.randomUUID(), 0, 20) }
+        assertEquals(LongAbsenceException.MEMBER_NOT_FOUND, unknown.code)
+        val softDeleted = absentees.first().also { jdbcTemplate.update("UPDATE members SET deleted_at = now() WHERE id = ?", it.id) }
+        entityManager.clear()
+        assertTrue(history.history(null, 0, 100).items.none { it.memberPublicId == softDeleted.publicId })
+    }
+
+    @Test
+    fun `a phase is only found with its own member, otherwise it reads as unknown`() {
+        val member = absentee()
+        val other = absentee()
+        val phaseId = memo(member, "x", 0).phasePublicId!!
+
+        assertEquals(true, history.phase(member.publicId, phaseId).isCurrent)
+        val foreign = assertThrows<LongAbsenceException> { history.phase(other.publicId, phaseId) }
+        assertEquals(LongAbsenceException.PHASE_NOT_FOUND, foreign.code)
+        val unknown = assertThrows<LongAbsenceException> { history.changes(member.publicId, UUID.randomUUID(), 0, 20) }
+        assertEquals(LongAbsenceException.PHASE_NOT_FOUND, unknown.code)
+    }
+
+    // ─── Retention (#376 F3, #380) ──────────────────────────────────────────
+
+    @Test
+    fun `90 days after the end memo and memo versions go, ten years after the phase, the open phase stays`() {
+        val member = absentee()
+        val a = memo(member, "A", 0)
+        val contacted = contact(member, true, a.version)
+        val phaseId = markReturned(member, contacted.version).phasePublicId
+        val open = absentee().also { memo(it, "open", 0) }
+        entityManager.flush()
+
+        clock.setToday(d("2027-01-23"))
+        assertEquals("A", history.phase(member.publicId, phaseId).memo, "day 89")
+        clock.setToday(d("2027-01-24"))
+        // Hidden on day 90 already before the job ran.
+        assertNull(history.phase(member.publicId, phaseId).memo)
+        assertEquals(listOf(AbsenceChangeKind.CONTACT_CHANGED), history.changes(member.publicId, phaseId, 0, 20).items.map { it.kind })
+        assertEquals(1, history.changes(member.publicId, phaseId, 0, 20).totalElements)
+
+        retention.purgeExpired()
+        entityManager.clear()
+        assertNull(
+            jdbcTemplate.queryForObject("SELECT memo FROM attendance_absence_followups WHERE public_id = ?", String::class.java, phaseId),
+        )
+        assertEquals(
+            0,
+            countRows(
+                "SELECT COUNT(*) FROM attendance_absence_changes c JOIN attendance_absence_followups f ON f.id = c.followup_id WHERE f.public_id = ? AND c.kind = 'MEMO_CHANGED'",
+                phaseId,
+            ),
+        )
+        assertEquals(
+            1,
+            countRows(
+                "SELECT COUNT(*) FROM attendance_absence_changes c JOIN attendance_absence_followups f ON f.id = c.followup_id WHERE f.public_id = ?",
+                phaseId,
+            ),
+        )
+        assertEquals(
+            1,
+            countRows("SELECT COUNT(*) FROM attendance_absence_followups WHERE member_id = ? AND memo IS NOT NULL", open.id!!),
+            "open memo stays",
+        )
+        assertEquals(0, retention.purgeExpired(), "idempotent")
+
+        clock.setToday(d("2036-10-25"))
+        assertEquals(1, history.history(member.publicId, 0, 20).items.size, "one day before ten years")
+        clock.setToday(d("2036-10-26"))
+        assertTrue(history.history(member.publicId, 0, 20).items.isEmpty(), "hidden on the day before the job ran")
+        assertEquals(
+            LongAbsenceException.PHASE_NOT_FOUND,
+            assertThrows<LongAbsenceException> { history.phase(member.publicId, phaseId) }.code,
+        )
+        retention.purgeExpired()
+        assertEquals(0, countRows("SELECT COUNT(*) FROM attendance_absence_followups WHERE public_id = ?", phaseId))
+        assertEquals(1, followupRows(open), "an open phase has no retention")
+    }
+
+    @Test
+    fun `the daily job catches up on a return nobody closed and takes the earliest visit`() {
         val member = absentee()
         memo(member, "missed", 0)
         fx.log(member, "2026-07-12")
         fx.log(member, "2026-07-05", berlin("2026-07-20", "18:00"))
-        // Within the 90 days after the return, so the row is closed but not purged yet.
         clock.setToday(d("2026-09-01"))
 
         retention.purgeExpired()
@@ -392,59 +664,60 @@ class LongAbsenceServiceIT {
                 member.id,
             ),
         )
-    }
-
-    @Test
-    fun `a corrected log reopens the old anchor empty, and the next write discards the old content`() {
-        val member = absentee()
-        memo(member, "before correction", 0)
-        contact(member, true, 1)
-        val returnLog = fx.log(member, "2026-07-05")
-        retention.markReturned(member.id!!)
-        jdbcTemplate.update("UPDATE attendance_logs SET deleted_at = now() WHERE id = ?", returnLog.id)
-        entityManager.clear()
-        // 2026-10-01 is before the closed phase's retention ends (07-05 + 90 days).
-        clock.setToday(d("2026-10-01"))
-
-        val reopened = listed().getValue(member.publicId)
-        assertEquals(d("2026-01-04"), reopened.lastSundayDate)
-        assertNull(reopened.memo)
-        assertEquals(false, reopened.contacted)
-        assertEquals(2, reopened.version)
-
-        val rewritten = memo(member, "after correction", reopened.version)
-        assertEquals("after correction", rewritten.memo)
-        assertEquals(false, rewritten.contacted)
-        assertNull(
+        assertEquals(
+            "CHECK_IN",
             jdbcTemplate.queryForObject(
-                "SELECT closed_on FROM attendance_absence_followups WHERE member_id = ?",
-                LocalDate::class.java,
+                "SELECT end_reason FROM attendance_absence_followups WHERE member_id = ?",
+                String::class.java,
                 member.id,
             ),
         )
     }
 
     @Test
-    fun `a closed phase past retention reads as never written even before the job ran`() {
+    fun `a corrected log never reopens a closed phase, the next write starts a new one`() {
         val member = absentee()
-        memo(member, "expired", 0)
-        val returnLog = fx.log(member, "2026-07-05")
-        retention.markReturned(member.id!!)
-        jdbcTemplate.update("UPDATE attendance_logs SET deleted_at = now() WHERE id = ?", returnLog.id)
+        val written = memo(member, "before correction", 0)
+        checkIn(member, "2026-07-05")
+        jdbcTemplate.update(
+            "UPDATE attendance_logs SET deleted_at = now() WHERE member_id = ? AND attendance_date > DATE '2026-01-04'",
+            member.id,
+        )
         entityManager.clear()
 
-        assertEquals(0, listed().getValue(member.publicId).version)
-        assertEquals("fresh", memo(member, "fresh", 0).memo)
+        val again = listed().getValue(member.publicId)
+        assertEquals(d("2026-01-04"), again.lastSundayDate)
+        assertNull(again.memo)
+        assertNull(again.phasePublicId)
+        val rewritten = memo(member, "after correction", again.version)
+        assertNotEquals(written.phasePublicId, rewritten.phasePublicId)
+        assertEquals(2, followupRows(member))
+        val old = history.phase(member.publicId, written.phasePublicId!!)
+        assertEquals(d("2026-07-05"), old.endedOn, "the closed phase stays closed")
+        assertEquals(false, old.isCurrent)
     }
 
     @Test
-    fun `leaving the church removes every follow-up of the member`() {
+    fun `leaving the church removes every phase and history entry and keeps the counter`() {
         val member = absentee()
-        memo(member, "to be removed", 0)
+        val written = memo(member, "to be removed", 0)
+        markReturned(member, written.version)
+        val revision = member.absenceRevision
 
-        assertEquals(1, retention.deleteForMember(member.id!!))
+        assertEquals(1, retention.deleteForMember(member))
+        entityManager.flush()
 
         assertEquals(0, followupRows(member))
+        assertEquals(0, countRows("SELECT COUNT(*) FROM attendance_absence_changes"))
+        assertNull(member.absenceManualReturnOn)
+        assertTrue(member.absenceRevision > revision)
+    }
+
+    @Test
+    fun `phase cutoff counts ten years like plusYears, also from 29 February`() {
+        assertEquals(d("2024-02-29"), LongAbsenceRetentionService.phaseCutoff(d("2034-02-28")))
+        assertEquals(d("2016-10-26"), LongAbsenceRetentionService.phaseCutoff(d("2026-10-26")))
+        assertEquals(d("2026-07-28"), LongAbsenceRetentionService.memoCutoff(d("2026-10-26")))
     }
 
     /** At most one 새가족 순 may exist; reuse a seeded one. */

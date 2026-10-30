@@ -16,6 +16,7 @@ class LongAbsenceException(
         const val VERSION_CONFLICT = "LONG_ABSENCE_VERSION_CONFLICT"
         const val INVALID_REQUEST = "LONG_ABSENCE_INVALID_REQUEST"
         const val MEMBER_NOT_FOUND = "LONG_ABSENCE_MEMBER_NOT_FOUND"
+        const val PHASE_NOT_FOUND = "LONG_ABSENCE_PHASE_NOT_FOUND"
 
         fun notCurrent() =
             LongAbsenceException(
@@ -28,5 +29,7 @@ class LongAbsenceException(
             LongAbsenceException(HttpStatus.CONFLICT, VERSION_CONFLICT, "The follow-up was changed meanwhile; reload and retry.")
 
         fun memberNotFound() = LongAbsenceException(HttpStatus.NOT_FOUND, MEMBER_NOT_FOUND, "Member not found.")
+
+        fun phaseNotFound() = LongAbsenceException(HttpStatus.NOT_FOUND, PHASE_NOT_FOUND, "Absence phase not found.")
     }
 }

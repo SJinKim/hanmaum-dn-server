@@ -151,6 +151,29 @@ class Member(
     @Column(name = "origin", nullable = false, updatable = false, length = 20)
     val origin: MemberOrigin = MemberOrigin.MANUAL,
 ) : BaseEntity() {
+    /**
+     * 장기결석자 (HDN-379): the day a pastor or admin marked the member as back without a check-in.
+     * The running absence counts from the later of this and the last qualifying check-in; cleared
+     * once a check-in on or after it exists, and when the member leaves.
+     */
+    @Column(name = "absence_manual_return_on")
+    var absenceManualReturnOn: LocalDate? = null
+
+    /**
+     * Conflict counter of the long-absence follow-up, sent to clients as `version`. Raised by every
+     * change that can make a loaded follow-up stale and never lowered, also not when the
+     * follow-ups are deleted, so an old editor never becomes valid again.
+     */
+    @Column(name = "absence_revision", nullable = false)
+    var absenceRevision: Long = 0
+        protected set
+
+    /** Raises [absenceRevision]; only call with the member row locked. */
+    fun nextAbsenceRevision(): Long {
+        absenceRevision += 1
+        return absenceRevision
+    }
+
     fun getFullName(): String = "$lastName$firstName" // Korean: no space between surname and given name
 
     @PrePersist

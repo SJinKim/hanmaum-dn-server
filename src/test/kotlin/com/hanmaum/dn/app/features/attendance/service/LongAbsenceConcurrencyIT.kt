@@ -5,7 +5,9 @@ import com.hanmaum.dn.app.features.attendance.LongAbsenceFixtures
 import com.hanmaum.dn.app.features.attendance.MutableClock
 import com.hanmaum.dn.app.features.attendance.NAMED_SERVICE_ID
 import com.hanmaum.dn.app.features.attendance.NAMED_SERVICE_PROPERTY
+import com.hanmaum.dn.app.features.attendance.api.v1.dto.LongAbsenceContactStatusRequest
 import com.hanmaum.dn.app.features.attendance.api.v1.dto.LongAbsenceMemoRequest
+import com.hanmaum.dn.app.features.attendance.api.v1.dto.LongAbsenceReturnRequest
 import com.hanmaum.dn.app.features.attendance.berlin
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
@@ -37,8 +39,8 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
- * HDN-375 writes in real, committed PostgreSQL transactions: the member lock orders a
- * follow-up write against a check-in and against a second first write of the same phase.
+ * HDN-375 and HDN-379 writes in real, committed PostgreSQL transactions: the member lock orders a
+ * follow-up write against a check-in, a manual return and a second write of the same phase.
  */
 @DataJpaTest(properties = ["spring.jpa.show-sql=false", NAMED_SERVICE_PROPERTY])
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -47,6 +49,7 @@ import kotlin.test.assertTrue
 @Import(
     PiiCryptoConfiguration::class,
     LongAbsenceService::class,
+    LongAbsencePhases::class,
     LongAbsenceRetentionService::class,
     SundayAttendancePolicy::class,
     LongAbsenceConcurrencyIT.ClockConfig::class,
@@ -84,6 +87,40 @@ class LongAbsenceConcurrencyIT {
 
     private fun memoRequest(version: Long) = LongAbsenceMemoRequest(LocalDate.parse("2026-01-04"), version, "메모")
 
+    private fun returnRequest(version: Long) = LongAbsenceReturnRequest(LocalDate.parse("2026-01-04"), version)
+
+    /** Runs both calls at once and returns their outcomes in call order. */
+    private fun <A, B> race(
+        first: () -> A,
+        second: () -> B,
+    ): Pair<Result<A>, Result<B>> {
+        val start = CountDownLatch(1)
+        val pool = Executors.newFixedThreadPool(2)
+        try {
+            val a =
+                pool.submit(
+                    Callable {
+                        check(start.await(10, TimeUnit.SECONDS))
+                        runCatching(first)
+                    },
+                )
+            val b =
+                pool.submit(
+                    Callable {
+                        check(start.await(10, TimeUnit.SECONDS))
+                        runCatching(second)
+                    },
+                )
+            start.countDown()
+            return a.get(10, TimeUnit.SECONDS) to b.get(10, TimeUnit.SECONDS)
+        } finally {
+            pool.shutdownNow()
+            assertTrue(pool.awaitTermination(10, TimeUnit.SECONDS))
+        }
+    }
+
+    private fun conflictCode(result: Result<*>): String? = (result.exceptionOrNull() as? LongAbsenceException)?.code
+
     @AfterEach
     fun cleanUp() {
         created.forEach { id ->
@@ -108,7 +145,8 @@ class LongAbsenceConcurrencyIT {
             val checkIn =
                 pool.submit {
                     tx.executeWithoutResult {
-                        members.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId).orElseThrow()
+                        val locked = members.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId).orElseThrow()
+                        val baseline = retention.beforeCheckIn(locked)
                         jdbcTemplate.update(
                             "INSERT INTO attendance_logs " +
                                 "(public_id, definition_id, member_id, attendance_date, attended, presence, created_at) " +
@@ -118,7 +156,7 @@ class LongAbsenceConcurrencyIT {
                             member.id,
                             NAMED_SERVICE_ID,
                         )
-                        retention.markReturned(member.id!!)
+                        retention.afterCheckIn(locked, baseline)
                         checkedIn.countDown()
                         check(release.await(10, TimeUnit.SECONDS))
                     }
@@ -127,7 +165,7 @@ class LongAbsenceConcurrencyIT {
             val write =
                 pool.submit(
                     Callable {
-                        runCatching { service.setMemo(member.publicId, memoRequest(0)) }.exceptionOrNull()
+                        runCatching { service.setMemo(member.publicId, memoRequest(0), "kc-pastor") }.exceptionOrNull()
                     },
                 )
             assertFailsWith<TimeoutException> { write.get(300, TimeUnit.MILLISECONDS) }
@@ -137,7 +175,9 @@ class LongAbsenceConcurrencyIT {
             val failure = write.get(10, TimeUnit.SECONDS)
             assertTrue(failure is LongAbsenceException)
             assertEquals(LongAbsenceException.NOT_CURRENT, failure.code)
-            assertEquals(0, followups(member))
+            // Only the absence the check-in ended, stored closed for the history; no memo moved into a new phase.
+            assertEquals(1, followups(member))
+            assertEquals(0, openFollowups(member))
         } finally {
             release.countDown()
             pool.shutdownNow()
@@ -157,7 +197,7 @@ class LongAbsenceConcurrencyIT {
                         pool.submit(
                             Callable {
                                 check(start.await(10, TimeUnit.SECONDS))
-                                runCatching { service.setMemo(member.publicId, memoRequest(0)) }
+                                runCatching { service.setMemo(member.publicId, memoRequest(0), "kc-pastor") }
                             },
                         )
                     }.also { start.countDown() }
@@ -172,6 +212,79 @@ class LongAbsenceConcurrencyIT {
             assertTrue(pool.awaitTermination(10, TimeUnit.SECONDS))
         }
     }
+
+    @Test
+    fun `two manual returns close the phase once, the second is a 409`() {
+        val member = absentee()
+        val (a, b) =
+            race(
+                { service.markReturned(member.publicId, returnRequest(0), "kc-one") },
+                { service.markReturned(member.publicId, returnRequest(0), "kc-two") },
+            )
+
+        assertEquals(1, listOf(a, b).count { it.isSuccess })
+        assertTrue(
+            conflictCode(listOf(a, b).single { it.isFailure }) in
+                setOf(LongAbsenceException.NOT_CURRENT, LongAbsenceException.VERSION_CONFLICT),
+        )
+        assertEquals(1, followups(member))
+        assertEquals(0, openFollowups(member))
+    }
+
+    @Test
+    fun `memo and contact writes with the same token, one wins and the other is a version conflict`() {
+        val member = absentee()
+        val (memo, contact) =
+            race(
+                { service.setMemo(member.publicId, memoRequest(0), "kc-one") },
+                {
+                    service.setContactStatus(
+                        member.publicId,
+                        LongAbsenceContactStatusRequest(LocalDate.parse("2026-01-04"), 0, true),
+                        "kc-two",
+                    )
+                },
+            )
+
+        assertEquals(1, listOf(memo, contact).count { it.isSuccess })
+        assertEquals(LongAbsenceException.VERSION_CONFLICT, conflictCode(listOf(memo, contact).single { it.isFailure }))
+        assertEquals(1, followups(member))
+        assertEquals(1, changes(member))
+    }
+
+    @Test
+    fun `a write waiting for a manual return is rejected and never lands in a new phase`() {
+        val member = absentee()
+        val (returned, write) =
+            race(
+                { service.markReturned(member.publicId, returnRequest(0), "kc-one") },
+                { service.setMemo(member.publicId, memoRequest(0), "kc-two") },
+            )
+
+        if (returned.isSuccess && write.isFailure) {
+            assertTrue(conflictCode(write) in setOf(LongAbsenceException.NOT_CURRENT, LongAbsenceException.VERSION_CONFLICT))
+            assertEquals(0, changes(member))
+        } else {
+            // The memo came first; the return then saw a stale token. Either way one phase, nothing open.
+            assertEquals(LongAbsenceException.VERSION_CONFLICT, conflictCode(returned))
+            assertEquals(1, openFollowups(member))
+        }
+        assertEquals(1, followups(member))
+    }
+
+    private fun openFollowups(member: Member): Int =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM attendance_absence_followups WHERE member_id = ? AND closed_on IS NULL",
+            Int::class.java,
+            member.id,
+        )!!
+
+    private fun changes(member: Member): Int =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM attendance_absence_changes c JOIN attendance_absence_followups f ON f.id = c.followup_id WHERE f.member_id = ?",
+            Int::class.java,
+            member.id,
+        )!!
 
     private fun followups(member: Member): Int =
         jdbcTemplate.queryForObject("SELECT COUNT(*) FROM attendance_absence_followups WHERE member_id = ?", Int::class.java, member.id)!!
