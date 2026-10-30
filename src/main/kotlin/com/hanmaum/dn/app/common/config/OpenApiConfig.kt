@@ -3,8 +3,11 @@ package com.hanmaum.dn.app.common.config
 import io.swagger.v3.oas.models.Components
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.info.Info
+import io.swagger.v3.oas.models.media.Content
+import io.swagger.v3.oas.models.media.MediaType
 import io.swagger.v3.oas.models.media.Schema
 import io.swagger.v3.oas.models.media.StringSchema
+import io.swagger.v3.oas.models.responses.ApiResponse
 import io.swagger.v3.oas.models.security.SecurityRequirement
 import io.swagger.v3.oas.models.security.SecurityScheme
 import org.springdoc.core.customizers.GlobalOpenApiCustomizer
@@ -105,6 +108,15 @@ class OpenApiConfig(
     @Bean
     fun longAbsenceNullabilityCustomizer(): GlobalOpenApiCustomizer = GlobalOpenApiCustomizer { applyLongAbsenceNullability(it) }
 
+    /**
+     * 401/403 of the pastoral-care class guard on all four long-absence operations. Added here, not
+     * with a class-level annotation: springdoc drops the default 200 of an operation that declares
+     * any response, and the two GETs declare none of their own.
+     */
+    @Bean
+    fun longAbsenceSecurityResponsesCustomizer(): GlobalOpenApiCustomizer =
+        GlobalOpenApiCustomizer { applyLongAbsenceSecurityResponses(it, apiPrefix) }
+
     companion object {
         const val BEARER_SCHEME = "bearerAuth"
 
@@ -129,12 +141,41 @@ class OpenApiConfig(
                 }
                 response.required = response.properties.keys.toList()
             }
+            // memoUpdate absent or null leaves the memo unchanged; {value: null} stays the clearing operation.
+            schemas["LongAbsenceContactStatusRequest"]?.let { request ->
+                val reference = request.properties?.get("memoUpdate")?.`$ref` ?: return@let
+                request.addProperty(
+                    "memoUpdate",
+                    Schema<Any>()
+                        .anyOf(listOf(Schema<Any>().`$ref`(reference), Schema<Any>().types(setOf("null"))))
+                        .description(request.properties["memoUpdate"]?.description),
+                )
+            }
             schemas["LongAbsenceGroupDto"]?.let { group ->
                 group.properties?.get("division")?.types = linkedSetOf("string", "null")
                 group.required = group.properties?.keys?.toList()
             }
             for (name in listOf("LongAbsenceActorDto", "LongAbsenceSummaryResponse")) {
                 schemas[name]?.let { it.required = it.properties?.keys?.toList() }
+            }
+        }
+
+        internal fun applyLongAbsenceSecurityResponses(
+            openApi: OpenAPI,
+            apiPrefix: String,
+        ) {
+            val problem =
+                Content().addMediaType(
+                    "application/problem+json",
+                    MediaType().schema(Schema<Any>().`$ref`("#/components/schemas/ProblemDetail")),
+                )
+            openApi.paths?.filterKeys { it.startsWith("$apiPrefix/attendance/long-absences") }?.values?.forEach { item ->
+                item.readOperations().forEach { operation ->
+                    operation.responses?.apply {
+                        addApiResponse("401", ApiResponse().description("Missing or invalid access token").content(problem))
+                        addApiResponse("403", ApiResponse().description("Caller is not PASTOR or ADMIN").content(problem))
+                    }
+                }
             }
         }
 
