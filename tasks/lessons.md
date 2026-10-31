@@ -295,3 +295,6 @@
 ### A member lock must survive an identity change
 - **Mistake**: Withdrawal resolved the member, then locked that row; a parallel link moved the consent to the canonical member, so the withdrawal ended with 204 and the grant stayed standing.
 - **Rule**: After taking a per-member lock, resolve the identity again and lock the member it now points to (`ConsentService.resolveAndLockMember`) before reading or writing member-bound data.
+
+- [HDN-379] Every path that ends a phase (check-in writer, daily job, manual return) must raise the member's `absence_revision` under the member lock; a close without it lets an old editor token match a later phase. Secure each such path with a test that goes close → log correction → old write → 409.
+- [HDN-379] A JWT `sub` that goes into a persisted actor field needs an explicit non-blank check (401) in the controller; a non-null Kotlin type does not reject `" "`.

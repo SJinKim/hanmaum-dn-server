@@ -7,6 +7,7 @@ import com.hanmaum.dn.app.common.domainvalue.MemberStatus
 import com.hanmaum.dn.app.common.observability.ExternalCallOutcome
 import com.hanmaum.dn.app.common.observability.OperationalMetrics
 import com.hanmaum.dn.app.common.security.SlidingWindowRateLimiter
+import com.hanmaum.dn.app.features.attendance.service.LongAbsenceRetentionService
 import com.hanmaum.dn.app.features.consents.domain.ConsentSource
 import com.hanmaum.dn.app.features.consents.service.ConsentService
 import com.hanmaum.dn.app.features.groups.repository.ChurchGroupRepository
@@ -95,6 +96,7 @@ class MemberService(
     private val reconciliationIntake: MemberReconciliationIntake? = null,
     private val consentService: ConsentService,
     private val profileImageService: ProfileImageService? = null,
+    private val longAbsenceRetention: LongAbsenceRetentionService? = null,
 ) {
     private val log = LoggerFactory.getLogger(MemberService::class.java)
     private val registrationLimiter = SlidingWindowRateLimiter(registrationRateLimit, Duration.ofMinutes(10))
@@ -734,6 +736,11 @@ class MemberService(
         endLeadershipIfMovedOutOfGroup(member, previousGroupId)
 
         val saved = memberRepository.save(member)
+        if (previousStatus != MemberStatus.INACTIVE && saved.memberStatus == MemberStatus.INACTIVE) {
+            // A member who left takes their 장기결석자 phases and memos along (#376 F3, #380);
+            // reactivation restores none.
+            longAbsenceRetention?.deleteForMember(saved)
+        }
         if (previousStatus == MemberStatus.PENDING && saved.memberStatus == MemberStatus.ACTIVE) {
             eventPublisher.publishEvent(
                 MemberNotificationRequested(
@@ -801,10 +808,12 @@ class MemberService(
      */
     @Transactional
     fun softDeleteMember(publicId: UUID) {
+        // Locked like every 장기결석자 write: a soft delete hides the follow-up and makes loaded editors stale.
         val member =
             memberRepository
-                .findByPublicIdAndDeletedAtIsNull(publicId)
+                .findForUpdateByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow { EntityNotFoundException("Member not found or already deleted: $publicId") }
+        longAbsenceRetention?.invalidate(member)
         member.statusBeforeDelete = member.memberStatus
         member.memberStatus = MemberStatus.DELETED
         member.deletedAt = Instant.now()
@@ -821,7 +830,7 @@ class MemberService(
     fun restoreMember(publicId: UUID): MemberDto {
         val member =
             memberRepository
-                .findByPublicId(publicId)
+                .findForUpdateByPublicId(publicId)
                 .orElseThrow { EntityNotFoundException("Member not found: $publicId") }
         if (member.deletedAt == null) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "삭제된 회원만 복원할 수 있습니다.")
@@ -839,6 +848,11 @@ class MemberService(
         member.deletedAt = null
         member.deleteEntryAt = null
         val saved = memberRepository.save(member)
+        if (saved.memberStatus == MemberStatus.INACTIVE) {
+            longAbsenceRetention?.deleteForMember(saved)
+        } else {
+            longAbsenceRetention?.invalidate(saved)
+        }
         log
             .atInfo()
             .addKeyValue("event.action", "member.restore")

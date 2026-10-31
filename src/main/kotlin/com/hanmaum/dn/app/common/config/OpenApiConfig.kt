@@ -3,7 +3,11 @@ package com.hanmaum.dn.app.common.config
 import io.swagger.v3.oas.models.Components
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.info.Info
+import io.swagger.v3.oas.models.media.Content
+import io.swagger.v3.oas.models.media.MediaType
+import io.swagger.v3.oas.models.media.Schema
 import io.swagger.v3.oas.models.media.StringSchema
+import io.swagger.v3.oas.models.responses.ApiResponse
 import io.swagger.v3.oas.models.security.SecurityRequirement
 import io.swagger.v3.oas.models.security.SecurityScheme
 import org.springdoc.core.customizers.GlobalOpenApiCustomizer
@@ -96,8 +100,111 @@ class OpenApiConfig(
             }
         }
 
+    /**
+     * 장기결석자 (HDN-375): every response field is serialized, nulls included, and springdoc keeps
+     * no Kotlin nullability. Marks all fields required and the nullable ones as such, including
+     * null in the enum and the nullable object references.
+     */
+    @Bean
+    fun longAbsenceNullabilityCustomizer(): GlobalOpenApiCustomizer = GlobalOpenApiCustomizer { applyLongAbsenceNullability(it) }
+
+    /**
+     * 401/403 of the pastoral-care class guard on all long-absence operations. Added here, not
+     * with a class-level annotation: springdoc drops the default 200 of an operation that declares
+     * any response, and the two GETs declare none of their own.
+     */
+    @Bean
+    fun longAbsenceSecurityResponsesCustomizer(): GlobalOpenApiCustomizer =
+        GlobalOpenApiCustomizer { applyLongAbsenceSecurityResponses(it, apiPrefix) }
+
     companion object {
         const val BEARER_SCHEME = "bearerAuth"
+
+        /** Nullable scalar fields and nullable object references per long-absence schema (HDN-375, HDN-379). */
+        private val LONG_ABSENCE_NULLABLE =
+            mapOf(
+                "LongAbsenceResponse" to
+                    (
+                        listOf("phasePublicId", "discriminator", "postAssignmentAttendance", "contactedBy", "contactedAt", "memo") to
+                            listOf("group", "contactedByMember")
+                    ),
+                "LongAbsenceReturnResponse" to (emptyList<String>() to listOf("returnedByMember")),
+                "LongAbsenceHistoryItem" to
+                    (
+                        listOf("discriminator", "contactedBy", "contactedAt", "returnedAt", "returnedBy") to
+                            listOf("contactedByMember", "returnedByMember")
+                    ),
+                "LongAbsencePhaseResponse" to
+                    (
+                        listOf("discriminator", "endedOn", "endReason", "contactedBy", "contactedAt", "returnedAt", "returnedBy", "memo") to
+                            listOf("contactedByMember", "returnedByMember")
+                    ),
+                "LongAbsenceChangeDto" to (listOf("occurredAt", "actorSubject", "contacted", "memo") to listOf("actorMember")),
+            )
+
+        private val LONG_ABSENCE_ALL_REQUIRED =
+            listOf("LongAbsenceActorDto", "LongAbsenceSummaryResponse", "LongAbsenceHistoryPage", "LongAbsenceChangePage")
+
+        internal fun applyLongAbsenceNullability(openApi: OpenAPI) {
+            val schemas = openApi.components?.schemas ?: return
+            for ((name, nullable) in LONG_ABSENCE_NULLABLE) {
+                val response = schemas[name] ?: continue
+                val properties = response.properties ?: continue
+                val (scalars, references) = nullable
+                for (field in scalars) {
+                    val property = properties[field] ?: continue
+                    property.types = linkedSetOf(*(property.types ?: setOf("string")).toTypedArray(), "null")
+                    // In OpenAPI 3.1, a nullable type alone does not override the enum constraint.
+                    property.enum?.let { values -> if (null !in values) property.addEnumItemObject(null) }
+                }
+                for (field in references) {
+                    val reference = properties[field]?.`$ref` ?: continue
+                    response.addProperty(
+                        field,
+                        Schema<Any>()
+                            .anyOf(listOf(Schema<Any>().`$ref`(reference), Schema<Any>().types(setOf("null"))))
+                            .description(properties[field]?.description),
+                    )
+                }
+                response.required = response.properties.keys.toList()
+            }
+            // memoUpdate absent or null leaves the memo unchanged; {value: null} stays the clearing operation.
+            schemas["LongAbsenceContactStatusRequest"]?.let { request ->
+                val reference = request.properties?.get("memoUpdate")?.`$ref` ?: return@let
+                request.addProperty(
+                    "memoUpdate",
+                    Schema<Any>()
+                        .anyOf(listOf(Schema<Any>().`$ref`(reference), Schema<Any>().types(setOf("null"))))
+                        .description(request.properties["memoUpdate"]?.description),
+                )
+            }
+            schemas["LongAbsenceGroupDto"]?.let { group ->
+                group.properties?.get("division")?.types = linkedSetOf("string", "null")
+                group.required = group.properties?.keys?.toList()
+            }
+            for (name in LONG_ABSENCE_ALL_REQUIRED) {
+                schemas[name]?.let { it.required = it.properties?.keys?.toList() }
+            }
+        }
+
+        internal fun applyLongAbsenceSecurityResponses(
+            openApi: OpenAPI,
+            apiPrefix: String,
+        ) {
+            val problem =
+                Content().addMediaType(
+                    "application/problem+json",
+                    MediaType().schema(Schema<Any>().`$ref`("#/components/schemas/ProblemDetail")),
+                )
+            openApi.paths?.filterKeys { it.startsWith("$apiPrefix/attendance/long-absences") }?.values?.forEach { item ->
+                item.readOperations().forEach { operation ->
+                    operation.responses?.apply {
+                        addApiResponse("401", ApiResponse().description("Missing or invalid access token").content(problem))
+                        addApiResponse("403", ApiResponse().description("Caller is not PASTOR or ADMIN").content(problem))
+                    }
+                }
+            }
+        }
 
         internal fun applyBearerSecurity(
             openApi: OpenAPI,

@@ -113,9 +113,9 @@ class PiiBackfillRunner(
         )
 
     /**
-     * `members` also carries the key id the row was written with and the lookup hashes derived
-     * from the plaintext; the entity keeps them in sync via `@PreUpdate`, so a direct write has
-     * to do the same. The hashes do not depend on the storage key, but a row written before
+     * `members` and the absence follow-ups also carry the key id the row was written with, and
+     * `members` the lookup hashes derived from the plaintext; the entities keep them in sync via
+     * `@PreUpdate`, so a direct write has to do the same. The hashes do not depend on the storage key, but a row written before
      * encryption may not have them at all.
      */
     private fun rewriteRow(
@@ -138,9 +138,11 @@ class PiiBackfillRunner(
 
         val assignments = mutableListOf("$column = ?")
         val arguments = mutableListOf<Any?>(encrypted)
-        if (table == MEMBERS_TABLE) {
+        if (table in PII_KEY_ID_TABLES) {
             assignments += "pii_key_id = ?"
             arguments += PiiCryptoContext.storageKeyId()
+        }
+        if (table == MEMBERS_TABLE) {
             LOOKUP_HASH_COLUMNS[column]?.let { hashColumn ->
                 assignments += "$hashColumn = ?"
                 arguments += PiiCryptoContext.lookupHash(plaintext)
@@ -203,6 +205,11 @@ class PiiBackfillRunner(
 
     private companion object {
         const val MEMBERS_TABLE = "members"
+        const val ABSENCE_FOLLOWUPS_TABLE = "attendance_absence_followups"
+        const val ABSENCE_CHANGES_TABLE = "attendance_absence_changes"
+
+        /** Tables that record the key id their encrypted columns were written with. */
+        val PII_KEY_ID_TABLES = setOf(MEMBERS_TABLE, ABSENCE_FOLLOWUPS_TABLE, ABSENCE_CHANGES_TABLE)
 
         val MEMBER_COLUMNS =
             listOf(
@@ -230,6 +237,11 @@ class PiiBackfillRunner(
             listOf(
                 "ministry_registrations" to "note",
                 "meeting_attendances" to "prayer_request",
+                ABSENCE_FOLLOWUPS_TABLE to "memo",
+                ABSENCE_FOLLOWUPS_TABLE to "contacted_by",
+                ABSENCE_FOLLOWUPS_TABLE to "returned_by",
+                ABSENCE_CHANGES_TABLE to "actor_subject",
+                ABSENCE_CHANGES_TABLE to "memo",
             )
 
         val ENCRYPTED_COLUMNS = MEMBER_COLUMNS.map { MEMBERS_TABLE to it } + SENSITIVE_TEXT_COLUMNS

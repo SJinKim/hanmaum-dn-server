@@ -1,6 +1,7 @@
 package com.hanmaum.dn.app.features.members.service
 
 import com.hanmaum.dn.app.common.domainvalue.MemberStatus
+import com.hanmaum.dn.app.features.attendance.service.LongAbsenceRetentionService
 import com.hanmaum.dn.app.features.members.domain.GraduationReason
 import com.hanmaum.dn.app.features.members.domain.Member
 import com.hanmaum.dn.app.features.members.domain.MemberGraduation
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.InjectMocks
 import org.mockito.Mock
+import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
@@ -27,6 +29,8 @@ class MemberGraduationServiceTest {
     @Mock private lateinit var memberRepository: MemberRepository
 
     @Mock private lateinit var graduationRepository: MemberGraduationRepository
+
+    @Mock private lateinit var longAbsenceRetention: LongAbsenceRetentionService
 
     @InjectMocks
     private lateinit var service: MemberGraduationService
@@ -45,10 +49,14 @@ class MemberGraduationServiceTest {
         `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(publicId)).thenReturn(Optional.of(m))
     }
 
+    private fun stubMemberForUpdate(m: Member) {
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(publicId)).thenReturn(Optional.of(m))
+    }
+
     @Test
     fun `graduating records the event and deactivates the member`() {
         val m = member()
-        stubMember(m)
+        stubMemberForUpdate(m)
         `when`(graduationRepository.findOpenByMemberId(1L)).thenReturn(null)
         `when`(graduationRepository.save(any<MemberGraduation>())).thenAnswer { it.arguments[0] }
 
@@ -58,12 +66,14 @@ class MemberGraduationServiceTest {
         assertEquals(GraduationReason.MARRIAGE, result.reason)
         assertEquals(actor, result.graduatedBy)
         assertEquals(graduatedOn, result.graduatedOn)
+        // Graduation ends membership, so the 장기결석자 memos go too (HDN-375, #376 F3).
+        verify(longAbsenceRetention).deleteForMember(m)
     }
 
     @Test
     fun `graduating snapshots the status that was actually there`() {
         val m = member(MemberStatus.PENDING)
-        stubMember(m)
+        stubMemberForUpdate(m)
         `when`(graduationRepository.findOpenByMemberId(1L)).thenReturn(null)
         `when`(graduationRepository.save(any<MemberGraduation>())).thenAnswer { it.arguments[0] }
 
@@ -75,7 +85,7 @@ class MemberGraduationServiceTest {
     @Test
     fun `graduating a member who already has an open graduation is rejected`() {
         val m = member()
-        stubMember(m)
+        stubMemberForUpdate(m)
         `when`(graduationRepository.findOpenByMemberId(1L)).thenReturn(
             MemberGraduation(m, graduatedOn, GraduationReason.MARRIAGE, actor, MemberStatus.ACTIVE),
         )
@@ -92,7 +102,7 @@ class MemberGraduationServiceTest {
     @Test
     fun `graduating a deleted member is rejected`() {
         val m = member(MemberStatus.DELETED)
-        stubMember(m)
+        stubMemberForUpdate(m)
 
         val error =
             assertThrows<ResponseStatusException> {
@@ -104,7 +114,7 @@ class MemberGraduationServiceTest {
 
     @Test
     fun `graduating an unknown member is rejected`() {
-        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(publicId)).thenReturn(Optional.empty())
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(publicId)).thenReturn(Optional.empty())
 
         assertThrows<EntityNotFoundException> {
             service.graduate(publicId, graduatedOn, GraduationReason.MARRIAGE, null, actor)
@@ -115,7 +125,7 @@ class MemberGraduationServiceTest {
     @Test
     fun `reinstating restores the status the member had before graduating`() {
         val m = member(MemberStatus.INACTIVE)
-        stubMember(m)
+        stubMemberForUpdate(m)
         val open = MemberGraduation(m, graduatedOn, GraduationReason.MARRIAGE, actor, MemberStatus.PENDING)
         `when`(graduationRepository.findOpenByMemberId(1L)).thenReturn(open)
         `when`(graduationRepository.save(any<MemberGraduation>())).thenAnswer { it.arguments[0] }
@@ -125,12 +135,13 @@ class MemberGraduationServiceTest {
         assertEquals(MemberStatus.PENDING, m.memberStatus)
         assertNotNull(result.revertedAt)
         assertEquals("admin-sub-2", result.revertedBy)
+        verify(longAbsenceRetention).invalidate(m)
     }
 
     @Test
     fun `reinstating a member with no open graduation is rejected`() {
         val m = member()
-        stubMember(m)
+        stubMemberForUpdate(m)
         `when`(graduationRepository.findOpenByMemberId(1L)).thenReturn(null)
 
         val error = assertThrows<ResponseStatusException> { service.reinstate(publicId, actor) }

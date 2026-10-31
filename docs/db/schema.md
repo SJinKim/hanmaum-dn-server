@@ -1,8 +1,8 @@
 <!-- Erzeugt von ./gradlew schemaSnapshot aus den Flyway-Migrationen. Nicht von Hand bearbeiten, siehe docs/db/README.md. -->
 # DB-Schema
 
-- Migrations-SHA-256: `b44a9e32daf9067543dff6d323f06d522a6e8c5616a1af36dba5d50add5a1af2`
-- Tabellen: 58 · Spalten: 601
+- Migrations-SHA-256: `bce2ce1fbb4b69b3129cc4c3c277fb3f3b1f2f9c13c608f1e169de18f5f49886`
+- Tabellen: 60 · Spalten: 636
 - Fachliche Notizen: `docs/db/schema-notes.md`
 - Spalten ohne `NOT NULL` sind nullable. Indizes, die nur einen Primärschlüssel oder Unique-Constraint tragen, stehen beim Constraint.
 
@@ -46,6 +46,83 @@ Indizes:
 Constraints:
 - `announcements_pkey` `PRIMARY KEY (id)`
 - `announcements_public_id_key` `UNIQUE (public_id)`
+
+## public.attendance_absence_changes
+
+Kontakt- und Memo-Verlauf einer 장기결석자-Phase (HDN-379). Jeder Eintrag hält den **neuen** Wert;
+aufeinanderfolgende `MEMO_CHANGED`-Einträge sind die Memo-Versionen. `revision` ist der
+Konfliktzähler des Mitglieds beim Schreiben. `origin = LEGACY_SNAPSHOT` ist der bei Einführung
+übernommene Stand ohne bekannte Memo-Zeit/-Autorschaft. `actor_subject` und `memo` sind
+verschlüsselt. Memo leeren löscht alle Memo-Versionen der Phase hart; 90 Tage nach Phasenende
+ebenso (#380).
+
+- `id` bigint NOT NULL DEFAULT `nextval('attendance_absence_changes_id_seq'::regclass)`
+- `public_id` uuid NOT NULL
+- `followup_id` bigint NOT NULL
+- `revision` bigint NOT NULL
+- `kind` character varying(32) NOT NULL
+- `origin` character varying(32) NOT NULL
+- `occurred_at` timestamp with time zone
+- `actor_subject` text
+- `contacted` boolean
+- `memo` text
+- `pii_key_id` character varying(50)
+- `created_at` timestamp with time zone NOT NULL DEFAULT `CURRENT_TIMESTAMP`
+- `updated_at` timestamp with time zone
+- `deleted_at` timestamp with time zone
+
+Constraints:
+- `attendance_absence_changes_followup_id_fkey` `FOREIGN KEY (followup_id) REFERENCES attendance_absence_followups(id) ON DELETE CASCADE`
+- `attendance_absence_changes_pkey` `PRIMARY KEY (id)`
+- `ck_attendance_absence_change_kind` `CHECK (((((kind)::text = 'CONTACT_CHANGED'::text) AND (contacted IS NOT NULL) AND (memo IS NULL)) OR (((kind)::text = 'MEMO_CHANGED'::text) AND (memo IS NOT NULL) AND (contacted IS NULL))))`
+- `ck_attendance_absence_change_origin` `CHECK (((((origin)::text = 'ACTION'::text) AND (occurred_at IS NOT NULL) AND (actor_subject IS NOT NULL)) OR ((origin)::text = 'LEGACY_SNAPSHOT'::text)))`
+- `ck_attendance_absence_change_revision` `CHECK ((revision >= 0))`
+- `uq_attendance_absence_change_revision` `UNIQUE (followup_id, revision, kind)`
+- `uq_attendance_absence_changes_public_id` `UNIQUE (public_id)`
+
+## public.attendance_absence_followups
+
+Nachverfolgung der 장기결석자 (HDN-375, HDN-379): eine Zeile je gespeicherter Abwesenheitsphase,
+mit Kontaktstatus und Memo. Die Phase zählt ab `absence_anchor_date`, dem späteren Datum aus
+letztem zählenden Sonntags-Check-in (`last_sunday_date`) und manueller Rückkehr; `phase_generation`
+unterscheidet Phasen mit gleichem `last_sunday_date`. Die Liste selbst wird aus `attendance_logs`
+berechnet. `memo`, `contacted_by` und `returned_by` sind verschlüsselt. Eine abgeschlossene Phase
+(`closed_on`, `end_reason`) wird nie wieder geöffnet; Memo und Memo-Versionen werden 90 Tage nach
+`closed_on` gelöscht, die Phase nach zehn Jahren (#380).
+
+- `id` bigint NOT NULL DEFAULT `nextval('attendance_absence_followups_id_seq'::regclass)`
+- `public_id` uuid NOT NULL
+- `member_id` bigint NOT NULL
+- `last_sunday_date` date NOT NULL
+- `contacted` boolean NOT NULL DEFAULT `false`
+- `contacted_by` text
+- `contacted_at` timestamp with time zone
+- `memo` text
+- `pii_key_id` character varying(50)
+- `closed_on` date
+- `version` bigint NOT NULL DEFAULT `0`
+- `created_at` timestamp with time zone NOT NULL DEFAULT `CURRENT_TIMESTAMP`
+- `updated_at` timestamp with time zone
+- `deleted_at` timestamp with time zone
+- `absence_anchor_date` date NOT NULL
+- `phase_generation` bigint NOT NULL DEFAULT `0`
+- `end_reason` character varying(32)
+- `end_recorded_at` timestamp with time zone
+- `returned_by` text
+
+Constraints:
+- `attendance_absence_followups_member_id_fkey` `FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE`
+- `attendance_absence_followups_pkey` `PRIMARY KEY (id)`
+- `ck_attendance_absence_followup_anchor` `CHECK ((absence_anchor_date >= last_sunday_date))`
+- `ck_attendance_absence_followup_contact` `CHECK (((contacted AND (contacted_by IS NOT NULL) AND (contacted_at IS NOT NULL)) OR ((NOT contacted) AND (contacted_by IS NULL) AND (contacted_at IS NULL))))`
+- `ck_attendance_absence_followup_end` `CHECK ((((closed_on IS NULL) AND (end_reason IS NULL) AND (end_recorded_at IS NULL) AND (returned_by IS NULL)) OR ((closed_on > absence_anchor_date) AND ((end_reason)::text = 'CHECK_IN'::text) AND (returned_by IS NULL)) OR ((closed_on > absence_anchor_date) AND ((end_reason)::text = 'MANUAL_RETURN'::text) AND (returned_by IS NOT NULL) AND (end_recorded_at IS NOT NULL))))`
+- `ck_attendance_absence_followup_generation` `CHECK ((phase_generation >= 0))`
+- `uq_attendance_absence_followup_phase_generation` `UNIQUE (member_id, last_sunday_date, phase_generation)`
+- `uq_attendance_absence_followups_public_id` `UNIQUE (public_id)`
+
+Indizes:
+- `idx_attendance_absence_followups_history` `btree (closed_on DESC, public_id DESC) WHERE (closed_on IS NOT NULL)`
+- `idx_attendance_absence_followups_member_history` `btree (member_id, closed_on DESC, public_id DESC) WHERE (closed_on IS NOT NULL)`
 
 ## public.attendance_definitions
 
@@ -759,6 +836,10 @@ Indizes:
 `keycloak_id` ist der `sub`-Claim des Keycloak-JWT und verknüpft das Login mit dem Mitglied
 (Anlage beim ersten Login).
 
+`absence_manual_return_on` ist die manuelle Rückkehr, ab der die laufende Abwesenheit zählt;
+`absence_revision` der monotone Konfliktzähler der 장기결석자-Nachverfolgung (Wire-`version`),
+der nie zurückgesetzt wird (HDN-379).
+
 - `id` bigint NOT NULL DEFAULT `nextval('members_id_seq'::regclass)`
 - `last_name` text NOT NULL
 - `first_name` text NOT NULL
@@ -796,8 +877,11 @@ Indizes:
 - `profile_image_key` character varying(255)
 - `profile_image_version` bigint NOT NULL DEFAULT `0`
 - `kakao_id` text
+- `absence_manual_return_on` date
+- `absence_revision` bigint NOT NULL DEFAULT `0`
 
 Constraints:
+- `ck_members_absence_revision` `CHECK ((absence_revision >= 0))`
 - `ck_members_identity_status` `CHECK (((identity_status IS NULL) OR ((identity_status)::text = ANY ((ARRAY['EMPLOYEE'::character varying, 'UNIVERSITY_STUDENT'::character varying, 'EXAM_PREPARATION'::character varying, 'WORKING_HOLIDAY'::character varying, 'EXCHANGE_STUDENT'::character varying, 'SELF_EMPLOYED'::character varying, 'EXPATRIATE'::character varying, 'JOB_SEEKING'::character varying])::text[]))))`
 - `ck_members_origin` `CHECK (((origin)::text = ANY ((ARRAY['MANUAL'::character varying, 'NEWCOMER_FORM'::character varying, 'APP'::character varying])::text[])))`
 - `members_group_id_fkey` `FOREIGN KEY (group_id) REFERENCES church_groups(id)`
