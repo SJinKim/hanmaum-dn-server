@@ -1116,14 +1116,14 @@ class MemberServiceTest {
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
 
         memberService.updateMember(member.publicId, UpdateMemberRequest(occupation = "학생"))
-        verify(longAbsenceRetention, never()).deleteForMember(10L)
+        verify(longAbsenceRetention, never()).deleteForMember(member)
 
         memberService.updateMember(member.publicId, UpdateMemberRequest(memberStatus = "INACTIVE"))
-        verify(longAbsenceRetention).deleteForMember(10L)
+        verify(longAbsenceRetention).deleteForMember(member)
 
         // Already INACTIVE: nothing left to remove, no second delete.
         memberService.updateMember(member.publicId, UpdateMemberRequest(memberStatus = "INACTIVE"))
-        verify(longAbsenceRetention, times(1)).deleteForMember(10L)
+        verify(longAbsenceRetention, times(1)).deleteForMember(member)
     }
 
     // --- rejectMember ---
@@ -1198,12 +1198,14 @@ class MemberServiceTest {
     fun `softDeleteMember sets deletedAt and status to DELETED`() {
         val member = memberWithId(1L)
         member.memberStatus = MemberStatus.INACTIVE
-        `when`(memberRepository.findByPublicIdAndDeletedAtIsNull(member.publicId))
+        `when`(memberRepository.findForUpdateByPublicIdAndDeletedAtIsNull(member.publicId))
             .thenReturn(Optional.of(member))
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
 
         val before = Instant.now().plusSeconds(30L * 24 * 60 * 60)
         memberService.softDeleteMember(member.publicId)
+        // Soft delete hides the 장기결석자 follow-up; editors loaded before it are stale (HDN-379).
+        verify(longAbsenceRetention).invalidate(member)
         val after = Instant.now().plusSeconds(30L * 24 * 60 * 60)
 
         assertNotNull(member.deletedAt)
@@ -1230,7 +1232,7 @@ class MemberServiceTest {
     @Test
     fun `restoreMember returns the member to its previous status`() {
         val member = deletedMember(MemberStatus.ACTIVE)
-        `when`(memberRepository.findByPublicId(member.publicId)).thenReturn(Optional.of(member))
+        `when`(memberRepository.findForUpdateByPublicId(member.publicId)).thenReturn(Optional.of(member))
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
 
         val dto = memberService.restoreMember(member.publicId)
@@ -1246,20 +1248,20 @@ class MemberServiceTest {
     @Test
     fun `restoreMember falls back to INACTIVE when no previous status was stored`() {
         val member = deletedMember(statusBeforeDelete = null)
-        `when`(memberRepository.findByPublicId(member.publicId)).thenReturn(Optional.of(member))
+        `when`(memberRepository.findForUpdateByPublicId(member.publicId)).thenReturn(Optional.of(member))
         `when`(memberRepository.save(any<Member>())).thenAnswer { it.arguments[0] }
 
         memberService.restoreMember(member.publicId)
 
         assertEquals(MemberStatus.INACTIVE, member.memberStatus)
         // Restored as INACTIVE: any follow-ups kept during the soft delete go now (HDN-375).
-        verify(longAbsenceRetention).deleteForMember(1L)
+        verify(longAbsenceRetention).deleteForMember(member)
     }
 
     @Test
     fun `restoreMember answers 409 when an active member uses the same email`() {
         val member = deletedMember(MemberStatus.ACTIVE)
-        `when`(memberRepository.findByPublicId(member.publicId)).thenReturn(Optional.of(member))
+        `when`(memberRepository.findForUpdateByPublicId(member.publicId)).thenReturn(Optional.of(member))
         `when`(memberRepository.findByEmailAndDeletedAtIsNull("kim@example.com")).thenReturn(memberWithId(2L))
 
         val ex = assertThrows<ResponseStatusException> { memberService.restoreMember(member.publicId) }
@@ -1272,7 +1274,7 @@ class MemberServiceTest {
     @Test
     fun `restoreMember answers 409 when an active member uses the same Keycloak account`() {
         val member = deletedMember(MemberStatus.ACTIVE)
-        `when`(memberRepository.findByPublicId(member.publicId)).thenReturn(Optional.of(member))
+        `when`(memberRepository.findForUpdateByPublicId(member.publicId)).thenReturn(Optional.of(member))
         `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull("kc-1")).thenReturn(memberWithId(2L))
 
         val ex = assertThrows<ResponseStatusException> { memberService.restoreMember(member.publicId) }
@@ -1284,7 +1286,7 @@ class MemberServiceTest {
     @Test
     fun `restoreMember refuses a member that is not deleted`() {
         val member = memberWithId(1L)
-        `when`(memberRepository.findByPublicId(member.publicId)).thenReturn(Optional.of(member))
+        `when`(memberRepository.findForUpdateByPublicId(member.publicId)).thenReturn(Optional.of(member))
 
         val ex = assertThrows<ResponseStatusException> { memberService.restoreMember(member.publicId) }
 

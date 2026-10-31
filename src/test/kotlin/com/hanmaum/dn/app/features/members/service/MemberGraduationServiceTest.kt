@@ -67,7 +67,7 @@ class MemberGraduationServiceTest {
         assertEquals(actor, result.graduatedBy)
         assertEquals(graduatedOn, result.graduatedOn)
         // Graduation ends membership, so the 장기결석자 memos go too (HDN-375, #376 F3).
-        verify(longAbsenceRetention).deleteForMember(1L)
+        verify(longAbsenceRetention).deleteForMember(m)
     }
 
     @Test
@@ -125,7 +125,7 @@ class MemberGraduationServiceTest {
     @Test
     fun `reinstating restores the status the member had before graduating`() {
         val m = member(MemberStatus.INACTIVE)
-        stubMember(m)
+        stubMemberForUpdate(m)
         val open = MemberGraduation(m, graduatedOn, GraduationReason.MARRIAGE, actor, MemberStatus.PENDING)
         `when`(graduationRepository.findOpenByMemberId(1L)).thenReturn(open)
         `when`(graduationRepository.save(any<MemberGraduation>())).thenAnswer { it.arguments[0] }
@@ -135,12 +135,13 @@ class MemberGraduationServiceTest {
         assertEquals(MemberStatus.PENDING, m.memberStatus)
         assertNotNull(result.revertedAt)
         assertEquals("admin-sub-2", result.revertedBy)
+        verify(longAbsenceRetention).invalidate(m)
     }
 
     @Test
     fun `reinstating a member with no open graduation is rejected`() {
         val m = member()
-        stubMember(m)
+        stubMemberForUpdate(m)
         `when`(graduationRepository.findOpenByMemberId(1L)).thenReturn(null)
 
         val error = assertThrows<ResponseStatusException> { service.reinstate(publicId, actor) }

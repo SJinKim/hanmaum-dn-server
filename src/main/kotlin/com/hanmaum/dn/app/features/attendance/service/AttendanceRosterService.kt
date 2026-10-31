@@ -72,6 +72,7 @@ class AttendanceRosterService(
         }
 
         val publicId = UUID.randomUUID()
+        val absenceBaseline = longAbsenceRetention.beforeCheckIn(member)
         val inserted =
             logRepo.insertIfAbsent(
                 publicId = publicId,
@@ -84,7 +85,7 @@ class AttendanceRosterService(
         if (inserted == 0) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "이미 출석이 기록되어 있습니다.")
         }
-        longAbsenceRetention.markReturned(member.id!!)
+        longAbsenceRetention.afterCheckIn(member, absenceBaseline)
 
         log.info("Attendance log added by admin definitionId={} date={}", definition.id, request.date)
 

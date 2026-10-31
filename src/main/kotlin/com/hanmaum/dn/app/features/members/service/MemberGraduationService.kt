@@ -72,8 +72,8 @@ class MemberGraduationService(
                 ),
             )
         member.memberStatus = MemberStatus.INACTIVE
-        // Graduation ends membership; the 장기결석자 memos go with it (#376 F3).
-        longAbsenceRetention.deleteForMember(memberId)
+        // Graduation ends membership; the 장기결석자 phases and memos go with it (#376 F3, #380).
+        longAbsenceRetention.deleteForMember(member)
 
         // Counters and identifiers only — never the member's name or the note.
         log.info("Graduated member memberId={} reason={} on={}", memberId, reason, graduatedOn)
@@ -85,7 +85,11 @@ class MemberGraduationService(
         publicId: UUID,
         actorSubject: String,
     ): MemberGraduation {
-        val member = requireMember(publicId)
+        // Locked like graduate(): the 장기결석자 counter is raised below.
+        val member =
+            memberRepository
+                .findForUpdateByPublicIdAndDeletedAtIsNull(publicId)
+                .orElseThrow { EntityNotFoundException("Member not found: $publicId") }
         val memberId = member.id!!
 
         val open =
@@ -98,6 +102,7 @@ class MemberGraduationService(
         open.revertedAt = Instant.now()
         open.revertedBy = actorSubject
         member.memberStatus = restoredStatus(open, memberId)
+        longAbsenceRetention.invalidate(member)
         val saved = graduationRepository.save(open)
 
         log.info("Reinstated member memberId={} restoredStatus={}", memberId, member.memberStatus)

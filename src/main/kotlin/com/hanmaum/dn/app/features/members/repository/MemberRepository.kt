@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Lock
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
@@ -40,6 +41,26 @@ interface MemberRepository :
     fun findAllByDeleteEntryAtLessThanEqualAndDeletedAtIsNotNull(deleteEntryAt: Instant): List<Member>
 
     fun findByPublicId(publicId: UUID): Optional<Member>
+
+    /** Locked like [findForUpdateByPublicIdAndDeletedAtIsNull], for a restore of a soft-deleted member. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT m FROM Member m WHERE m.publicId = :publicId")
+    fun findForUpdateByPublicId(
+        @Param("publicId") publicId: UUID,
+    ): Optional<Member>
+
+    /** Row-locks the members in id order, the lock order of the 장기결석자 writers (HDN-379). */
+    @Query(value = "SELECT id FROM members WHERE id IN (:ids) ORDER BY id FOR UPDATE", nativeQuery = true)
+    fun lockIdsForUpdate(
+        @Param("ids") ids: Collection<Long>,
+    ): List<Long>
+
+    /** Raises the absence counter of a member locked by [lockIdsForUpdate]; stale editor tokens stop matching. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "UPDATE members SET absence_revision = absence_revision + 1 WHERE id = :id", nativeQuery = true)
+    fun bumpAbsenceRevision(
+        @Param("id") id: Long,
+    ): Int
 
     /** Members with their current 순 in one query, for list enrichment without N+1. */
     @Query("SELECT m FROM Member m LEFT JOIN FETCH m.group WHERE m.id IN :ids")

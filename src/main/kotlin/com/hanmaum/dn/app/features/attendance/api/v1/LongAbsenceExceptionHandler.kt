@@ -51,7 +51,8 @@ class LongAbsenceExceptionHandler {
         return problem(
             HttpStatus.BAD_REQUEST,
             LongAbsenceException.INVALID_REQUEST,
-            "Invalid request. lastSundayDate, version and the memo key are required; memo is at most 2000 characters.",
+            "Invalid request. Ids must be UUIDs, page >= 0 and size 1 to 100; writes need lastSundayDate and version, " +
+                "a memo write the memo key; memo is at most 2000 characters.",
         )
     }
 
@@ -62,7 +63,7 @@ class LongAbsenceExceptionHandler {
     fun integrity(exception: DataIntegrityViolationException): ResponseEntity<ProblemDetail> {
         val causes = generateSequence<Throwable>(exception) { it.cause }.toList()
         val constraint = causes.filterIsInstance<ConstraintViolationException>().firstOrNull()?.constraintName
-        if (constraint == PHASE_CONSTRAINT) return stale()
+        if (constraint in RACE_CONSTRAINTS) return stale()
         return failure(sqlState(causes))
     }
 
@@ -71,6 +72,13 @@ class LongAbsenceExceptionHandler {
     fun denied(): ResponseEntity<ProblemDetail> {
         log.warn("Long-absence request denied status=403")
         return ResponseEntity(securityProblemDetail(HttpStatus.FORBIDDEN), HttpStatus.FORBIDDEN)
+    }
+
+    /** A token without a usable subject cannot be an actor of a write. */
+    @ExceptionHandler(InvalidActorSubjectException::class)
+    fun unauthenticated(): ResponseEntity<ProblemDetail> {
+        log.warn("Long-absence request unauthenticated status=401")
+        return ResponseEntity(securityProblemDetail(HttpStatus.UNAUTHORIZED), HttpStatus.UNAUTHORIZED)
     }
 
     @ExceptionHandler(Exception::class)
@@ -100,6 +108,8 @@ class LongAbsenceExceptionHandler {
     }
 
     private companion object {
-        const val PHASE_CONSTRAINT = "uq_attendance_absence_followup_phase"
+        /** A parallel first write of the same phase or revision; the member lock should prevent both. */
+        val RACE_CONSTRAINTS =
+            setOf("uq_attendance_absence_followup_phase_generation", "uq_attendance_absence_change_revision")
     }
 }

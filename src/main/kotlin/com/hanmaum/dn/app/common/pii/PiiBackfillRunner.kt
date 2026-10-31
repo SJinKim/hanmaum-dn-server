@@ -206,9 +206,10 @@ class PiiBackfillRunner(
     private companion object {
         const val MEMBERS_TABLE = "members"
         const val ABSENCE_FOLLOWUPS_TABLE = "attendance_absence_followups"
+        const val ABSENCE_CHANGES_TABLE = "attendance_absence_changes"
 
         /** Tables that record the key id their encrypted columns were written with. */
-        val PII_KEY_ID_TABLES = setOf(MEMBERS_TABLE, ABSENCE_FOLLOWUPS_TABLE)
+        val PII_KEY_ID_TABLES = setOf(MEMBERS_TABLE, ABSENCE_FOLLOWUPS_TABLE, ABSENCE_CHANGES_TABLE)
 
         val MEMBER_COLUMNS =
             listOf(
@@ -238,6 +239,9 @@ class PiiBackfillRunner(
                 "meeting_attendances" to "prayer_request",
                 ABSENCE_FOLLOWUPS_TABLE to "memo",
                 ABSENCE_FOLLOWUPS_TABLE to "contacted_by",
+                ABSENCE_FOLLOWUPS_TABLE to "returned_by",
+                ABSENCE_CHANGES_TABLE to "actor_subject",
+                ABSENCE_CHANGES_TABLE to "memo",
             )
 
         val ENCRYPTED_COLUMNS = MEMBER_COLUMNS.map { MEMBERS_TABLE to it } + SENSITIVE_TEXT_COLUMNS

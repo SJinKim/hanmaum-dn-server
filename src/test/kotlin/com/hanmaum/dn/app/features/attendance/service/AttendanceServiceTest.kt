@@ -27,7 +27,6 @@ import org.mockito.Mock
 import org.mockito.Mockito.lenient
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
-import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
@@ -376,8 +375,9 @@ class AttendanceServiceTest {
             eq(CheckInPresence.UNCONFIRMED.name),
         )
         assertNotNull(publicIdCaptor.firstValue)
-        // The check-in closes the member's 장기결석자 phases they returned from (HDN-375).
-        verify(longAbsenceRetention).markReturned(1L)
+        // The check-in closes the member's 장기결석자 phases they returned from (HDN-375, HDN-379).
+        verify(longAbsenceRetention).beforeCheckIn(member)
+        verify(longAbsenceRetention).afterCheckIn(member, null)
     }
 
     @Test
@@ -468,7 +468,8 @@ class AttendanceServiceTest {
         val exception = assertThrows<ResponseStatusException> { service.checkIn("kc-001") }
 
         assertEquals(409, exception.statusCode.value())
-        verifyNoInteractions(longAbsenceRetention)
+        // Nothing was inserted, so no phase is closed and no editor made stale.
+        verify(longAbsenceRetention, never()).afterCheckIn(any(), anyOrNull())
     }
 
     @Test
