@@ -121,7 +121,10 @@ class LongAbsenceRetentionService(
                             followupRepository.findMemberIdsToClose(today, policy.sundayServiceIdsParameter, afterMemberId, BATCH_SIZE)
                         if (ids.isNotEmpty()) memberRepository.lockIdsForUpdate(ids)
                         ids.forEach { memberId ->
-                            closed += followupRepository.closeReturned(today, policy.sundayServiceIdsParameter, memberId, clock.instant())
+                            val ended = followupRepository.closeReturned(today, policy.sundayServiceIdsParameter, memberId, clock.instant())
+                            // Same lock, same transaction: an editor loaded before this close must not match any later phase.
+                            if (ended > 0) memberRepository.bumpAbsenceRevision(memberId)
+                            closed += ended
                         }
                         ids
                     }.orEmpty()

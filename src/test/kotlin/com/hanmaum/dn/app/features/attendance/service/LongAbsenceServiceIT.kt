@@ -675,6 +675,32 @@ class LongAbsenceServiceIT {
     }
 
     @Test
+    fun `the daily close invalidates the old editor, also after a log correction`() {
+        val member = absentee()
+        val written = memo(member, "draft", 0)
+        fx.log(member, "2026-07-05")
+        clock.setToday(d("2026-10-26"))
+
+        retention.purgeExpired()
+        val revision = revisionOf(member)
+        assertEquals(0, retention.purgeExpired(), "a rerun changes nothing")
+        assertEquals(revision, revisionOf(member), "a rerun leaves the counter alone")
+
+        jdbcTemplate.update(
+            "UPDATE attendance_logs SET deleted_at = now() WHERE member_id = ? AND attendance_date > DATE '2026-01-04'",
+            member.id,
+        )
+        entityManager.clear()
+
+        val stale = assertThrows<LongAbsenceException> { memo(member, "late draft", written.version) }
+        assertEquals(LongAbsenceException.VERSION_CONFLICT, stale.code)
+        assertEquals(1, followupRows(member), "no new phase was created by the old editor")
+    }
+
+    private fun revisionOf(member: Member): Long =
+        jdbcTemplate.queryForObject("SELECT absence_revision FROM members WHERE id = ?", Long::class.java, member.id)!!
+
+    @Test
     fun `a corrected log never reopens a closed phase, the next write starts a new one`() {
         val member = absentee()
         val written = memo(member, "before correction", 0)

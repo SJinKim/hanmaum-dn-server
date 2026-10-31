@@ -79,7 +79,7 @@ class LongAbsenceController(
         @PathVariable memberPublicId: UUID,
         @Valid @RequestBody request: LongAbsenceContactStatusRequest,
         @AuthenticationPrincipal jwt: Jwt,
-    ): ResponseEntity<ApiResponse<LongAbsenceResponse>> = noStore(service.setContactStatus(memberPublicId, request, jwt.subject))
+    ): ResponseEntity<ApiResponse<LongAbsenceResponse>> = noStore(service.setContactStatus(memberPublicId, request, actorOf(jwt)))
 
     @PutMapping("/{memberPublicId}/memo")
     @Operation(operationId = "setLongAbsenceMemo", summary = "Replace or clear the memo of the current phase")
@@ -103,7 +103,7 @@ class LongAbsenceController(
         @PathVariable memberPublicId: UUID,
         @Valid @RequestBody request: LongAbsenceMemoRequest,
         @AuthenticationPrincipal jwt: Jwt,
-    ): ResponseEntity<ApiResponse<LongAbsenceResponse>> = noStore(service.setMemo(memberPublicId, request, jwt.subject))
+    ): ResponseEntity<ApiResponse<LongAbsenceResponse>> = noStore(service.setMemo(memberPublicId, request, actorOf(jwt)))
 
     @PutMapping("/{memberPublicId}/return")
     @Operation(
@@ -130,7 +130,7 @@ class LongAbsenceController(
         @PathVariable memberPublicId: UUID,
         @Valid @RequestBody request: LongAbsenceReturnRequest,
         @AuthenticationPrincipal jwt: Jwt,
-    ): ResponseEntity<ApiResponse<LongAbsenceReturnResponse>> = noStore(service.markReturned(memberPublicId, request, jwt.subject))
+    ): ResponseEntity<ApiResponse<LongAbsenceReturnResponse>> = noStore(service.markReturned(memberPublicId, request, actorOf(jwt)))
 
     @GetMapping("/history")
     @Operation(
@@ -198,4 +198,7 @@ class LongAbsenceController(
 
     private fun <T> noStore(data: T): ResponseEntity<ApiResponse<T>> =
         ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.success(data = data))
+
+    /** The actor stored with a write: a missing or blank subject is unauthenticated, not a value to persist. */
+    private fun actorOf(jwt: Jwt): String = jwt.subject?.takeIf { it.isNotBlank() } ?: throw InvalidActorSubjectException()
 }

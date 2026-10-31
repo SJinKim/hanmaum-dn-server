@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Lock
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
@@ -53,6 +54,13 @@ interface MemberRepository :
     fun lockIdsForUpdate(
         @Param("ids") ids: Collection<Long>,
     ): List<Long>
+
+    /** Raises the absence counter of a member locked by [lockIdsForUpdate]; stale editor tokens stop matching. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "UPDATE members SET absence_revision = absence_revision + 1 WHERE id = :id", nativeQuery = true)
+    fun bumpAbsenceRevision(
+        @Param("id") id: Long,
+    ): Int
 
     /** Members with their current 순 in one query, for list enrichment without N+1. */
     @Query("SELECT m FROM Member m LEFT JOIN FETCH m.group WHERE m.id IN :ids")

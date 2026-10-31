@@ -74,6 +74,13 @@ class LongAbsenceExceptionHandler {
         return ResponseEntity(securityProblemDetail(HttpStatus.FORBIDDEN), HttpStatus.FORBIDDEN)
     }
 
+    /** A token without a usable subject cannot be an actor of a write. */
+    @ExceptionHandler(InvalidActorSubjectException::class)
+    fun unauthenticated(): ResponseEntity<ProblemDetail> {
+        log.warn("Long-absence request unauthenticated status=401")
+        return ResponseEntity(securityProblemDetail(HttpStatus.UNAUTHORIZED), HttpStatus.UNAUTHORIZED)
+    }
+
     @ExceptionHandler(Exception::class)
     fun unexpected(exception: Exception): ResponseEntity<ProblemDetail> =
         failure(sqlState(generateSequence<Throwable>(exception) { it.cause }.toList()), exception.javaClass.simpleName)

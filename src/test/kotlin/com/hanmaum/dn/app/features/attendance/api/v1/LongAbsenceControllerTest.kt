@@ -148,6 +148,35 @@ class LongAbsenceControllerTest {
         verifyNoInteractions(service, history)
     }
 
+    @Test
+    fun `a token without a usable subject is a 401 on every write and reaches no service`() {
+        listOf(" ", "\t").forEach { blankSubject ->
+            val pastor = jwt().jwt { it.subject(blankSubject) }.authorities(SimpleGrantedAuthority("ROLE_${Roles.PASTOR}"))
+            mockMvc
+                .perform(
+                    put(
+                        "$base/$memberId/memo",
+                    ).with(
+                        pastor,
+                    ).contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"lastSundayDate":"2026-07-26","version":0,"memo":"x"}"""),
+                ).andExpect(status().isUnauthorized)
+            mockMvc
+                .perform(
+                    put(
+                        "$base/$memberId/contact-status",
+                    ).with(
+                        pastor,
+                    ).contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"lastSundayDate":"2026-07-26","version":0,"contacted":true}"""),
+                ).andExpect(status().isUnauthorized)
+            mockMvc
+                .perform(put("$base/$memberId/return").with(pastor).contentType(MediaType.APPLICATION_JSON).content(RETURN_BODY))
+                .andExpect(status().isUnauthorized)
+        }
+        verifyNoInteractions(service, history)
+    }
+
     @ParameterizedTest
     @ValueSource(
         strings = [
