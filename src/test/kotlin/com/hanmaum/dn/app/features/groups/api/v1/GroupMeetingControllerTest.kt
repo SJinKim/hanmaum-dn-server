@@ -1,10 +1,12 @@
 package com.hanmaum.dn.app.features.groups.api.v1
 
 import com.hanmaum.dn.app.common.config.SecurityConfig
+import com.hanmaum.dn.app.features.groups.api.v1.dto.MeetingDetailDto
 import com.hanmaum.dn.app.features.groups.service.GroupMeetingService
 import com.hanmaum.dn.app.features.members.repository.MemberRepository
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
+import org.mockito.Mockito.`when`
 import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
 import org.springframework.beans.factory.annotation.Autowired
@@ -18,8 +20,11 @@ import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequ
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import java.time.OffsetDateTime
 import java.util.UUID
 import kotlin.test.Test
 
@@ -86,5 +91,29 @@ class GroupMeetingControllerTest {
     fun `POST report passes the leader's subject, not a client value`() {
         reportAs("GROUP_LEADER").andExpect(status().isOk)
         verify(service).submitReport(eq(meetingId), any(), eq("kc-002"), eq(false))
+    }
+
+    @Test
+    fun `GET meetings returns wrapped empty list`() {
+        `when`(service.getMeetings("kc-002", false)).thenReturn(emptyList())
+
+        mockMvc
+            .perform(get("/api/v1/group-meetings").with(withRole(null)))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.data").isEmpty)
+    }
+
+    @Test
+    fun `GET meeting details returns wrapped data`() {
+        `when`(service.getMeetingDetails(meetingId, "kc-002", false)).thenReturn(
+            MeetingDetailDto(meetingId, "청년 1순", OffsetDateTime.parse("2026-10-11T14:00:00+02:00"), "본당", emptyList()),
+        )
+
+        mockMvc
+            .perform(get("/api/v1/group-meetings/$meetingId").with(withRole(null)))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.data.groupName").value("청년 1순"))
     }
 }

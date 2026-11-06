@@ -1,10 +1,12 @@
 package com.hanmaum.dn.app.features.church.api.v1
 
 import com.hanmaum.dn.app.common.api.ErrorResponse
+import com.hanmaum.dn.app.common.dto.ApiResponse
 import com.hanmaum.dn.app.features.church.api.v1.dto.ChurchLocationResponse
 import com.hanmaum.dn.app.features.church.service.ChurchLocationService
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
@@ -28,12 +30,13 @@ class ChurchLocationController(
     @OpenApiResponse(
         responseCode = "200",
         description = "The configured church geofence.",
-        content = [Content(schema = Schema(implementation = ChurchLocationResponse::class))],
+        useReturnTypeSchema = true,
     )
     @OpenApiResponse(
         responseCode = "503",
         description = "This deployment has no church location configured. Clients should hide geofenced features rather than retry.",
         content = [Content(schema = Schema(implementation = ErrorResponse::class))],
     )
-    fun getLocation(): ChurchLocationResponse = churchLocationService.getLocation()
+    fun getLocation(): ResponseEntity<ApiResponse<ChurchLocationResponse>> =
+        ResponseEntity.ok(ApiResponse.success(churchLocationService.getLocation()))
 }
