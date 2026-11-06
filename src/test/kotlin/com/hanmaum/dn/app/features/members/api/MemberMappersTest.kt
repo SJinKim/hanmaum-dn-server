@@ -176,6 +176,39 @@ class MemberMappersTest {
     }
 
     @Test
+    fun `applyPatch clears blank optional contact fields and trims supplied values`() {
+        val member =
+            Member(
+                lastName = "김",
+                firstName = "철수",
+                phoneNumber = "010-1111-2222",
+                street = "기존로",
+                houseNumber = "3",
+                zipCode = "12345",
+                city = "서울",
+                occupation = "개발자",
+            )
+
+        member.applyPatch(
+            UpdateMemberRequest(
+                phoneNumber = " ",
+                street = "",
+                houseNumber = "\t",
+                zipCode = " 10115 ",
+                city = " Berlin ",
+                occupation = "   ",
+            ),
+        )
+
+        assertNull(member.phoneNumber)
+        assertNull(member.street)
+        assertNull(member.houseNumber)
+        assertEquals("10115", member.zipCode)
+        assertEquals("Berlin", member.city)
+        assertNull(member.occupation)
+    }
+
+    @Test
     fun `applyPatch throws IllegalArgumentException for unknown memberStatus`() {
         val member = Member(lastName = "김", firstName = "철수")
         val req = UpdateMemberRequest(memberStatus = "GIBBERISH")

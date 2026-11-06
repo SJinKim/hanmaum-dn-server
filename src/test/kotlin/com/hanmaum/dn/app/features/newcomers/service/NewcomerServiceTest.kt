@@ -127,6 +127,40 @@ class NewcomerServiceTest {
     }
 
     @Test
+    fun `update clears blank profile text and trims supplied contact text before saving`() {
+        val profile = NewcomerProfile(addressedMember())
+        profile.member.phoneNumber = "010-1111-2222"
+        profile.assignmentReason = "기존 사유"
+        profile.overallNotes = "기존 메모"
+        profile.previousChurch = "기존 교회"
+        profile.additionalNotes = "기존 비고"
+        whenever(profiles.findForUpdate(profile.publicId)).thenReturn(profile)
+        whenever(profiles.saveAndFlush(any<NewcomerProfile>())).thenAnswer { it.arguments[0] as NewcomerProfile }
+
+        service.update(
+            profile.publicId,
+            UpdateNewcomerRequest(
+                version = profile.version,
+                phoneNumber = " 010-9999-8888 ",
+                assignmentReason = "",
+                overallNotes = " ",
+                previousChurch = "\t",
+                additionalNotes = "   ",
+            ),
+        )
+
+        verify(profiles).saveAndFlush(
+            check {
+                assertEquals("010-9999-8888", it.member.phoneNumber)
+                assertNull(it.assignmentReason)
+                assertNull(it.overallNotes)
+                assertNull(it.previousChurch)
+                assertNull(it.additionalNotes)
+            },
+        )
+    }
+
+    @Test
     fun `update keeps an address field the request omits`() {
         val profile = NewcomerProfile(addressedMember())
         whenever(profiles.findForUpdate(profile.publicId)).thenReturn(profile)

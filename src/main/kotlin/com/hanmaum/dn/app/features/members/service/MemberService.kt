@@ -658,12 +658,12 @@ class MemberService(
         request: UpdateMyProfileRequest,
     ): MemberResponse {
         val member = resolveAndLinkMember(keycloakSubject, email, emailVerified, firstName, lastName, birthDateClaim)
-        request.phoneNumber?.let { member.phoneNumber = it }
+        request.phoneNumber?.let { member.phoneNumber = it.trim().ifBlank { null } }
         request.birthDate?.let { member.birthDate = it }
-        request.street?.let { member.street = it }
-        request.houseNumber?.let { member.houseNumber = it }
-        request.zipCode?.let { member.zipCode = it }
-        request.city?.let { member.city = it }
+        request.street?.let { member.street = it.trim().ifBlank { null } }
+        request.houseNumber?.let { member.houseNumber = it.trim().ifBlank { null } }
+        request.zipCode?.let { member.zipCode = it.trim().ifBlank { null } }
+        request.city?.let { member.city = it.trim().ifBlank { null } }
         request.identityStatus?.let { member.identityStatus = it }
         request.workOrSchool?.let { member.workOrSchool = it.trim().ifBlank { null } }
         val saved = memberRepository.save(member)
