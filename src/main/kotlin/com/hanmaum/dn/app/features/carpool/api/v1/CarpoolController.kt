@@ -35,6 +35,7 @@ class CarpoolController(
         ResponseEntity.ok(ApiResponse.success(carpoolService.getCarsForDate(date, authentication.token.subject)))
 
     @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
     fun createCar(
         @RequestBody req: CreateCarRequest,
         authentication: JwtAuthenticationToken,
