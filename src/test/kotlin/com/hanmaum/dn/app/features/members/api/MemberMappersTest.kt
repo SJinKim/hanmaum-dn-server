@@ -254,6 +254,10 @@ class MemberMappersTest {
     @Test
     fun `applyPatch does not change fields when corresponding request field is null`() {
         val member = Member(lastName = "김", firstName = "철수", memberStatus = MemberStatus.ACTIVE)
+        member.street = "Existing Street"
+        member.houseNumber = "7"
+        member.zipCode = "12345"
+        member.phoneNumber = "010-1111-2222"
         member.city = "서울"
         member.occupation = "개발자"
         val req = UpdateMemberRequest() // all null
@@ -261,6 +265,10 @@ class MemberMappersTest {
         assertEquals("서울", member.city) // unchanged
         assertEquals("개발자", member.occupation)
         assertEquals("김", member.lastName) // unchanged
+        assertEquals("Existing Street", member.street)
+        assertEquals("7", member.houseNumber)
+        assertEquals("12345", member.zipCode)
+        assertEquals("010-1111-2222", member.phoneNumber)
     }
 
     // --- Member.toDto() ---

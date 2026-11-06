@@ -1802,7 +1802,7 @@ class MemberServiceTest {
     }
 
     @Test
-    fun `updateMyProfile preserves address fields omitted from patch`() {
+    fun `updateMyProfile preserves address and phone fields omitted from patch`() {
         val keycloakSub = UUID.randomUUID().toString()
         val member = memberWithId(1L)
         member.keycloakId = keycloakSub
@@ -1825,6 +1825,15 @@ class MemberServiceTest {
         assertEquals("50667", response.zipCode)
         assertEquals("Köln", response.city)
         assertEquals("+49 123", response.phoneNumber)
+
+        val changed =
+            memberService.updateMyProfile(
+                keycloakSubject = keycloakSub,
+                email = null,
+                request = UpdateMyProfileRequest(city = "Berlin"),
+            )
+        assertEquals("+49 123", changed.phoneNumber)
+        assertEquals("+49 123", member.phoneNumber)
     }
 
     @Test

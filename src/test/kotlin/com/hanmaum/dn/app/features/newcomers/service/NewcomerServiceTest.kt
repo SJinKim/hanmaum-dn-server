@@ -163,6 +163,11 @@ class NewcomerServiceTest {
     @Test
     fun `update keeps an address field the request omits`() {
         val profile = NewcomerProfile(addressedMember())
+        profile.member.phoneNumber = "010-1111-2222"
+        profile.assignmentReason = "Existing assignment"
+        profile.overallNotes = "Existing notes"
+        profile.previousChurch = "Existing church"
+        profile.additionalNotes = "Existing details"
         whenever(profiles.findForUpdate(profile.publicId)).thenReturn(profile)
         whenever(profiles.saveAndFlush(any<NewcomerProfile>())).thenAnswer { it.arguments[0] as NewcomerProfile }
 
@@ -173,6 +178,23 @@ class NewcomerServiceTest {
         assertEquals("7a", member.houseNumber)
         assertEquals("80331", member.zipCode)
         assertEquals("Berlin", member.city)
+        assertEquals("010-1111-2222", member.phoneNumber)
+        assertEquals("Existing assignment", profile.assignmentReason)
+        assertEquals("Existing notes", profile.overallNotes)
+        assertEquals("Existing church", profile.previousChurch)
+        assertEquals("Existing details", profile.additionalNotes)
+    }
+
+    @Test
+    fun `update clears blank phone number before saving`() {
+        val profile = NewcomerProfile(addressedMember())
+        profile.member.phoneNumber = "010-1111-2222"
+        whenever(profiles.findForUpdate(profile.publicId)).thenReturn(profile)
+        whenever(profiles.saveAndFlush(any<NewcomerProfile>())).thenAnswer { it.arguments[0] as NewcomerProfile }
+
+        service.update(profile.publicId, UpdateNewcomerRequest(version = profile.version, phoneNumber = " \t "))
+
+        verify(profiles).saveAndFlush(check { assertNull(it.member.phoneNumber) })
     }
 
     @Test
