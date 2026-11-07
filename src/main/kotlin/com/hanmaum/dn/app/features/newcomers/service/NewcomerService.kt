@@ -165,7 +165,7 @@ class NewcomerService(
         request.firstName?.let { member.firstName = it.trim() }
         request.gender?.let { member.gender = it }
         request.birthDate?.let { member.birthDate = it }
-        request.phoneNumber?.let { member.phoneNumber = it.trim() }
+        request.phoneNumber?.let { member.phoneNumber = it.trim().ifBlank { null } }
         request.street?.let { member.street = it.trim().ifBlank { null } }
         request.houseNumber?.let { member.houseNumber = it.trim().ifBlank { null } }
         request.zipCode?.let { member.zipCode = it.trim().ifBlank { null } }
@@ -194,13 +194,13 @@ class NewcomerService(
         }
         request.firstVisitDate?.let { profile.firstVisitDate = it }
         request.assignedGroupPublicId?.let { profile.assignedGroup = resolveAssignableGroup(it) }
-        request.assignmentReason?.let { profile.assignmentReason = it }
-        request.overallNotes?.let { profile.overallNotes = it }
+        request.assignmentReason?.let { profile.assignmentReason = it.trim().ifBlank { null } }
+        request.overallNotes?.let { profile.overallNotes = it.trim().ifBlank { null } }
         request.postAssignmentAttendance?.let { profile.postAssignmentAttendance = it }
-        request.previousChurch?.let { profile.previousChurch = it }
+        request.previousChurch?.let { profile.previousChurch = it.trim().ifBlank { null } }
         request.churchExperience?.let { profile.churchExperience = it }
         request.visitMotives?.let { profile.visitMotives = encodeList(it) }
-        request.additionalNotes?.let { profile.additionalNotes = it }
+        request.additionalNotes?.let { profile.additionalNotes = it.trim().ifBlank { null } }
         return profileRepository.saveAndFlush(profile).toResponse()
     }
 

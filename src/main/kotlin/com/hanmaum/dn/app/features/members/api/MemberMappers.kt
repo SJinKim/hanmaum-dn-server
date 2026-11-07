@@ -89,13 +89,13 @@ fun Member.applyPatch(request: UpdateMemberRequest) {
     request.discriminator?.let { this.discriminator = it }
     request.gender?.let { this.gender = mapGender(it) }
     request.birthDate?.let { this.birthDate = it }
-    request.phoneNumber?.let { this.phoneNumber = it }
+    request.phoneNumber?.let { this.phoneNumber = it.trim().ifBlank { null } }
     request.email?.let { this.email = it }
-    request.street?.let { this.street = it }
-    request.houseNumber?.let { this.houseNumber = it }
-    request.zipCode?.let { this.zipCode = it }
-    request.city?.let { this.city = it }
-    request.occupation?.let { this.occupation = it }
+    request.street?.let { this.street = it.trim().ifBlank { null } }
+    request.houseNumber?.let { this.houseNumber = it.trim().ifBlank { null } }
+    request.zipCode?.let { this.zipCode = it.trim().ifBlank { null } }
+    request.city?.let { this.city = it.trim().ifBlank { null } }
+    request.occupation?.let { this.occupation = it.trim().ifBlank { null } }
     request.identityStatus?.let { this.identityStatus = it }
     // A blank 소속 clears it; null leaves it unchanged.
     request.workOrSchool?.let { this.workOrSchool = it.trim().ifBlank { null } }

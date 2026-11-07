@@ -77,6 +77,7 @@ import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.check
 import org.mockito.kotlin.eq
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.http.HttpStatus
@@ -1764,7 +1765,44 @@ class MemberServiceTest {
     }
 
     @Test
-    fun `updateMyProfile preserves address fields omitted from patch`() {
+    fun `updateMyProfile clears blank contact fields and trims supplied values before saving`() {
+        val keycloakSub = UUID.randomUUID().toString()
+        val member = memberWithId(1L)
+        member.keycloakId = keycloakSub
+        member.phoneNumber = "010-1111-2222"
+        member.street = "Existing Street"
+        member.houseNumber = "7"
+        member.zipCode = "50667"
+        member.city = "Köln"
+        `when`(memberRepository.findByKeycloakIdAndDeletedAtIsNull(keycloakSub)).thenReturn(member)
+        `when`(memberRepository.save(member)).thenReturn(member)
+
+        memberService.updateMyProfile(
+            keycloakSubject = keycloakSub,
+            email = null,
+            request =
+                UpdateMyProfileRequest(
+                    phoneNumber = " ",
+                    street = "",
+                    houseNumber = "\t",
+                    zipCode = " 10115 ",
+                    city = " Berlin ",
+                ),
+        )
+
+        verify(memberRepository).save(
+            check {
+                assertNull(it.phoneNumber)
+                assertNull(it.street)
+                assertNull(it.houseNumber)
+                assertEquals("10115", it.zipCode)
+                assertEquals("Berlin", it.city)
+            },
+        )
+    }
+
+    @Test
+    fun `updateMyProfile preserves address and phone fields omitted from patch`() {
         val keycloakSub = UUID.randomUUID().toString()
         val member = memberWithId(1L)
         member.keycloakId = keycloakSub
@@ -1787,6 +1825,15 @@ class MemberServiceTest {
         assertEquals("50667", response.zipCode)
         assertEquals("Köln", response.city)
         assertEquals("+49 123", response.phoneNumber)
+
+        val changed =
+            memberService.updateMyProfile(
+                keycloakSubject = keycloakSub,
+                email = null,
+                request = UpdateMyProfileRequest(city = "Berlin"),
+            )
+        assertEquals("+49 123", changed.phoneNumber)
+        assertEquals("+49 123", member.phoneNumber)
     }
 
     @Test

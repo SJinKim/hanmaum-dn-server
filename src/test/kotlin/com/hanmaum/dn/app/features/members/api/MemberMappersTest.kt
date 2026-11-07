@@ -176,6 +176,39 @@ class MemberMappersTest {
     }
 
     @Test
+    fun `applyPatch clears blank optional contact fields and trims supplied values`() {
+        val member =
+            Member(
+                lastName = "김",
+                firstName = "철수",
+                phoneNumber = "010-1111-2222",
+                street = "기존로",
+                houseNumber = "3",
+                zipCode = "12345",
+                city = "서울",
+                occupation = "개발자",
+            )
+
+        member.applyPatch(
+            UpdateMemberRequest(
+                phoneNumber = " ",
+                street = "",
+                houseNumber = "\t",
+                zipCode = " 10115 ",
+                city = " Berlin ",
+                occupation = "   ",
+            ),
+        )
+
+        assertNull(member.phoneNumber)
+        assertNull(member.street)
+        assertNull(member.houseNumber)
+        assertEquals("10115", member.zipCode)
+        assertEquals("Berlin", member.city)
+        assertNull(member.occupation)
+    }
+
+    @Test
     fun `applyPatch throws IllegalArgumentException for unknown memberStatus`() {
         val member = Member(lastName = "김", firstName = "철수")
         val req = UpdateMemberRequest(memberStatus = "GIBBERISH")
@@ -221,6 +254,10 @@ class MemberMappersTest {
     @Test
     fun `applyPatch does not change fields when corresponding request field is null`() {
         val member = Member(lastName = "김", firstName = "철수", memberStatus = MemberStatus.ACTIVE)
+        member.street = "Existing Street"
+        member.houseNumber = "7"
+        member.zipCode = "12345"
+        member.phoneNumber = "010-1111-2222"
         member.city = "서울"
         member.occupation = "개발자"
         val req = UpdateMemberRequest() // all null
@@ -228,6 +265,10 @@ class MemberMappersTest {
         assertEquals("서울", member.city) // unchanged
         assertEquals("개발자", member.occupation)
         assertEquals("김", member.lastName) // unchanged
+        assertEquals("Existing Street", member.street)
+        assertEquals("7", member.houseNumber)
+        assertEquals("12345", member.zipCode)
+        assertEquals("010-1111-2222", member.phoneNumber)
     }
 
     // --- Member.toDto() ---
