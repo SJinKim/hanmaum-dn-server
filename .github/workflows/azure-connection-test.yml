@@ -1,0 +1,32 @@
+name: Azure connection test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  connection-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Show OIDC subject
+        run: |
+          node --input-type=module <<'JS'
+          const url = process.env.ACTIONS_ID_TOKEN_REQUEST_URL
+            + '&audience=api%3A%2F%2FAzureADTokenExchange';
+          const response = await fetch(url, {
+            headers: {
+              Authorization: `Bearer ${process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN}`
+            }
+          });
+          if (!response.ok) throw new Error(`OIDC request failed: ${response.status}`);
+          const { value } = await response.json();
+          const claims = JSON.parse(
+            Buffer.from(value.split('.')[1], 'base64url').toString()
+          );
+          console.log('Subject: ' + claims.sub);
+          JS
