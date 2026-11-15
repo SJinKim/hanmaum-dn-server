@@ -1,10 +1,12 @@
 package com.hanmaum.dn.app.features.dishwashing.api.v1
 
+import com.hanmaum.dn.app.common.dto.ApiResponse
 import com.hanmaum.dn.app.features.dishwashing.api.v1.dto.CreateDishwashingRequest
 import com.hanmaum.dn.app.features.dishwashing.api.v1.dto.DishwashingDayDto
 import com.hanmaum.dn.app.features.dishwashing.service.DishwashingService
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
@@ -23,7 +25,8 @@ class DishwashingController(
 ) {
     // Für die App (User)
     @GetMapping
-    fun getSchedule(): List<DishwashingDayDto> = service.getUpcomingSchedule()
+    fun getSchedule(): ResponseEntity<ApiResponse<List<DishwashingDayDto>>> =
+        ResponseEntity.ok(ApiResponse.success(service.getUpcomingSchedule()))
 
     // Für Admin (Erstellen / Überschreiben für einen Tag)
     @PostMapping

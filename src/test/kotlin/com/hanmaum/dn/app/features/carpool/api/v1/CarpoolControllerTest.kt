@@ -19,7 +19,9 @@ import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequ
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.util.UUID
 import kotlin.test.Test
@@ -55,7 +57,8 @@ class CarpoolControllerTest {
 
     @Test
     fun `create passes the admin flag from the token`() {
-        `when`(carpoolService.createCar(any(), eq("kc-001"), eq(true))).thenReturn(UUID.randomUUID())
+        val createdId = UUID.randomUUID()
+        `when`(carpoolService.createCar(any(), eq("kc-001"), eq(true))).thenReturn(createdId)
 
         mockMvc
             .perform(
@@ -64,6 +67,19 @@ class CarpoolControllerTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"sessionDate":"2026-10-11","name":"테스트 차","maxSeats":4}"""),
             ).andExpect(status().isCreated)
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.data").value(createdId.toString()))
         verify(carpoolService).createCar(any(), eq("kc-001"), eq(true))
+    }
+
+    @Test
+    fun `get returns wrapped empty cars list`() {
+        `when`(carpoolService.getCarsForDate(any(), eq("kc-002"))).thenReturn(emptyList())
+
+        mockMvc
+            .perform(get("/api/v1/carpool").param("date", "2026-10-11").with(jwt().jwt { it.subject("kc-002") }))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.data").isEmpty)
     }
 }

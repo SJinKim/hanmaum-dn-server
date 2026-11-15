@@ -15,7 +15,6 @@ import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.util.UUID
@@ -54,9 +53,10 @@ class AlbumControllerTest {
         mockMvc
             .perform(get("/api/v1/albums").with(jwt()))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$[0].name").value("여름수련회"))
-            .andExpect(jsonPath("$[0].pcloudCode").value("CODE1"))
-            .andExpect(jsonPath("$[0].displayOrder").value(0))
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.data[0].name").value("여름수련회"))
+            .andExpect(jsonPath("$.data[0].pcloudCode").value("CODE1"))
+            .andExpect(jsonPath("$.data[0].displayOrder").value(0))
     }
 
     @Test
@@ -66,7 +66,9 @@ class AlbumControllerTest {
         mockMvc
             .perform(get("/api/v1/albums").with(jwt()))
             .andExpect(status().isOk)
-            .andExpect(content().json("[]"))
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.data").isArray)
+            .andExpect(jsonPath("$.data").isEmpty)
     }
 
     @Test

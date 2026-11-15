@@ -34,7 +34,7 @@ class ChurchLocationControllerTest {
     @MockitoBean private lateinit var jwtDecoder: JwtDecoder
 
     @Test
-    fun `GET church location returns client compatible top-level response`() {
+    fun `GET church location returns wrapped response`() {
         `when`(churchLocationService.getLocation()).thenReturn(
             ChurchLocationResponse(
                 latitude = 51.1234,
@@ -48,10 +48,10 @@ class ChurchLocationControllerTest {
                 get("/api/v1/church/location")
                     .with(jwt().jwt { it.subject("kc-001") }),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.latitude").value(51.1234))
-            .andExpect(jsonPath("$.longitude").value(6.5678))
-            .andExpect(jsonPath("$.radiusMeters").value(100))
-            .andExpect(jsonPath("$.data").doesNotExist())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.data.latitude").value(51.1234))
+            .andExpect(jsonPath("$.data.longitude").value(6.5678))
+            .andExpect(jsonPath("$.data.radiusMeters").value(100))
     }
 
     @Test

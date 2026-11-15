@@ -1,5 +1,6 @@
 package com.hanmaum.dn.app.features.groups.api.v1
 
+import com.hanmaum.dn.app.common.dto.ApiResponse
 import com.hanmaum.dn.app.common.security.Roles
 import com.hanmaum.dn.app.features.groups.api.v1.dto.CreateMeetingRequest
 import com.hanmaum.dn.app.features.groups.api.v1.dto.GroupMeetingDto
@@ -7,6 +8,7 @@ import com.hanmaum.dn.app.features.groups.api.v1.dto.MeetingDetailDto
 import com.hanmaum.dn.app.features.groups.api.v1.dto.SubmitMeetingReportRequest
 import com.hanmaum.dn.app.features.groups.service.GroupMeetingService
 import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
 import org.springframework.web.bind.annotation.GetMapping
@@ -47,8 +49,8 @@ class GroupMeetingController(
     // USER: eigene Gruppe, ADMIN: alle
     @GetMapping
     @PreAuthorize("isAuthenticated()")
-    fun getMeetings(authentication: JwtAuthenticationToken): List<GroupMeetingDto> =
-        service.getMeetings(authentication.token.subject, authentication.isAdmin())
+    fun getMeetings(authentication: JwtAuthenticationToken): ResponseEntity<ApiResponse<List<GroupMeetingDto>>> =
+        ResponseEntity.ok(ApiResponse.success(service.getMeetings(authentication.token.subject, authentication.isAdmin())))
 
     // USER: nur eigene Gruppe (Gebete), ADMIN: alle
     @GetMapping("/{publicId}")
@@ -56,7 +58,8 @@ class GroupMeetingController(
     fun getMeetingDetails(
         @PathVariable publicId: UUID,
         authentication: JwtAuthenticationToken,
-    ): MeetingDetailDto = service.getMeetingDetails(publicId, authentication.token.subject, authentication.isAdmin())
+    ): ResponseEntity<ApiResponse<MeetingDetailDto>> =
+        ResponseEntity.ok(ApiResponse.success(service.getMeetingDetails(publicId, authentication.token.subject, authentication.isAdmin())))
 
     private fun JwtAuthenticationToken.isAdmin(): Boolean = authorities.any { it.authority == Roles.authority(Roles.ADMIN) }
 }

@@ -1,11 +1,13 @@
 package com.hanmaum.dn.app.features.carpool.api.v1
 
+import com.hanmaum.dn.app.common.dto.ApiResponse
 import com.hanmaum.dn.app.common.security.Roles
 import com.hanmaum.dn.app.features.carpool.api.v1.dto.CarDto
 import com.hanmaum.dn.app.features.carpool.api.v1.dto.CreateCarRequest
 import com.hanmaum.dn.app.features.carpool.service.CarpoolService
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
 import org.springframework.web.bind.annotation.GetMapping
@@ -29,14 +31,19 @@ class CarpoolController(
     fun getCars(
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) date: LocalDate,
         authentication: JwtAuthenticationToken,
-    ): List<CarDto> = carpoolService.getCarsForDate(date, authentication.token.subject)
+    ): ResponseEntity<ApiResponse<List<CarDto>>> =
+        ResponseEntity.ok(ApiResponse.success(carpoolService.getCarsForDate(date, authentication.token.subject)))
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     fun createCar(
         @RequestBody req: CreateCarRequest,
         authentication: JwtAuthenticationToken,
-    ): UUID = carpoolService.createCar(req, authentication.token.subject, authentication.isAdmin())
+    ): ResponseEntity<ApiResponse<UUID>> =
+        ResponseEntity
+            .status(
+                HttpStatus.CREATED,
+            ).body(ApiResponse.success(carpoolService.createCar(req, authentication.token.subject, authentication.isAdmin())))
 
     @PostMapping("/{carPublicId}/join")
     fun joinCar(
