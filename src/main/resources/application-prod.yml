@@ -25,6 +25,8 @@ logging:
   structured:
     format:
       console: ecs
+    json:
+      customizer: com.hanmaum.dn.app.common.observability.SafeLogJsonCustomizer
 
 app:
   security:
